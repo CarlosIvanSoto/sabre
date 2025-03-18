@@ -1,0 +1,43 @@
+{
+  "name": "@sabre/client",
+  "version": "1.0.0",
+  "description": "Wrapper for the Sabre Dev Studio API",
+  "keywords": [
+    "sabre",
+    "client"
+  ],
+  "homepage": "https://github.com/CarlosIvanSoto/sabre-client#readme",
+  "bugs": {
+    "url": "https://github.com/CarlosIvanSoto/sabre-client/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CarlosIvanSoto/sabre-client.git"
+  },
+  "license": "MIT",
+  "author": "Carlos Ivan Soto <csoto_99@outlook.com>",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist/**",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npx tsc",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.3",
+    "@types/xml2js": "^0.4.14",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.1"
+  }
+}

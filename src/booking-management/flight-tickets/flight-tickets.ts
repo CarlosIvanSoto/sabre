@@ -1,7 +1,5 @@
 import { Sabre } from "../../sabre"
-import { VoidTicketsOptions, VoidTicketsResponseSuccess } from "./interfaces"
-import { CheckTicketsOptions, CheckTicketsResponseSuccess } from "./interfaces/check-tickets.interface"
-import { RefundTicketsOptions, RefundTicketsResponseSuccess } from "./interfaces/refund-tickets.interface"
+import { CheckTicketsOptions, CheckTicketsResponseSuccess, RefundTicketsOptions, RefundTicketsResponseSuccess, VoidTicketsOptions, VoidTicketsResponseSuccess } from "./interfaces"
 
 export class FlightTickets {
   /**
@@ -22,7 +20,7 @@ export class FlightTickets {
    * @param payload VoidTicketsOptions
    * @returns VoidTicketsResponse
    */
-  async voidTickets(payload: VoidTicketsOptions) {
+  async void(payload: VoidTicketsOptions) {
     const path = '/v1/trip/orders/voidFlightTickets'
     return this.sabre.post<VoidTicketsResponseSuccess>(path, payload)
   }
@@ -34,7 +32,7 @@ export class FlightTickets {
    * @param payload RefundTicketsOptions
    * @returns RefundTicketsResponse
    */
-  async refundTickets(payload: RefundTicketsOptions) {
+  async refund(payload: RefundTicketsOptions) {
     const path = '/v1/trip/orders/refundFlightTickets'
     return this.sabre.post<RefundTicketsResponseSuccess>(path, payload)
   }
@@ -46,7 +44,7 @@ export class FlightTickets {
    * @param payload CheckTicketsOptions
    * @returns CheckTicketsResponse
    */
-  async checkTickets(payload: CheckTicketsOptions) {
+  async check(payload: CheckTicketsOptions) {
     const path = '/v1/trip/orders/checkFlightTickets'
     return this.sabre.post<CheckTicketsResponseSuccess>(path, payload)
   }

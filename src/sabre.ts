@@ -1,27 +1,33 @@
-import { GetOptions, PostOptions } from "./common/interfaces";
+import { Authentication } from "./authentication/authentication";
+import { Booking, FlightTickets } from "./booking-management";
+import { PostOptions } from "./common/interfaces";
 import { baseUrl, conversationId, domain, userAgent } from "./config";
-import { ErrorResponse } from "./interfaces";
+import { SabreOptions } from "./interfaces";
 
 export class Sabre {
   private readonly headers: Headers;
   private readonly secret: string;
 
-  constructor(
-    private readonly username?: string,
-    private readonly password?: string,
-    private readonly organization?: string, // PCC
-  ) {
+  readonly authentication = new Authentication(this)
+  readonly booking = new Booking(this)
+  readonly flightTickets = new FlightTickets(this)
+
+  constructor(private readonly options: SabreOptions = {}) {
 
     const processEnv = typeof process !== 'undefined' && process.env
-    if (!username && processEnv) 
-      this.username = processEnv.SABRE_USERNAME
-    if (!password && processEnv)
-      this.password = processEnv.SABRE_PASSWORD
-    if (!organization && processEnv)
-      this.organization = processEnv.SABRE_ORGANIZATION
+    if (!this.options.username && processEnv)
+      this.options.username = processEnv.SABRE_USERNAME
+    if (!this.options.password && processEnv)
+      this.options.password = processEnv.SABRE_PASSWORD
+    if (!this.options.organization && processEnv)
+      this.options.organization = processEnv.SABRE_ORGANIZATION
 
-    if (!this.username || !this.password || !this.organization) {
-      throw new Error('Missing LegacySabre authorization. Pass it to the constructor `new LegacySabre("USERNAME", "PASSWORD", "ORGANIZATION")')
+    if (!this.options.username || !this.options.password || !this.options.organization) {
+      throw new Error(`Missing Sabre authorization. Pass it to the constructor new Sabre({
+        username: '773400', 
+        password: 'PASSWORD_GOES_HERE',
+        organization: '7TZA', // pcc
+      });})`)
     }
 
     this.headers = new Headers({
@@ -40,50 +46,16 @@ export class Sabre {
   async fetchRequest<T>(
     path: string,
     options = {},
-  ): Promise<{ data: T | null; error: ErrorResponse | null }> {
-    try {
-      const response = await fetch(`${baseUrl}${path}`, options);
+  ): Promise<T> {
+    const response = await fetch(`${baseUrl}${path}`, options);
 
-      if (!response.ok) {
-        try {
-          const rawError = await response.text();
-          return { data: null, error: JSON.parse(rawError) };
-        } catch (err) {
-          if (err instanceof SyntaxError) {
-            return {
-              data: null,
-              error: {
-                name: 'application_error',
-                message:
-                  'Internal server error. We are unable to process your request right now, please try again later.',
-              },
-            };
-          }
-
-          const error: ErrorResponse = {
-            message: response.statusText,
-            name: 'application_error',
-          };
-
-          if (err instanceof Error) {
-            return { data: null, error: { ...error, message: err.message } };
-          }
-
-          return { data: null, error };
-        }
-      }
-
-      const data = await response.json();
-      return { data: data as T, error: null };
-    } catch (error) {
-      return {
-        data: null,
-        error: {
-          name: 'application_error',
-          message: 'Unable to fetch data. The request could not be resolved.',
-        },
-      };
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(JSON.stringify(error))
     }
+
+    const data = await response.json();
+    return data
   }
   async post<T>(path: string, entity?: unknown, options: PostOptions = {}) {
     const requestOptions = {
@@ -97,6 +69,11 @@ export class Sabre {
   }
 
   async auth<T>(path: string, entity?: unknown, options: PostOptions = {}) {
+    /**
+     * La palabra 'basic' seguida de un EPR codificado en base64 
+     * como par base64(base64(V1:usuario:grupo:dominio):base64(contraseña)), 
+     * p.e. basic VmpFNmRYTmxjbWxrT21keWIzVndPbVJ2YldGcGJnPT06TVRJek5EVT0=
+     */
     this.headers.set('Authorization', `Basic ${this.secret}`)
     this.headers.set('Content-Type', 'application/x-www-form-urlencoded')
 
@@ -111,13 +88,10 @@ export class Sabre {
   }
 
   private getSecret() {
-    if (!this.password) throw new Error('Missing Sabre password')
-    return btoa(`${this.userID()}:${btoa(this.password)}`)
+    if (!this.options.password) throw new Error('Missing Sabre password')
+    return btoa(`${this.userID()}:${btoa(this.options.password)}`)
   }
   private userID() {
-    return btoa(`V1:${this.username}:${this.organization}:${domain}`)
+    return btoa(`V1:${this.options.username}:${this.options.organization}:${domain}`)
   }
-  // security(): SabreSecurity {
-  //   return { username: this.username, password: this.password, pcc: this.organization }
-  // }
 }

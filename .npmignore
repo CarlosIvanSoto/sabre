@@ -1,0 +1,15 @@
+/src
+/node_modules
+
+tsconfig.json
+tsup.config.ts
+
+# OS
+.DS_Store
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local

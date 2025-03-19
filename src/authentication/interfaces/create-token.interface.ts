@@ -1,5 +1,4 @@
 import { PostOptions } from "../../common/interfaces"
-import { ErrorResponse } from "../../interfaces";
 
 export interface CreateTokenResponseSuccess {
   /**
@@ -16,14 +15,10 @@ export interface CreateTokenResponseSuccess {
   token_type: string
   /**
    * El tiempo de vencimiento en segundos.
-   *
-   * example: 604800
+   * TTL
+   * 
+   * example: 604800 
    */
   expires_in: number
 }
 export interface CreateTokenRequestOptions extends PostOptions {}
-
-export interface CreateTokenResponse {
-  data: CreateTokenResponseSuccess | null;
-  error: ErrorResponse | null;
-}

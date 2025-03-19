@@ -3,7 +3,7 @@ import { version } from '../package.json';
 const defaultBaseUrl = 'https://api.platform.sabre.com';
 const defaultUserAgent = `sabre-client-node:${version}`;
 const defaultConversationId = `sabre.client.node:${version}`
-const defaultDomain = 'DEFAULT'
+const defaultDomain = 'AA'
 
 const baseUrl =
   typeof process !== 'undefined' && process.env

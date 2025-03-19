@@ -1,17 +1,18 @@
 {
-  "exclude": ["node_modules", "dist"],
   "compilerOptions": {
-    "lib": ["ESNext"],
-    "module": "ESNext",
+    "strict": true,
+    "noImplicitAny": true,
     "esModuleInterop": true,
+    "strictNullChecks": true,
+    "target": "ES2022",
     "moduleResolution": "node",
     "resolveJsonModule": true,
-    "target": "ESNext",
-    "moduleDetection": "force",
+    "module": "CommonJS",
     "declaration": true,
-    "outDir": "build",
-    "skipLibCheck": true,
-    "strict": true
+    "isolatedModules": true,
+    "noEmit": true,
+    "outDir": "dist",
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }

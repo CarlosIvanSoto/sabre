@@ -13,9 +13,9 @@ npm install sabre-client
 First, you need to get an username, password and pcc which is available in the [DEV STUDIO - Applications](https://developer.sabre.com/my-account/applications).
 
 ```js
-import { SabreLegacy } from 'sabre-client';
+import { Sabre } from 'sabre-client';
 
-const sabre = new SabreLegacy({
+const sabre = new Sabre({
   username: '773400', 
   password: 'PASSWORD_GOES_HERE',
   organization: '7TZA', // pcc

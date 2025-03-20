@@ -14,10 +14,10 @@ npm run test
 npm run build
 ```
 
-## Change semantic version
+## Link package
 
 ```bash
-npm link sabre-client
+npm link
 ```
 
 ## Change semantic version

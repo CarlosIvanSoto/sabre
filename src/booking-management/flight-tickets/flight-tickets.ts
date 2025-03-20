@@ -1,5 +1,6 @@
 import { Sabre } from "../../sabre"
 import { CheckTicketsOptions, CheckTicketsResponseSuccess, RefundTicketsOptions, RefundTicketsResponseSuccess, VoidTicketsOptions, VoidTicketsResponseSuccess } from "./interfaces"
+import { FulfillTicketsOptions, FulfillTicketsResponseSuccess } from "./interfaces/fulfill-tickets.interface"
 
 export class FlightTickets {
   /**
@@ -47,5 +48,19 @@ export class FlightTickets {
   async check(payload: CheckTicketsOptions) {
     const path = '/v1/trip/orders/checkFlightTickets'
     return this.sabre.post<CheckTicketsResponseSuccess>(path, payload)
+  }
+
+
+  /**
+   * Procesa tickets proporcionando una solicitud que contiene una lista de números de ticket que se verificarán. 
+   * Actualmente, los EMD no son compatibles.
+   * 
+   * payload - Contiene elementos obligatorios y opcionales para consultar los tickets.
+   * @param payload CheckTicketsOptions
+   * @returns CheckTicketsResponse
+   */
+  async fulfill(payload: FulfillTicketsOptions) {
+    const path = '/v1/trip/orders/fulfillFlightTickets'
+    return this.sabre.post<FulfillTicketsResponseSuccess>(path, payload)
   }
 }

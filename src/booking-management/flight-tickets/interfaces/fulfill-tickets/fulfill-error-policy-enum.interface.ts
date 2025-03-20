@@ -1,0 +1,9 @@
+/**
+ * Identifica el tipo de documento de pasajero.
+ */
+const FULFILL_ERROR_POLICY = {
+  ALLOW_PARTIAL_FULFILLMENT: "ALLOW_PARTIAL_FULFILLMENT",
+  HALT_ON_INVALID_MINIMUM_CONNECTING_TIME_ERROR: "HALT_ON_INVALID_MINIMUM_CONNECTING_TIME_ERROR",
+} as const
+
+export type FulfillErrorPolicyEnum = keyof typeof FULFILL_ERROR_POLICY;

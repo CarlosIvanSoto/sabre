@@ -1,0 +1,10 @@
+const NOTIFICATION_EMAIL = {
+  DEFAULT: "DEFAULT",
+  INVOICE: "INVOICE",
+  ETICKET: "ETICKET",
+  ETICKET_PDF: "ETICKET_PDF",
+  ITINERARY: "ITINERARY",
+  ITINERARY_PDF: "ITINERARY_PDF",
+} as const
+
+export type NotificationEmailEnum = keyof typeof NOTIFICATION_EMAIL;

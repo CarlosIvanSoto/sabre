@@ -13,7 +13,6 @@ export class Sabre {
   readonly flightTickets = new FlightTickets(this)
 
   constructor(private readonly options: SabreOptions = {}) {
-
     const processEnv = typeof process !== 'undefined' && process.env
     if (!this.options.username && processEnv)
       this.options.username = processEnv.SABRE_USERNAME

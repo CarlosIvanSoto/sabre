@@ -1,6 +1,6 @@
-import { CancelErrorPolicyEnum, Notification, PrinterAddress, Ticket } from "../../common/interfaces"
+import { BookingSourceEnum, CancelErrorPolicyEnum, Notification, PrinterAddress, Ticket } from "../../common/interfaces"
 import { Booking } from "./booking.interface"
-import { BookingSourceEnum, CarReference, CruiseReference, FlightReference, HotelReference, TrainReference } from "../common/interfaces"
+import { CarReference, CruiseReference, FlightReference, HotelReference, TrainReference } from "../common/interfaces"
 
 /**
  * Identifica la política para el manejo de las operaciones de boletos aéreos dentro del servicio Cancelar Reserva.

@@ -1,6 +1,5 @@
-import { BookingError } from "../../common/interfaces";
+import { BookingError, BookingSourceEnum } from "../../common/interfaces";
 import { Booking } from "./booking.interface";
-import { BookingSourceEnum } from "../common/interfaces";
 
 /**
  * Identifica la porción de datos que se devolverán.

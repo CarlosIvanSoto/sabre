@@ -7,3 +7,4 @@
  */
 export * from './booking/booking'
 export * from './flight-tickets/flight-tickets'
+export * from './enhanced-air-ticket/enhanced-air-ticket'

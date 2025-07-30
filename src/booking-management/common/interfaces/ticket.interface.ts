@@ -2,7 +2,6 @@ import { FareRulePenalty } from "../../booking/common/interfaces/fare-rule-penal
 import { Tax } from "../../booking/common/interfaces/tax.interface"
 import { TotalValues } from "./total-values.interface"
 import { Value } from "../../booking/common/interfaces/value.interface"
-
 /**
  * Contiene información detallada sobre la elegibilidad de cancelación y montos reembolsables para un boleto sencillo.
  */

@@ -1,6 +1,6 @@
 import { Sabre } from "../../sabre"
-import { CheckTicketsOptions, CheckTicketsResponseSuccess, RefundTicketsOptions, RefundTicketsResponseSuccess, VoidTicketsOptions, VoidTicketsResponseSuccess } from "./interfaces"
-import { FulfillTicketsOptions, FulfillTicketsResponseSuccess } from "./interfaces/fulfill-tickets.interface"
+import { CheckTicketsOptions, CheckTicketsResponseSuccess, RefundTicketsOptions, RefundTicketsResponseSuccess, 
+  VoidTicketsOptions, VoidTicketsResponseSuccess, FulfillTicketsOptions, FulfillTicketsResponseSuccess } from "./interfaces"
 
 export class FlightTickets {
   /**

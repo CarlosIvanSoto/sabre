@@ -5,3 +5,4 @@ export * from './booking-error.interface'
 export * from './ticket.interface'
 export * from './total-values.interface'
 export * from './booking-source-enum.interface'
+export * from './ticket-status-enum.interface';

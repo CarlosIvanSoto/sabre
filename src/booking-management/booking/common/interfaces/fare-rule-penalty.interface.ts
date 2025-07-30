@@ -9,7 +9,7 @@ const FARE_RULE_PENALTY_APPLICABILITY =  {
   AFTER_DEPARTURE: "AFTER_DEPARTURE",
 } as const
 
-type FareRulePenaltyApplicabilityEnum = keyof typeof FARE_RULE_PENALTY_APPLICABILITY
+export type FareRulePenaltyApplicabilityEnum = keyof typeof FARE_RULE_PENALTY_APPLICABILITY
 /**
  * Contiene información sobre sanciones aplicadas a reglas de tarifas específicas.
  */

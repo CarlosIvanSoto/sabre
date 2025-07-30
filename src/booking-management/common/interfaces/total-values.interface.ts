@@ -37,4 +37,13 @@ export interface TotalValues {
    * example: USD
    */
   currencyCode: string
+  /**
+     * pattern:^[0-9]+(\.[0-9]{1,3})?$
+     * example:110.00 
+     * The net remit amount. 
+     * The EPR keyword "NETFQD" is required to return netRemit. 
+     * Net remit is used to arrange the payment of an additional commission above the standard commission amount. 
+     * This extra commission is payable by the validating carrier through the BSP settlement cycle.
+     */
+    netRemit?: string
 }

@@ -1,15 +1,6 @@
 import { TotalValues } from "../../../common/interfaces";
 import { Commission, CouponStatus, FlightReference } from "../../common/interfaces"
-/**
- * Identifica el estado actual del ticket.
- *
- * example: Issued
- */
-enum TicketStatusEnum {
-  Issued,
-  Voided,
-  'Refunded/Exchanged'
-}
+import { TicketStatusEnum } from "../../../common/interfaces";
 /**
  * Contiene información del billete de avión electrónico para el viajero.
  */

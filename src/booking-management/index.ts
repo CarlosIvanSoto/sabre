@@ -5,5 +5,5 @@
  * Estas implementaciones se simplifican para garantizar que tanto expertos como principiantes 
  * puedan integrar y adoptar las API Sabre de la forma más fluida posible.
  */
-export * from './booking/booking'
-export * from './flight-tickets/flight-tickets'
+export * from './booking'
+export * from './flight-tickets'

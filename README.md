@@ -34,7 +34,7 @@ Send the request for acquiring an authentication ATK session token.
 await sabre.authentication.OAuthTokenV2();
 ```
 
-### Get booking
+### Get booking v1.30
 
 Displays comprehensive booking details irrespective of source, optionally narrowing down the response to selected elements.
 

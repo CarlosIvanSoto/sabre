@@ -2,6 +2,7 @@ import { Authentication } from "./authentication/authentication";
 import { Booking, FlightTickets } from "./booking-management";
 import { PostOptions } from "./common/interfaces";
 import { baseUrl, conversationId, domain, userAgent } from "./config";
+import { SabreError } from "./errors";
 import { SabreOptions } from "./interfaces";
 
 export class Sabre {
@@ -37,7 +38,7 @@ export class Sabre {
     this.secret = this.getSecret()
   }
 
-  setAuthorization(token: string) {
+  setAuthorization(token: string): void {
     this.headers.set('Authorization', `Bearer ${token}`)
     this.headers.set('Content-Type', 'application/json')
   }
@@ -47,16 +48,26 @@ export class Sabre {
     options = {},
   ): Promise<T> {
     const response = await fetch(`${baseUrl}${path}`, options);
-
+ 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(JSON.stringify(error))
+      let errorDetails =  `Request failed with status ${response.status}`;
+      try {
+        const jsonError = await response.json() as unknown;
+        errorDetails = JSON.stringify(jsonError);
+      } catch (e) {
+        console.error(e)
+        errorDetails = response.statusText;
+      }
+      throw new SabreError(
+        `Request failed with status ${response.status}`, 
+        response.status, 
+        errorDetails);
     }
 
-    const data = await response.json();
-    return data
+    const data = await response.json() as T;
+    return data;
   }
-  async post<T>(path: string, entity?: unknown, options: PostOptions = {}) {
+  async post<T>(path: string, entity?: unknown, options: PostOptions = {}): Promise<T> {
     const requestOptions = {
       method: 'POST',
       headers: this.headers,
@@ -67,7 +78,7 @@ export class Sabre {
     return this.fetchRequest<T>(path, requestOptions);
   }
 
-  async auth<T>(path: string, entity?: unknown, options: PostOptions = {}) {
+  async auth<T>(path: string, entity?: unknown, options: PostOptions = {}): Promise<T>  {
     /**
      * La palabra 'basic' seguida de un EPR codificado en base64 
      * como par base64(base64(V1:usuario:grupo:dominio):base64(contraseña)), 
@@ -86,11 +97,11 @@ export class Sabre {
     return this.fetchRequest<T>(path, requestOptions);
   }
 
-  private getSecret() {
+  private getSecret(): string {
     if (!this.options.password) throw new Error('Missing Sabre password')
     return btoa(`${this.userID()}:${btoa(this.options.password)}`)
   }
-  private userID() {
+  private userID(): string {
     return btoa(`V1:${this.options.username}:${this.options.organization}:${domain}`)
   }
 }

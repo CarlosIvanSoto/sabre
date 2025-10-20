@@ -1,5 +1,14 @@
-import { Sabre } from "../../sabre"
-import { CancelBookingOptions, CancelBookingResponseSuccess, CreateBookingOptions, CreateBookingResponseSuccess, GetBookingOptions, GetBookingResponseSuccess, ModifyBookingOptions, ModifyBookingResponseSuccess } from "./interfaces"
+import { Sabre } from "../sabre"
+import {
+  CancelBookingOptions,
+  CancelBookingResponseSuccess,
+  CreateBookingOptions,
+  CreateBookingResponseSuccess,
+  GetBookingOptions,
+  GetBookingResponseSuccess,
+  ModifyBookingOptions,
+  ModifyBookingResponseSuccess,
+} from "./interfaces"
 
 export class Booking {
   /**
@@ -17,9 +26,9 @@ export class Booking {
    * 
    * payload - Contiene elementos tanto obligatorios como opcionales para realizar una solicitud de reserva.
    * @param payload GetBookingOptions
-   * @returns GetBookingResponse
+   * @returns {Promise<GetBookingResponseSuccess>}
    */
-  async get(payload: GetBookingOptions){
+  get(payload: GetBookingOptions): Promise<GetBookingResponseSuccess>{
     const path = '/v1/trip/orders/getBooking'
     return this.sabre.post<GetBookingResponseSuccess>(path, payload)
   }
@@ -28,9 +37,9 @@ export class Booking {
    * 
    * payload - Contiene elementos obligatorios y opcionales para realizar una solicitud de reserva.
    * @param payload CreateBookingOptions
-   * @returns CreateBookingResponse
+   * @returns {Promise<CreateBookingResponseSuccess>}
    */
-  async create(payload: CreateBookingOptions) {
+  async create(payload: CreateBookingOptions): Promise<CreateBookingResponseSuccess> {
     const path = '/v1/trip/orders/createBooking'
     return this.sabre.post<CreateBookingResponseSuccess>(path, payload)
   }
@@ -39,9 +48,9 @@ export class Booking {
    * 
    * payload - Contiene elementos obligatorios y opcionales para cancelar la totalidad o partes de una reserva.
    * @param payload CancelBookingOptions
-   * @returns CancelBookingRequest
+   * @returns {Promise<CancelBookingResponseSuccess>}
    */
-  async cancel(payload: CancelBookingOptions) {
+  async cancel(payload: CancelBookingOptions): Promise<CancelBookingResponseSuccess> {
     const path = '/v1/trip/orders/cancelBooking'
     return this.sabre.post<CancelBookingResponseSuccess>(path, payload)
   }
@@ -50,9 +59,9 @@ export class Booking {
    * 
    * payload - Contiene elementos obligatorios y opcionales para modificar datos no relacionados con el itinerario en la reserva existente. 
    * @param payload ModifyBookingOptions 
-   * @returns ModifyBookingResponse
+   * @returns {Promise<ModifyBookingResponseSuccess>}
    */
-  async modify(payload: ModifyBookingOptions) {
+  async modify(payload: ModifyBookingOptions): Promise<ModifyBookingResponseSuccess> {
     const path = '/v1/trip/orders/modifyBooking'
     return this.sabre.post<ModifyBookingResponseSuccess>(path, payload)
   }

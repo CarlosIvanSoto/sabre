@@ -1,3 +1,4 @@
+import { Search, Ticketing } from "./air";
 import { Authentication } from "./authentication/authentication";
 import { Booking, FlightTickets } from "./booking-management";
 import { PostOptions } from "./common/interfaces";
@@ -12,6 +13,8 @@ export class Sabre {
   readonly authentication = new Authentication(this)
   readonly booking = new Booking(this)
   readonly flightTickets = new FlightTickets(this)
+  readonly search = new Search(this)
+  readonly ticketing = new Ticketing(this)
 
   constructor(private readonly options: SabreOptions = {}) {
     const processEnv = typeof process !== 'undefined' && process.env

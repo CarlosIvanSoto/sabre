@@ -93,6 +93,38 @@ Checks tickets with ticket numbers listed in the request for void, refund and ex
 await sabre.flightTickets.check(options);
 ```
 
+### Fulfill Flight Tickets
+
+Processes the issuance of tickets and various electronic miscellaneous documents (EMDs). EMDs are currently not supported.
+
+```js
+await sabre.flightTickets.fulfill(options);
+```
+
+### Bargain Finder Max (Search)
+
+Searches for the lowest available priced itineraries for a given origin and destination.
+
+```js
+await sabre.search.shop(options);
+```
+
+### Revalidate Itinerary (Search)
+
+The Revalidate Itinerary API allows you to re-query the availability and price of a specific itinerary option without having to book it.
+
+```js
+await sabre.search.revalidate(options);
+```
+
+### Issue Ticket (Ticketing) 
+
+Issues an airline ticket from an existing PNR (booking).
+
+```js
+await sabre.ticketing.issue(options);
+```
+
 ## Development
 
 #### Install dependencies

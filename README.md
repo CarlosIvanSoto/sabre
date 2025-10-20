@@ -34,7 +34,7 @@ Send the request for acquiring an authentication ATK session token.
 await sabre.authentication.OAuthTokenV2();
 ```
 
-## Get booking
+### Get booking
 
 Displays comprehensive booking details irrespective of source, optionally narrowing down the response to selected elements.
 
@@ -45,7 +45,7 @@ await sabre.booking.get({
 });
 ```
 
-## Create booking
+### Create booking
 
 Creates an air booking (NDC/ATPCO/LCC).
 
@@ -53,7 +53,7 @@ Creates an air booking (NDC/ATPCO/LCC).
 await sabre.booking.create(options);
 ```
 
-## Modify Booking
+### Modify Booking
 
 Creates a list of booking items that need to be modified.
 
@@ -61,7 +61,7 @@ Creates a list of booking items that need to be modified.
 await sabre.booking.modify(options);
 ```
 
-## Cancel Booking
+### Cancel Booking
 
 Cancels a booking or specified booking items, optionally voiding or refunding related flight tickets.
 
@@ -69,7 +69,7 @@ Cancels a booking or specified booking items, optionally voiding or refunding re
 await sabre.booking.cancel(options);
 ```
 
-## Void Flight Tickets
+### Void Flight Tickets
 
 Voids tickets with ticket numbers listed in the request, optionally including nonelectronic tickets (paper).
 
@@ -77,7 +77,7 @@ Voids tickets with ticket numbers listed in the request, optionally including no
 await sabre.flightTickets.void(options);
 ```
 
-## Refund Flight Tickets
+### Refund Flight Tickets
 
 Processes tickets by providing a request containing a list of ticket numbers which should be refunded. EMDs are currently not supported.
 
@@ -85,7 +85,7 @@ Processes tickets by providing a request containing a list of ticket numbers whi
 await sabre.flightTickets.refund(options);
 ```
 
-## Check Flight Tickets
+### Check Flight Tickets
 
 Checks tickets with ticket numbers listed in the request for void, refund and exchange conditions. EMDs are currently not supported.
 

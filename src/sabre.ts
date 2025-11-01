@@ -5,6 +5,7 @@ import { PostOptions } from "./common/interfaces";
 import { baseUrl, conversationId, domain, userAgent } from "./config";
 import { SabreError } from "./errors";
 import { SabreOptions } from "./interfaces";
+import { Reservation } from "./trip-management/reservation";
 
 export class Sabre {
   private readonly headers: Headers;
@@ -15,6 +16,7 @@ export class Sabre {
   readonly flightTickets = new FlightTickets(this)
   readonly search = new Search(this)
   readonly ticketing = new Ticketing(this)
+  readonly reservation = new Reservation(this)
 
   constructor(private readonly options: SabreOptions = {}) {
     const processEnv = typeof process !== 'undefined' && process.env

@@ -26,6 +26,9 @@ npm link
 npm version patch
 ```
 
+```bash
+npm publish --dry-run 
+```
 ## License
 
 MIT License

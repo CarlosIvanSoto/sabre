@@ -64,7 +64,7 @@ async function main() {
   try {
     sabre.setAuthorization(SABRE_TOKEN);
     const res = await sabre.search.shop(options)
-    console.log('Respuesta:',JSON.stringify(res));
+    console.log('Respuesta:', JSON.stringify(res));
   } catch (err) {
     console.error('Error al llamar a search.shop:', err)
   }

@@ -20,7 +20,7 @@ const options: BargainFinderMaxOptions = {
       {
         OriginLocation: { LocationCode: 'TRC' },
         DestinationLocation: { LocationCode: 'MEX' },
-        DepartureDateTime: '2025-12-02T10:00:00',
+        DepartureDateTime: '2026-03-09T00:00:00',
         Fixed: false
       }
     ],

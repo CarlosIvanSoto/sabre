@@ -5,48 +5,75 @@ import { RevalidateItineraryOptions, Sabre } from '../src'
 
 const options: RevalidateItineraryOptions = {
   OTA_AirLowFareSearchRQ: {
-    AvailableFlightsOnly: true,
+    Version: '5',
+    POS: {
+      Source: [
+        {
+          PseudoCityCode: process.env.SABRE_ORGANIZATION!,
+          RequestorID: {
+            Type: '1',
+            ID: '1',
+            CompanyName: {
+              Code: 'TN'
+            }
+          },
+          FixedPCC: false
+        }
+      ]
+    },
     OriginDestinationInformation: [
       {
-        OriginLocation: { LocationCode: 'TRC' },
-        DestinationLocation: { LocationCode: 'MEX' },
-        DepartureDateTime: '2025-11-25T10:00:00',
-        Fixed: true,
+        Fixed: false,
+        DepartureDateTime: '2026-03-09T06:15:00',
+        OriginLocation: {
+          LocationCode: 'TRC'
+        },
+        DestinationLocation: {
+          LocationCode: 'MEX'
+        },
         TPA_Extensions: {
           Flight: [
             {
-              Airline: { Marketing: 'SU' },
-              DepartureDateTime: '2024-10-25T10:00:00',
-              ArrivalDateTime: '2024-10-25T13:00:00',
-              OriginLocation: { LocationCode: 'SVO' },
-              DestinationLocation: { LocationCode: 'LHR' },
-              Number: 100,
               Type: 'A',
-              ClassOfService: 'Y'
+              Number: 101,
+              DepartureDateTime: '2026-03-09T06:15:00',
+              ArrivalDateTime: '2026-03-09T08:00:00',
+              ClassOfService: 'E',
+              OriginLocation: {
+                LocationCode: 'TRC'
+              },
+              DestinationLocation: {
+                LocationCode: 'MEX'
+              },
+              Airline: {
+                Marketing: 'AM',
+                Operating: 'AM'
+              }
             }
           ]
         }
       }
     ],
-    POS: {
-      Source: [
-        {
-          RequestorID: { ID: '1', Type: '1', CompanyName: { Code: 'TN' } },
-          PseudoCityCode: '7TZA',
-          FixedPCC: true
-        }
-      ]
-    },
     TravelerInfoSummary: {
       AirTravelerAvail: [
         {
           PassengerTypeQuantity: [
-            { Code: 'ADT', Quantity: 1, PersonName: { Surname: 'SIMPSON' } }
+            {
+              Code: 'ADT',
+              Quantity: 1
+            }
           ]
         }
       ]
     },
-    Version: 'V5',
+    TPA_Extensions: {
+      IntelliSellTransaction: {
+        RequestType: {
+          Name: '50ITINS'
+        }
+      }
+    },
+    AvailableFlightsOnly: false
   }
 }
 

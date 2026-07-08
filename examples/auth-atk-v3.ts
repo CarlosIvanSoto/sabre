@@ -7,7 +7,7 @@ async function main() {
   const run = process.env.RUN_EXAMPLES === '1' || process.env.RUN_EXAMPLES === 'true'
   if (!run) {
     console.log('Este ejemplo está listo. Para ejecutarlo en tu entorno con credenciales:')
-    console.log('RUN_EXAMPLES=1 SABRE_USERNAME=xxx SABRE_PASSWORD=yyy SABRE_ORGANIZATION=zzz npm run example:auth-atk')
+    console.log('RUN_EXAMPLES=1 SABRE_USERNAME=xxx SABRE_PASSWORD=yyy SABRE_ORGANIZATION=zzz SABRE_CLIENT_ID=aaa SABRE_CLIENT_SECRET=bbb npm run example:auth-atk-v3')
     return
   }
 
@@ -16,14 +16,19 @@ async function main() {
     console.error('Faltan variables de entorno: SABRE_USERNAME, SABRE_PASSWORD, SABRE_ORGANIZATION')
     return
   }
+  const { SABRE_CLIENT_ID, SABRE_CLIENT_SECRET } = process.env
+  if (!SABRE_CLIENT_ID || !SABRE_CLIENT_SECRET) {
+    console.error('Faltan variables de entorno: SABRE_CLIENT_ID, SABRE_CLIENT_SECRET')
+    return
+  }
 
-  const sabre = new Sabre({ username: SABRE_USERNAME, password: SABRE_PASSWORD, organization: SABRE_ORGANIZATION })
+  const sabre = new Sabre({ username: SABRE_USERNAME, password: SABRE_PASSWORD, organization: SABRE_ORGANIZATION, clientId: SABRE_CLIENT_ID, clientSecret: SABRE_CLIENT_SECRET })
 
   try {
-    const res = await sabre.authentication.OAuthTokenV2();
+    const res = await sabre.authentication.OAuthTokenV3();
     console.log('Respuesta (resumen):', JSON.stringify(res).slice(0, 1000))
   } catch (err) {
-    console.error('Error al llamar a authentication.OAuthTokenV2:', err)
+    console.error('Error al llamar a authentication.OAuthTokenV3:', err)
   }
 }
 

@@ -42,7 +42,9 @@
     "example:search-shop": "node --env-file=.env --import=tsx examples/search-shop.ts",
     "example:search-revalidate": "node --env-file=.env --import=tsx examples/search-revalidate.ts",
     "example:create-pnr-wop": "node --env-file=.env --import=tsx examples/create-passanger-name-record-without-profile.ts",
-    "example:crea-reserva": "example:search-shop && example:search-revalidate && example:create-pnr"
+    "example:crea-reserva": "example:search-shop && example:search-revalidate && example:create-pnr",
+    "example:auth-atk-v3": "node --env-file=.env --import=tsx examples/auth-atk-v3.ts",
+    "example:search-shop": "node --env-file=.env --import=tsx examples/search-shop.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.38.0",

@@ -1,4 +1,6 @@
 export { Sabre } from './sabre'
-export * from './booking-management/booking/interfaces'
-export * from './booking-management/flight-tickets/interfaces'
-export * from './authentication/interfaces/create-token.interface'
+
+export * from './booking-management/interfaces'
+export * from './trip-management/interfaces'
+export * from './authentication/interfaces'
+export * from './air/interfaces'

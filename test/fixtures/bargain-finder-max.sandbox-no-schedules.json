@@ -1,0 +1,112 @@
+{
+  "recordedAt": "2026-10-10",
+  "environment": "sandbox",
+  "outcome": "SabreBusinessError: bargainFinderMax: No complete journey can be built in IF2/ADVJR1. (code PROCESS, retryable false)",
+  "request": {
+    "OTA_AirLowFareSearchRQ": {
+      "Version": "5",
+      "POS": {
+        "Source": [
+          {
+            "PseudoCityCode": "XXXX",
+            "RequestorID": {
+              "Type": "1",
+              "ID": "1",
+              "CompanyName": {
+                "Code": "TN"
+              }
+            }
+          }
+        ]
+      },
+      "OriginDestinationInformation": [
+        {
+          "DepartureDateTime": "2026-11-09T10:00:00",
+          "OriginLocation": {
+            "LocationCode": "GDL"
+          },
+          "DestinationLocation": {
+            "LocationCode": "WAW"
+          }
+        }
+      ],
+      "TravelPreferences": {
+        "MaxStopsQuantity": 0
+      },
+      "TravelerInfoSummary": {
+        "AirTravelerAvail": [
+          {
+            "PassengerTypeQuantity": [
+              {
+                "Code": "ADT",
+                "Quantity": 1
+              }
+            ]
+          }
+        ]
+      },
+      "TPA_Extensions": {
+        "IntelliSellTransaction": {
+          "RequestType": {
+            "Name": "50ITINS"
+          }
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "groupedItineraryResponse": {
+        "version": "7.2.2",
+        "messages": [
+          {
+            "severity": "Info",
+            "type": "SERVER",
+            "code": "GCA14-ISELL-TN-00-2026-10-00-24MR",
+            "text": "27131"
+          },
+          {
+            "severity": "Info",
+            "type": "WORKERTHREAD",
+            "code": "TRANSACTIONID",
+            "text": "0"
+          },
+          {
+            "severity": "Info",
+            "type": "DRE",
+            "code": "RULEID",
+            "text": "21728"
+          },
+          {
+            "severity": "Info",
+            "type": "DEFAULT",
+            "code": "RULEID",
+            "text": "25238"
+          },
+          {
+            "severity": "Info",
+            "type": "SCHEDULES",
+            "code": "MSG",
+            "text": "NO FLIGHT SCHEDULES FOR QUALIFIERS USED"
+          },
+          {
+            "severity": "Error",
+            "type": "IF2",
+            "code": "PROCESS",
+            "text": "No complete journey can be built in IF2/ADVJR1."
+          },
+          {
+            "severity": "Error",
+            "type": "ERR",
+            "code": "ERR",
+            "text": "Error during Processing"
+          }
+        ],
+        "statistics": {
+          "itineraryCount": 0
+        }
+      }
+    }
+  }
+}

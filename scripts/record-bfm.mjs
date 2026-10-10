@@ -2,8 +2,11 @@
 // Graba fixtures de Bargain Finder Max v5 contra sandbox (cert) con credenciales reales.
 // Lo corre el usuario; nunca la CI. Necesita `npm run build` antes.
 //
-//   SABRE_CLIENT_ID=… SABRE_CLIENT_SECRET=… SABRE_USERNAME=… SABRE_PASSWORD=… SABRE_PCC=… \
-//     node scripts/record-bfm.mjs [ok|no-schedules]
+//   node --env-file=.env scripts/record-bfm.mjs [ok|no-schedules]
+//
+// Variables: SABRE_CLIENT_ID, SABRE_CLIENT_SECRET, SABRE_USERNAME, SABRE_PASSWORD y
+// SABRE_PCC (o SABRE_ORGANIZATION). Si SABRE_USERNAME es solo el ID de usuario, se arma el
+// EPR: `<user>-<PCC>-AA` en v3 y `V1:<user>:<PCC>:AA` en v2.
 //
 // Opcionales: SABRE_AUTH_VERSION (v3 por defecto), SABRE_BFM_ORIGIN / SABRE_BFM_DESTINATION
 // (DFW / LAX por defecto).
@@ -32,8 +35,10 @@ const env = (name, fallback) => {
 };
 
 const authVersion = process.env.SABRE_AUTH_VERSION ?? 'v3';
-const pcc = env('SABRE_PCC');
-const username = env('SABRE_USERNAME');
+const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
+const user = env('SABRE_USERNAME');
+const isEpr = user.includes('-') || user.includes(':');
+const username = isEpr ? user : authVersion === 'v3' ? `${user}-${pcc}-AA` : `V1:${user}:${pcc}:AA`;
 const credentials = {
   clientId: authVersion === 'v3' ? env('SABRE_CLIENT_ID') : process.env.SABRE_CLIENT_ID,
   clientSecret: authVersion === 'v3' ? env('SABRE_CLIENT_SECRET') : process.env.SABRE_CLIENT_SECRET,
@@ -107,7 +112,7 @@ try {
   body = captured.body;
 }
 
-const secrets = [pcc, username].filter((value) => value.length >= 3);
+const secrets = [username, user, pcc].filter((value) => value.length >= 3);
 function redact(value) {
   if (typeof value === 'string') {
     return secrets.reduce((text, secret) => text.split(secret).join('XXXX'), value);

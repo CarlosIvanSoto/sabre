@@ -66,8 +66,12 @@ export async function bargainFinderMax(
 
 /**
  * Paso 3 del orden de detección: un mensaje con `severity: Error` en
- * `groupedItineraryResponse.messages[]` es un `SabreBusinessError`. Supuesto pendiente de
- * confirmar con una respuesta real de error (el wiki no trae el body).
+ * `groupedItineraryResponse.messages[]` (respuesta 200) es un `SabreBusinessError`.
+ *
+ * En sandbox, los mensajes `Error` son genéricos (`No complete journey can be built…`,
+ * `Error during Processing`) y el texto del catálogo llega en un mensaje `Info`
+ * (`NO FLIGHT SCHEDULES FOR QUALIFIERS USED`). Por eso, cuando hay algún `Error`, el
+ * catálogo se busca en el `text` de todos los mensajes.
  */
 export function classifyBargainFinderMax(body: unknown): SabreError | undefined {
   const response = isObject(body) ? body.groupedItineraryResponse : undefined;
@@ -81,8 +85,9 @@ export function classifyBargainFinderMax(body: unknown): SabreError | undefined 
   const error = messages.find((message) => message.severity?.toLowerCase() === 'error');
   if (error === undefined) return undefined;
 
-  const text = typeof error.text === 'string' ? error.text : '';
-  const known = CATALOG.find((entry) => text.toLowerCase().includes(entry.code.toLowerCase()));
+  const match = findInCatalog(messages);
+  const text = match?.text ?? (typeof error.text === 'string' ? error.text : '');
+  const known = match?.entry;
   const code = known?.code ?? error.code ?? text;
   return new SabreBusinessError(`${BARGAIN_FINDER_MAX_SERVICE}: ${text || code}`, {
     service: BARGAIN_FINDER_MAX_SERVICE,
@@ -90,6 +95,18 @@ export function classifyBargainFinderMax(body: unknown): SabreError | undefined 
     retryable: known?.retryable ?? false,
     raw: body,
   });
+}
+
+function findInCatalog(
+  messages: Partial<ItineraryMessage>[],
+): { entry: (typeof CATALOG)[number]; text: string } | undefined {
+  for (const message of messages) {
+    if (typeof message.text !== 'string') continue;
+    const text = message.text.toLowerCase();
+    const entry = CATALOG.find((candidate) => text.includes(candidate.code.toLowerCase()));
+    if (entry !== undefined) return { entry, text: message.text };
+  }
+  return undefined;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

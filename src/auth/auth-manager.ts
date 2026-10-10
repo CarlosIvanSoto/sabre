@@ -3,9 +3,15 @@
 import type { ResolvedConfig } from '../config.js';
 import { SabreGatewayError } from '../errors/index.js';
 import type { RestTransport } from '../http/rest-transport.js';
+import { EventLogger } from '../logging/logger.js';
 import { buildTokenRequest } from './token-request.js';
 
 export const TOKEN_SERVICE = 'oauthTokenCreate';
+
+/** Margen de refresco proactivo: 1 h antes de expirar (o media vida si el token dura menos). */
+export const REFRESH_THRESHOLD_S = 3600;
+
+export type TokenRefreshReason = 'initial' | 'proactive' | 'reactive';
 
 /** Token ATK obtenido de OAuth Token Create. */
 export interface AccessToken {
@@ -27,15 +33,53 @@ export interface AuthManagerOptions {
   now?: () => number;
 }
 
+/**
+ * Cachea el token en memoria, lo renueva antes de que expire y comparte una sola
+ * petición en vuelo entre requests concurrentes. Interno en v0.3.0.
+ */
 export class AuthManager {
   readonly #config: ResolvedConfig;
   readonly #transport: RestTransport;
   readonly #now: () => number;
+  readonly #log: EventLogger;
+  #token: AccessToken | undefined;
+  #inFlight: Promise<AccessToken> | undefined;
 
   constructor(config: ResolvedConfig, transport: RestTransport, options: AuthManagerOptions = {}) {
     this.#config = config;
     this.#transport = transport;
     this.#now = options.now ?? Date.now;
+    this.#log = new EventLogger(config.logger);
+  }
+
+  /** Token vigente; pide uno nuevo si no hay o si cruzó el umbral de refresco. */
+  async getToken(): Promise<string> {
+    const token = this.#token;
+    if (token !== undefined && !this.#needsRefresh(token)) return token.accessToken;
+    return (await this.#refresh(token === undefined ? 'initial' : 'proactive')).accessToken;
+  }
+
+  #needsRefresh(token: AccessToken): boolean {
+    const thresholdMs = Math.min(REFRESH_THRESHOLD_S, token.expiresIn / 2) * 1000;
+    return this.#now() >= token.obtainedAt + token.expiresIn * 1000 - thresholdMs;
+  }
+
+  /** Una sola petición en vuelo: las llamadas concurrentes esperan la misma promesa. */
+  #refresh(reason: TokenRefreshReason): Promise<AccessToken> {
+    this.#inFlight ??= this.fetchToken()
+      .then((token) => {
+        this.#token = token;
+        this.#log.emit('info', 'sabre.auth.token.refresh', {
+          authVersion: this.#config.authVersion,
+          reason,
+          expiresIn: token.expiresIn,
+        });
+        return token;
+      })
+      .finally(() => {
+        this.#inFlight = undefined;
+      });
+    return this.#inFlight;
   }
 
   /**

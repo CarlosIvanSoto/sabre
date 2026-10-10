@@ -38,7 +38,7 @@ describe('RestTransport', () => {
   it('pide el header Authorization al proveedor, salvo con auth: false', async () => {
     const fetch = mockFetch(json(200, {}), json(200, {}));
     const t = transport(fetch);
-    const provider = vi.fn(async () => 'Bearer T1RLAQ');
+    const provider = { get: vi.fn(async () => 'Bearer T1RLAQ'), invalidate: vi.fn() };
     t.setAuthorizationProvider(provider);
 
     await t.request(shop);
@@ -46,7 +46,7 @@ describe('RestTransport', () => {
 
     expect((fetch.mock.calls[0]![1]?.headers as Headers).get('Authorization')).toBe('Bearer T1RLAQ');
     expect((fetch.mock.calls[1]![1]?.headers as Headers).has('Authorization')).toBe(false);
-    expect(provider).toHaveBeenCalledOnce();
+    expect(provider.get).toHaveBeenCalledOnce();
   });
 
   describe('paso 1: errores de gateway REST', () => {
@@ -133,7 +133,7 @@ describe('RestTransport', () => {
       const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } satisfies SabreLogger;
       const fetch = mockFetch(json(200, { travelers: [{ givenName: 'Ana' }] }));
       const t = transport(fetch, { logger });
-      t.setAuthorizationProvider(async () => 'Bearer T1RLAQ-secret');
+      t.setAuthorizationProvider({ get: async () => 'Bearer T1RLAQ-secret', invalidate: () => {} });
 
       await t.request({ ...shop, body: { travelers: [{ givenName: 'Luis' }] } });
 

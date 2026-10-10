@@ -2,7 +2,7 @@
 // Ver sabre-wiki/wiki/sdk/renovacion-token-oauth.md y wiki/entities/oauth-token-create.md.
 import type { ResolvedConfig } from '../config.js';
 import { SabreGatewayError } from '../errors/index.js';
-import type { RestTransport } from '../http/rest-transport.js';
+import type { AuthorizationProvider, RestTransport } from '../http/rest-transport.js';
 import { EventLogger } from '../logging/logger.js';
 import { buildTokenRequest } from './token-request.js';
 
@@ -44,6 +44,8 @@ export class AuthManager {
   readonly #log: EventLogger;
   #token: AccessToken | undefined;
   #inFlight: Promise<AccessToken> | undefined;
+  /** El último token cacheado fue rechazado con 401 (el próximo refresco es reactivo). */
+  #invalidated = false;
 
   constructor(config: ResolvedConfig, transport: RestTransport, options: AuthManagerOptions = {}) {
     this.#config = config;
@@ -56,7 +58,26 @@ export class AuthManager {
   async getToken(): Promise<string> {
     const token = this.#token;
     if (token !== undefined && !this.#needsRefresh(token)) return token.accessToken;
-    return (await this.#refresh(token === undefined ? 'initial' : 'proactive')).accessToken;
+    const reason = token !== undefined ? 'proactive' : this.#invalidated ? 'reactive' : 'initial';
+    return (await this.#refresh(reason)).accessToken;
+  }
+
+  /**
+   * Descarta `accessToken` tras un 401 de un servicio. Si el caché ya tiene otro token
+   * (otra request lo renovó), no hace nada: los 401 concurrentes comparten un refresco.
+   */
+  invalidate(accessToken: string): void {
+    if (this.#token?.accessToken !== accessToken) return;
+    this.#token = undefined;
+    this.#invalidated = true;
+  }
+
+  /** Adaptador de salida para el transporte REST: `Authorization: Bearer <token>`. */
+  bearerProvider(): AuthorizationProvider {
+    return {
+      get: async () => `Bearer ${await this.getToken()}`,
+      invalidate: (authorization) => this.invalidate(authorization.replace(/^Bearer /, '')),
+    };
   }
 
   #needsRefresh(token: AccessToken): boolean {
@@ -69,6 +90,7 @@ export class AuthManager {
     this.#inFlight ??= this.fetchToken()
       .then((token) => {
         this.#token = token;
+        this.#invalidated = false;
         this.#log.emit('info', 'sabre.auth.token.refresh', {
           authVersion: this.#config.authVersion,
           reason,

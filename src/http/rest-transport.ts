@@ -29,7 +29,7 @@ export interface RestRequest {
    */
   idempotent: boolean;
   query?: Record<string, string | number | boolean | undefined>;
-  /** Se serializa como JSON. */
+  /** Se serializa como JSON, salvo `URLSearchParams`, que va como form-urlencoded. */
   body?: unknown;
   headers?: Record<string, string>;
   /** `false` para no pedir el header `Authorization` (p. ej. la propia request de token). */
@@ -97,8 +97,9 @@ export class RestTransport {
   async #send<T>(request: RestRequest, attempt: number): Promise<T> {
     const url = this.#url(request);
     const headers = new Headers({ Accept: 'application/json', ...request.headers });
+    const form = request.body instanceof URLSearchParams;
     if (request.body !== undefined && !headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json');
+      headers.set('Content-Type', form ? 'application/x-www-form-urlencoded' : 'application/json');
     }
     if (request.auth !== false && this.#authorization !== undefined) {
       headers.set('Authorization', await this.#authorization());
@@ -113,7 +114,7 @@ export class RestTransport {
       response = await this.#config.fetch(url, {
         method: request.method,
         headers,
-        ...(request.body === undefined ? {} : { body: JSON.stringify(request.body) }),
+        ...(request.body === undefined ? {} : { body: form ? String(request.body) : JSON.stringify(request.body) }),
         ...(request.signal === undefined ? {} : { signal: request.signal }),
       });
     } catch (cause) {

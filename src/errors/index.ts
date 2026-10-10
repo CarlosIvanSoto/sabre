@@ -6,6 +6,7 @@ export {
   SabreWarning,
 } from './sabre-error.js';
 export type {
+  SabreBusinessErrorOptions,
   SabreErrorOptions,
   SabreGatewayErrorOptions,
   SabreOrchestrationErrorOptions,

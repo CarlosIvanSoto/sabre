@@ -40,13 +40,22 @@ describe('SabreError', () => {
     expect(internal.code).toBe('SP.INTERNAL_ERROR');
   });
 
-  it('SabreBusinessError lleva service y code sin normalizar y nunca es reintentable', () => {
+  it('SabreBusinessError lleva service y code sin normalizar y por defecto no es reintentable', () => {
     const err = new SabreBusinessError('Asiento no disponible', { service: 'seatMap', code: '135', raw });
     expect(err).toBeInstanceOf(SabreError);
     expect(err).not.toBeInstanceOf(SabreWarning);
     expect(err.service).toBe('seatMap');
     expect(err.code).toBe('135');
     expect(err.retryable).toBe(false);
+  });
+
+  it('SabreBusinessError acepta retryable: true para códigos temporales de servicios de lectura', () => {
+    const err = new SabreBusinessError('Transmission timeout', {
+      service: 'bargainFinderMax',
+      code: 'Transmission timeout',
+      retryable: true,
+    });
+    expect(err.retryable).toBe(true);
   });
 
   it('SabreWarning es un SabreError distinto de SabreBusinessError', () => {

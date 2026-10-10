@@ -88,14 +88,26 @@ export interface SabreServiceErrorOptions extends Omit<SabreErrorOptions, 'retry
   code: string;
 }
 
-/** Error del catálogo propio de un servicio. Nunca se reintenta automáticamente. */
+export interface SabreBusinessErrorOptions extends SabreServiceErrorOptions {
+  /**
+   * Solo para códigos que Sabre documenta como temporales en un servicio de lectura
+   * (p. ej. `Transmission timeout` de Bargain Finder Max). Por defecto `false`.
+   * La política de reintentos igual exige que la operación sea idempotente.
+   */
+  retryable?: boolean;
+}
+
+/**
+ * Error del catálogo propio de un servicio. No es reintentable, salvo los códigos
+ * temporales de servicios de lectura que se marcan con `retryable: true`.
+ */
 export class SabreBusinessError extends SabreError {
   override name = 'SabreBusinessError';
   readonly service: string;
   readonly code: string;
 
-  constructor(message: string, options: SabreServiceErrorOptions) {
-    super(message, { ...options, retryable: false });
+  constructor(message: string, options: SabreBusinessErrorOptions) {
+    super(message, { ...options, retryable: options.retryable ?? false });
     this.service = options.service;
     this.code = options.code;
   }

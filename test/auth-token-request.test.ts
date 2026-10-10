@@ -82,7 +82,7 @@ describe('AuthManager.fetchToken', () => {
   it('no usa el proveedor de Authorization del transporte (Bearer)', async () => {
     const fetch = mockFetch(json(200, token));
     const resolved = resolveConfig(config({ fetch }));
-    const transport = new RestTransport(resolved, { authorization: async () => 'Bearer viejo' });
+    const transport = new RestTransport(resolved, { authorization: { get: async () => 'Bearer viejo', invalidate: () => {} } });
     await new AuthManager(resolved, transport).fetchToken();
     expect((fetch.mock.calls[0]![1]?.headers as Headers).get('Authorization')).toMatch(/^Basic /);
   });

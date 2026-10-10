@@ -39,8 +39,13 @@ export interface RestRequest {
   signal?: AbortSignal;
 }
 
-/** Devuelve el valor del header `Authorization` (lo provee `AuthManager`). */
-export type AuthorizationProvider = () => Promise<string>;
+/** Fuente del header `Authorization` de los servicios (la implementa `AuthManager`). */
+export interface AuthorizationProvider {
+  /** Valor vigente del header, p. ej. `Bearer <token>`. */
+  get(): Promise<string>;
+  /** El gateway rechazó `authorization` con 401: descartarlo para que `get` traiga otro. */
+  invalidate(authorization: string): void;
+}
 
 export interface RestTransportOptions {
   authorization?: AuthorizationProvider;
@@ -65,7 +70,7 @@ export class RestTransport {
     this.#sleep = options.sleep ?? sleep;
   }
 
-  /** Punto de enganche para `AuthManager` (Fase 1.3). */
+  /** Punto de enganche para `AuthManager`. */
   setAuthorizationProvider(provider: AuthorizationProvider | undefined): void {
     this.#authorization = provider;
   }
@@ -74,10 +79,29 @@ export class RestTransport {
     if (request.retry !== undefined) validateRetryOptions(request.retry, 'retry');
     const retry = { ...this.#config.retry, ...definedOnly(request.retry ?? {}) };
 
+    let reauthorized = false;
     for (let attempt = 0; ; attempt++) {
+      // Fuera del try: un fallo al obtener el token ya pasó por sus propios reintentos.
+      const authorization = await this.#authorizationFor(request);
       try {
-        return await this.#send<T>(request, attempt);
+        return await this.#send<T>(request, attempt, authorization);
       } catch (error) {
+        // Refresco reactivo: un solo reintento con token nuevo, fuera del presupuesto genérico.
+        // Aplica también a escrituras: el 401 del gateway rechaza la request antes del proveedor.
+        if (authorization !== undefined && !reauthorized && isUnauthorized(error)) {
+          reauthorized = true;
+          this.#authorization?.invalidate(authorization);
+          this.#log.emit('warn', 'sabre.request.retry', {
+            service: request.service,
+            method: request.method,
+            path: request.path,
+            attempt: attempt + 1,
+            reason: 'unauthorized',
+            error: error as SabreError,
+          });
+          attempt--;
+          continue;
+        }
         if (attempt >= retry.maxRetries || !shouldRetry(error, request.idempotent)) throw error;
         const delayMs = retryDelay(attempt, retry.baseDelayMs, this.#random);
         this.#log.emit('warn', 'sabre.request.retry', {
@@ -94,16 +118,19 @@ export class RestTransport {
     }
   }
 
-  async #send<T>(request: RestRequest, attempt: number): Promise<T> {
+  async #authorizationFor(request: RestRequest): Promise<string | undefined> {
+    if (request.auth === false || this.#authorization === undefined) return undefined;
+    return this.#authorization.get();
+  }
+
+  async #send<T>(request: RestRequest, attempt: number, authorization: string | undefined): Promise<T> {
     const url = this.#url(request);
     const headers = new Headers({ Accept: 'application/json', ...request.headers });
     const form = request.body instanceof URLSearchParams;
     if (request.body !== undefined && !headers.has('Content-Type')) {
       headers.set('Content-Type', form ? 'application/x-www-form-urlencoded' : 'application/json');
     }
-    if (request.auth !== false && this.#authorization !== undefined) {
-      headers.set('Authorization', await this.#authorization());
-    }
+    if (authorization !== undefined) headers.set('Authorization', authorization);
 
     const logContext = { service: request.service, method: request.method, path: request.path, attempt };
     this.#log.emit('debug', 'sabre.request.start', logContext);
@@ -193,6 +220,10 @@ function extractCode(body: unknown): string | undefined {
     if (typeof value === 'string' && value !== '') return value;
   }
   return undefined;
+}
+
+function isUnauthorized(error: unknown): boolean {
+  return error instanceof SabreGatewayError && error.protocol === 'rest' && error.status === 401;
 }
 
 function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {

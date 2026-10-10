@@ -12,8 +12,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Piso declarado en engines y LTS actual. Ver wiki/sdk/configuracion-logging-y-build.md.
-        node: ['18', 'lts/*']
+        # Piso declarado en engines y LTS activa. Ver wiki/sdk/version-minima-de-node.md.
+        node: ['22', '24']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

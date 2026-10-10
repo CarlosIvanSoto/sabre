@@ -22,7 +22,8 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:portable": "node scripts/check-portable.mjs src"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [rewrite-v0.3]
+  pull_request:
+    branches: [rewrite-v0.3]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Piso declarado en engines y LTS actual. Ver wiki/sdk/configuracion-logging-y-build.md.
+        node: ['18', 'lts/*']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run check:portable
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test

@@ -7,10 +7,9 @@ export type SabreEnvironment = 'sandbox' | 'production';
 
 export type SabreAuthVersion = 'v3' | 'v2';
 
+/** Credenciales para OAuth Token Create v3: Client ID/Secret más usuario EPR. */
 export interface SabreCredentials {
-  /** Requerido en v3; no se usa en v2. */
   clientId: string;
-  /** Requerido en v3; no se usa en v2. */
   clientSecret: string;
   /** Usuario EPR. */
   username: string;
@@ -18,11 +17,18 @@ export interface SabreCredentials {
   password: string;
 }
 
-export interface SabreConfig {
-  credentials: SabreCredentials;
+/** Credenciales para OAuth Token Create v2: solo EPR; `clientId`/`clientSecret` se ignoran. */
+export interface SabreCredentialsV2 {
+  clientId?: string;
+  clientSecret?: string;
+  /** Usuario EPR. */
+  username: string;
+  /** Contraseña EPR. */
+  password: string;
+}
+
+interface SabreBaseConfig {
   environment: SabreEnvironment;
-  /** Versión de OAuth Token Create. Por defecto `'v3'`. */
-  authVersion?: SabreAuthVersion;
   /** Campo reservado: PCC vs iPCC sigue sin resolver. */
   pcc?: string;
   logger?: SabreLogger;
@@ -32,6 +38,21 @@ export interface SabreConfig {
   fetch?: typeof fetch;
 }
 
+/** OAuth Token Create v3 (por defecto). */
+export interface SabreConfigV3 extends SabreBaseConfig {
+  authVersion?: 'v3';
+  credentials: SabreCredentials;
+}
+
+/** OAuth Token Create v2. */
+export interface SabreConfigV2 extends SabreBaseConfig {
+  authVersion: 'v2';
+  credentials: SabreCredentialsV2;
+}
+
+/** Config del cliente, discriminada por `authVersion`. */
+export type SabreConfig = SabreConfigV3 | SabreConfigV2;
+
 export const BASE_URLS: Readonly<Record<SabreEnvironment, string>> = Object.freeze({
   sandbox: 'https://api.cert.platform.sabre.com',
   production: 'https://api.platform.sabre.com',
@@ -39,7 +60,7 @@ export const BASE_URLS: Readonly<Record<SabreEnvironment, string>> = Object.free
 
 /** Config validada y con defaults aplicados. */
 export interface ResolvedConfig {
-  credentials: Readonly<SabreCredentials>;
+  credentials: Readonly<SabreCredentials | SabreCredentialsV2>;
   environment: SabreEnvironment;
   baseUrl: string;
   authVersion: SabreAuthVersion;

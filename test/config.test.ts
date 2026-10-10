@@ -20,9 +20,19 @@ describe('SabreConfig', () => {
     expect(resolveConfig(config({ retry: { maxRetries: 1 } })).retry).toEqual({ maxRetries: 1, baseDelayMs: 500 });
   });
 
-  it('en v2 no exige clientId/clientSecret', () => {
-    const v2 = { username: 'epr-user', password: 'epr-pass' } as SabreConfig['credentials'];
-    expect(resolveConfig(config({ authVersion: 'v2', credentials: v2 })).authVersion).toBe('v2');
+  it('en v2 no exige clientId/clientSecret (tipo y runtime)', () => {
+    const v2: SabreConfig = { environment: 'sandbox', authVersion: 'v2', credentials: { username: 'epr-user', password: 'epr-pass' } };
+    expect(resolveConfig(v2).authVersion).toBe('v2');
+  });
+
+  it('en v3 (explícito o por defecto) el tipo exige clientId/clientSecret', () => {
+    const epr = { username: 'epr-user', password: 'epr-pass' };
+    // @ts-expect-error clientId/clientSecret son obligatorios sin authVersion
+    const implicit: SabreConfig = { environment: 'sandbox', credentials: epr };
+    // @ts-expect-error clientId/clientSecret son obligatorios con authVersion 'v3'
+    const explicit: SabreConfig = { environment: 'sandbox', authVersion: 'v3', credentials: epr };
+    expect(() => resolveConfig(implicit)).toThrow(/clientId \(requerido con authVersion v3\)/);
+    expect(() => resolveConfig(explicit)).toThrow(/clientId \(requerido con authVersion v3\)/);
   });
 
   it.each<[string, unknown, RegExp]>([

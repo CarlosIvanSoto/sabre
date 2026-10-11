@@ -58,6 +58,17 @@ describe('SabreError', () => {
     expect(err.retryable).toBe(true);
   });
 
+  it('SabreBusinessError lleva los avisos que llegaron con él, sin su raw al serializar', () => {
+    const warning = new SabreWarning('Aviso', { service: 'createBooking', code: 'AIRCRAFT_CHANGE', raw });
+    const err = new SabreBusinessError('Falla', { service: 'createBooking', code: 'X', warnings: [warning] });
+    expect(err.warnings).toEqual([warning]);
+    expect(new SabreBusinessError('Falla', { service: 'seatMap', code: '135' }).warnings).toEqual([]);
+    const json = JSON.parse(JSON.stringify(err)) as { warnings: unknown[] };
+    expect(json.warnings).toEqual([
+      { name: 'SabreWarning', message: 'Aviso', retryable: false, service: 'createBooking', code: 'AIRCRAFT_CHANGE' },
+    ]);
+  });
+
   it('SabreWarning es un SabreError distinto de SabreBusinessError', () => {
     const warn = new SabreWarning('Aviso', { service: 'createBooking', code: 'WARN' });
     expect(warn).toBeInstanceOf(SabreError);
@@ -83,6 +94,7 @@ describe('SabreError', () => {
       retryable: false,
       service: 'createBooking',
       code: '1',
+      warnings: [],
     });
     expect(Object.keys(err)).not.toContain('raw');
     expect({ ...err }).not.toHaveProperty('raw');

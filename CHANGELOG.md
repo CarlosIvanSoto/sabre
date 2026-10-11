@@ -36,8 +36,13 @@ Air Booking flow are done.
   booking (for example `BOOKING_NOT_FOUND`); otherwise warnings and partial errors are
   returned on the result. Transient failures (`INTERNAL_SERVER_TIMEOUT`,
   `DOWNLINE_SERVICE_FAILURE`, gateway `429`/`5xx`) are retried.
+- `sabre.booking.cancel`: Cancel Booking from the Booking Management API v1, for the whole
+  booking (`cancelAll`) or by `itemId`. It is never retried automatically, and combinations
+  that Sabre always rejects throw a `TypeError` before any request is sent.
+  `NO_ITEMS_CANCELLED` throws `SabreBusinessError` even though Sabre sends it as a warning.
 - Typed error hierarchy: `SabreError`, `SabreGatewayError`, `SabreOrchestrationError`,
-  `SabreBusinessError` and `SabreWarning`, each with `retryable`. `SabreError.raw` keeps the
+  `SabreBusinessError` and `SabreWarning`, each with `retryable`. `SabreBusinessError` carries
+  the `warnings` and other `errors` that arrived with it. `SabreError.raw` keeps the
   original response fragment; it can contain credentials or passenger data and is not
   enumerable.
 - Retries with exponential backoff and full jitter (500 ms floor), only for idempotent

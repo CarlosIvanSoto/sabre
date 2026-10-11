@@ -29,17 +29,23 @@ export function toWarning(service: string, item: BookingResponseError): SabreWar
   return new SabreWarning(messageOf(service, item), { service, code: codeOf(item), raw: item });
 }
 
+export interface BusinessErrorAttachments {
+  warnings?: SabreWarning[];
+  errors?: SabreBusinessError[];
+  retryable?: boolean;
+}
+
 export function toBusinessError(
   service: string,
   item: BookingResponseError,
-  warnings: SabreWarning[],
-  retryable = false,
+  { warnings = [], errors = [], retryable = false }: BusinessErrorAttachments = {},
 ): SabreBusinessError {
   return new SabreBusinessError(messageOf(service, item), {
     service,
     code: codeOf(item),
     raw: item,
     warnings,
+    errors,
     retryable,
   });
 }

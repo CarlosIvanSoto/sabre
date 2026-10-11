@@ -187,5 +187,5 @@ function warningOf(item: BookingResponseError): SabreWarning {
 }
 
 function errorOf(item: BookingResponseError, warnings: SabreWarning[]): SabreBusinessError {
-  return toBusinessError(GET_BOOKING_SERVICE, item, warnings, RETRYABLE_TYPES.has(item.type));
+  return toBusinessError(GET_BOOKING_SERVICE, item, { warnings, retryable: RETRYABLE_TYPES.has(item.type) });
 }

@@ -97,6 +97,11 @@ export interface SabreBusinessErrorOptions extends SabreServiceErrorOptions {
   retryable?: boolean;
   /** Avisos que llegaron junto con el error (p. ej. `category: WARNING` de Create Booking). */
   warnings?: readonly SabreWarning[];
+  /**
+   * Otros errores que llegaron junto con este (p. ej. la causa real detrás de
+   * `NO_ITEMS_CANCELLED` en Cancel Booking).
+   */
+  errors?: readonly SabreBusinessError[];
 }
 
 /**
@@ -108,12 +113,14 @@ export class SabreBusinessError extends SabreError {
   readonly service: string;
   readonly code: string;
   readonly warnings: readonly SabreWarning[];
+  readonly errors: readonly SabreBusinessError[];
 
   constructor(message: string, options: SabreBusinessErrorOptions) {
     super(message, { ...options, retryable: options.retryable ?? false });
     this.service = options.service;
     this.code = options.code;
     this.warnings = options.warnings ?? [];
+    this.errors = options.errors ?? [];
   }
 }
 

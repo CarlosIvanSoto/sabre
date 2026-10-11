@@ -69,6 +69,25 @@ describe('SabreError', () => {
     ]);
   });
 
+  it('SabreBusinessError lleva los otros errores que llegaron con él, sin su raw al serializar', () => {
+    const cause = new SabreBusinessError('Causa', { service: 'cancelBooking', code: 'UNABLE_TO_VOID_TICKET', raw });
+    const err = new SabreBusinessError('Falla', { service: 'cancelBooking', code: 'NO_ITEMS_CANCELLED', errors: [cause] });
+    expect(err.errors).toEqual([cause]);
+    expect(new SabreBusinessError('Falla', { service: 'seatMap', code: '135' }).errors).toEqual([]);
+    const json = JSON.parse(JSON.stringify(err)) as { errors: unknown[] };
+    expect(json.errors).toEqual([
+      {
+        name: 'SabreBusinessError',
+        message: 'Causa',
+        retryable: false,
+        service: 'cancelBooking',
+        code: 'UNABLE_TO_VOID_TICKET',
+        warnings: [],
+        errors: [],
+      },
+    ]);
+  });
+
   it('SabreWarning es un SabreError distinto de SabreBusinessError', () => {
     const warn = new SabreWarning('Aviso', { service: 'createBooking', code: 'WARN' });
     expect(warn).toBeInstanceOf(SabreError);
@@ -95,6 +114,7 @@ describe('SabreError', () => {
       service: 'createBooking',
       code: '1',
       warnings: [],
+      errors: [],
     });
     expect(Object.keys(err)).not.toContain('raw');
     expect({ ...err }).not.toHaveProperty('raw');

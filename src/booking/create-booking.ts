@@ -119,7 +119,7 @@ export function classifyCreateBooking(body: unknown): SabreError | undefined {
   }
   const items = responseErrors(response);
   const fatal = items.find((item) => !isWarning(item));
-  if (fatal !== undefined) return toBusinessError(CREATE_BOOKING_SERVICE, fatal, items.filter(isWarning).map(warningOf));
+  if (fatal !== undefined) return toBusinessError(CREATE_BOOKING_SERVICE, fatal, { warnings: items.filter(isWarning).map(warningOf) });
   return new SabreError(`${CREATE_BOOKING_SERVICE}: respuesta malformada, sin confirmationId ni errores fatales`, {
     retryable: false,
     raw: body,
@@ -135,7 +135,7 @@ function toCreateBookingResponse(body: RawCreateBookingResponse): CreateBookingR
     ...(body.booking === undefined ? {} : { booking: body.booking }),
     ...(body.request === undefined ? {} : { request: body.request }),
     warnings: items.filter(isWarning).map(warningOf),
-    errors: items.filter((item) => !isWarning(item)).map((item) => toBusinessError(CREATE_BOOKING_SERVICE, item, [])),
+    errors: items.filter((item) => !isWarning(item)).map((item) => toBusinessError(CREATE_BOOKING_SERVICE, item)),
   };
 }
 

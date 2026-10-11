@@ -5,3 +5,4 @@ coverage/
 .env
 .sabre-token.json
 .env.*
+.sabre-pilot-pnr.json

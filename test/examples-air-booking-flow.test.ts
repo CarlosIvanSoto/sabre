@@ -105,7 +105,7 @@ describe('examples/air-booking-flow', () => {
     const summary = await airBookingFlow(sabre, { search, onStep: (step: string) => steps.push(step) });
 
     expect(steps).toEqual(['bargainFinderMax', 'revalidateItinerarySkipped', 'revalidateItinerary']);
-    expect(summary.skipped).toEqual([expect.objectContaining({ code: 'PROCESS', flights: expect.stringMatching(/→/) })]);
+    expect(summary.skipped).toEqual([expect.objectContaining({ code: 'NO FARE FOR CLASS USED', flights: expect.stringMatching(/→/) })]);
     expect(calls(fetch, '/v5/shop/flights/revalidate')).toHaveLength(2);
     // Los dos intentos fijan itinerarios distintos de BFM.
     const [first, second] = calls(fetch, '/v5/shop/flights/revalidate').map(([, init]) => String(init?.body));

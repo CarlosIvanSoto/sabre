@@ -27,6 +27,8 @@ Air Booking flow are done.
   references resolved into self-contained itineraries.
 - `sabre.air.revalidateItinerary`: Revalidate Itinerary v5, plus
   `buildRevalidateItineraryRequest` to build the request from a Bargain Finder Max itinerary.
+  Its own error catalog (`NO FARE FOR CLASS USED`, `NO SUCH FLIGHT`, …) gives stable, non-retryable
+  `SabreBusinessError` codes.
 - `sabre.booking.create`: Create Booking from the Booking Management API v1 through the ATPCO
   path (`flightDetails`), plus `buildBookingFlightDetails` to build `flightDetails` from a
   revalidated itinerary. It is never retried automatically. Warnings and non-fatal errors are

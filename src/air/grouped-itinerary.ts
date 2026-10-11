@@ -13,6 +13,8 @@ import { SabreError } from '../errors/index.js';
 export interface ScheduleEndpoint {
   airport: string;
   city?: string;
+  /** Visto en sandbox para aeropuertos de EE. UU. */
+  state?: string;
   country?: string;
   /** Hora local con offset, p. ej. `17:10:00+02:00`. */
   time: string;
@@ -37,6 +39,8 @@ export interface ScheduleCarrier {
 /** Vuelo/segmento operado (`scheduleDescs[]`). */
 export interface ScheduleDesc {
   id: number;
+  /** Visto en sandbox, p. ej. `"7"`; significado sin confirmar. */
+  dotRating?: string;
   frequency?: string;
   stopCount?: number;
   eTicketable?: boolean;
@@ -67,6 +71,8 @@ export interface TaxDesc {
   publishedCurrency?: string;
   station?: string;
   country?: string;
+  /** Visto en sandbox. */
+  taxReissue?: { refundable?: boolean };
 }
 
 /** Resumen de impuestos por código (`taxSummaryDescs[]`). Misma forma que `TaxDesc`. */
@@ -257,7 +263,7 @@ export interface RawFare {
 
 export interface RawPricingInformation {
   pricingSubsource?: string;
-  /** Visto solo en Revalidate Itinerary, p. ej. `ATPCO`. */
+  /** P. ej. `ATPCO`. Visto en Revalidate y en sandbox de BFM. */
   distributionModel?: string;
   fare: RawFare;
 }
@@ -267,6 +273,8 @@ export interface RawItinerary {
   pricingSource?: string;
   /** Visto solo en Revalidate Itinerary. */
   currentItinerary?: boolean;
+  /** Visto en sandbox de BFM; significado sin confirmar. */
+  diversitySwapper?: { weighedPrice?: number };
   legs: Ref[];
   pricingInformation: RawPricingInformation[];
 }

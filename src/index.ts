@@ -1,6 +1,23 @@
 export const VERSION = '0.3.0';
 
 export { Sabre } from './sabre.js';
+export type { Air } from './air/air.js';
+export type {
+  BargainFinderMaxRequest,
+  BargainFinderMaxResponse,
+  RequestOptions,
+} from './air/bargain-finder-max.js';
+export type {
+  LowFareSearchLocation,
+  LowFareSearchOriginDestination,
+  LowFareSearchPassengerTypeQuantity,
+  LowFareSearchRequestorId,
+  LowFareSearchSource,
+  LowFareSearchTpaExtensions,
+  LowFareSearchTravelerInfoSummary,
+  LowFareSearchTravelPreferences,
+  OtaAirLowFareSearchRq,
+} from './air/low-fare-search-request.js';
 export type {
   SabreAuthVersion,
   SabreConfig,

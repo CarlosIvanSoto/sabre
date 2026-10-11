@@ -31,6 +31,10 @@ describe('shouldRetry', () => {
     expect(shouldRetry(retryable, false)).toBe(false);
     expect(shouldRetry(new SabreGatewayError('x', { protocol: 'rest', status: 400, retryable: false }), true)).toBe(false);
     expect(shouldRetry(new SabreBusinessError('x', { service: 's', code: '1' }), true)).toBe(false);
+    // Un error de negocio temporal se reintenta solo si la operación es idempotente.
+    const temporary = new SabreBusinessError('x', { service: 's', code: '1', retryable: true });
+    expect(shouldRetry(temporary, true)).toBe(true);
+    expect(shouldRetry(temporary, false)).toBe(false);
     expect(shouldRetry(new Error('x'), true)).toBe(false);
   });
 });

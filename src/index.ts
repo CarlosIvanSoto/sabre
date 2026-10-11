@@ -25,6 +25,7 @@ export type {
   LowFareSearchTravelPreferences,
   OtaAirLowFareSearchRq,
 } from './air/low-fare-search-request.js';
+export type { SabreTokenStore, StoredToken } from './auth/token-store.js';
 export type {
   SabreAuthVersion,
   SabreConfig,

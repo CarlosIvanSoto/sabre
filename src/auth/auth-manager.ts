@@ -5,6 +5,7 @@ import { SabreGatewayError } from '../errors/index.js';
 import type { AuthorizationProvider, RestTransport } from '../http/rest-transport.js';
 import { EventLogger } from '../logging/logger.js';
 import { buildTokenRequest } from './token-request.js';
+import { isStoredToken, type SabreTokenStore, type StoredToken, tokenStoreKey } from './token-store.js';
 
 export const TOKEN_SERVICE = 'oauthTokenCreate';
 
@@ -34,8 +35,8 @@ export interface AuthManagerOptions {
 }
 
 /**
- * Cachea el token en memoria, lo renueva antes de que expire y comparte una sola
- * petición en vuelo entre requests concurrentes. Interno en v0.3.0.
+ * Cachea el token en memoria (y en `tokenStore`, si lo hay), lo renueva antes de que expire
+ * y comparte una sola petición en vuelo entre requests concurrentes. Interno en v0.3.0.
  */
 export class AuthManager {
   readonly #config: ResolvedConfig;
@@ -46,12 +47,17 @@ export class AuthManager {
   #inFlight: Promise<AccessToken> | undefined;
   /** El último token cacheado fue rechazado con 401 (el próximo refresco es reactivo). */
   #invalidated = false;
+  /** Token rechazado con 401: si el store todavía lo tiene, no se vuelve a usar. */
+  #rejected: string | undefined;
+  readonly #store: SabreTokenStore | undefined;
+  #storeKey: Promise<string> | undefined;
 
   constructor(config: ResolvedConfig, transport: RestTransport, options: AuthManagerOptions = {}) {
     this.#config = config;
     this.#transport = transport;
     this.#now = options.now ?? Date.now;
     this.#log = new EventLogger(config.logger);
+    this.#store = config.tokenStore;
   }
 
   /** Token vigente; pide uno nuevo si no hay o si cruzó el umbral de refresco. */
@@ -70,6 +76,7 @@ export class AuthManager {
     if (this.#token?.accessToken !== accessToken) return;
     this.#token = undefined;
     this.#invalidated = true;
+    this.#rejected = accessToken;
   }
 
   /** Adaptador de salida para el transporte REST: `Authorization: Bearer <token>`. */
@@ -87,21 +94,80 @@ export class AuthManager {
 
   /** Una sola petición en vuelo: las llamadas concurrentes esperan la misma promesa. */
   #refresh(reason: TokenRefreshReason): Promise<AccessToken> {
-    this.#inFlight ??= this.fetchToken()
-      .then((token) => {
-        this.#token = token;
-        this.#invalidated = false;
-        this.#log.emit('info', 'sabre.auth.token.refresh', {
-          authVersion: this.#config.authVersion,
-          reason,
-          expiresIn: token.expiresIn,
-        });
-        return token;
-      })
-      .finally(() => {
-        this.#inFlight = undefined;
-      });
+    this.#inFlight ??= this.#obtain(reason).finally(() => {
+      this.#inFlight = undefined;
+    });
     return this.#inFlight;
+  }
+
+  /** Token del store si sigue vigente (otro proceso pudo renovarlo); si no, uno nuevo. */
+  async #obtain(reason: TokenRefreshReason): Promise<AccessToken> {
+    const stored = await this.#readStore();
+    if (stored !== undefined && stored.accessToken !== this.#rejected && !this.#needsRefresh(stored)) {
+      this.#token = stored;
+      this.#invalidated = false;
+      return stored;
+    }
+
+    const token = await this.fetchToken();
+    this.#token = token;
+    this.#invalidated = false;
+    this.#rejected = undefined;
+    this.#log.emit('info', 'sabre.auth.token.refresh', {
+      authVersion: this.#config.authVersion,
+      reason,
+      expiresIn: token.expiresIn,
+    });
+    await this.#writeStore(token);
+    return token;
+  }
+
+  async #readStore(): Promise<AccessToken | undefined> {
+    if (this.#store === undefined) return undefined;
+    try {
+      const value = await this.#store.get(await this.#key());
+      if (!isStoredToken(value)) return undefined;
+      return {
+        accessToken: value.accessToken,
+        expiresIn: (value.expiresAt - value.obtainedAt) / 1000,
+        obtainedAt: value.obtainedAt,
+      };
+    } catch (error) {
+      this.#storeFailed('get', error);
+      return undefined;
+    }
+  }
+
+  async #writeStore(token: AccessToken): Promise<void> {
+    if (this.#store === undefined) return;
+    const stored: StoredToken = {
+      accessToken: token.accessToken,
+      obtainedAt: token.obtainedAt,
+      expiresAt: token.obtainedAt + token.expiresIn * 1000,
+    };
+    try {
+      await this.#store.set(await this.#key(), stored);
+    } catch (error) {
+      this.#storeFailed('set', error);
+    }
+  }
+
+  #key(): Promise<string> {
+    const { environment, authVersion, credentials } = this.#config;
+    this.#storeKey ??= tokenStoreKey(environment, authVersion, credentials);
+    return this.#storeKey;
+  }
+
+  /**
+   * El store nunca rompe la llamada: se sigue con el caché en memoria. Del error solo se
+   * loguea el nombre: el mensaje lo arma el store del consumidor y podría traer el token.
+   */
+  #storeFailed(operation: 'get' | 'set', error: unknown): void {
+    this.#log.emit('warn', 'sabre.auth.token.store', {
+      authVersion: this.#config.authVersion,
+      operation,
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
   }
 
   /**

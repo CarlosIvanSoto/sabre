@@ -18,6 +18,7 @@
 // El token nunca llega al archivo: solo se graba el body del servicio.
 import { writeFileSync } from 'node:fs';
 import { Sabre, SabreError } from '../dist/index.js';
+import { fileTokenStore } from './file-token-store.mjs';
 
 const mode = process.argv[2] ?? 'ok';
 if (mode !== 'ok' && mode !== 'no-schedules') {
@@ -87,7 +88,7 @@ const recordingFetch = async (input, init) => {
   return response;
 };
 
-const sabre = new Sabre({ environment: 'sandbox', authVersion, credentials, fetch: recordingFetch, retry: { maxRetries: 0 } });
+const sabre = new Sabre({ environment: 'sandbox', authVersion, credentials, fetch: recordingFetch, retry: { maxRetries: 0 }, tokenStore: fileTokenStore });
 
 let outcome;
 try {

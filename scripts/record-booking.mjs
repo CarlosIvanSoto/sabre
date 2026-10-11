@@ -19,6 +19,7 @@ import {
   SabreBusinessError,
   SabreError,
 } from '../dist/index.js';
+import { fileTokenStore } from './file-token-store.mjs';
 
 const env = (name, fallback) => {
   const value = process.env[name] ?? fallback;
@@ -76,7 +77,7 @@ const recordingFetch = async (input, init) => {
   return response;
 };
 
-const sabre = new Sabre({ environment: 'sandbox', authVersion, credentials, fetch: recordingFetch, retry: { maxRetries: 0 } });
+const sabre = new Sabre({ environment: 'sandbox', authVersion, credentials, fetch: recordingFetch, retry: { maxRetries: 0 }, tokenStore: fileTokenStore });
 
 const found = await sabre.air.bargainFinderMax(search);
 const first = found.itineraryGroups.flatMap((group) => group.itineraries.map((itinerary) => ({ group, itinerary })))[0];

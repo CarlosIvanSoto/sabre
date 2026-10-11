@@ -19,7 +19,8 @@ export type SabreLogEvent =
   | 'sabre.request.start'
   | 'sabre.request.end'
   | 'sabre.request.retry'
-  | 'sabre.auth.token.refresh';
+  | 'sabre.auth.token.refresh'
+  | 'sabre.auth.token.store';
 
 /** Logger interno: redacta siempre el contexto y no hace nada si no hay logger. */
 export class EventLogger {

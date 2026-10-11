@@ -1,5 +1,6 @@
 // Config explícita del consumidor; el SDK nunca lee variables de entorno.
 // Ver sabre-wiki/wiki/sdk/configuracion-logging-y-build.md.
+import type { SabreTokenStore } from './auth/token-store.js';
 import { DEFAULT_RETRY, type RetryOptions, validateRetryOptions } from './http/retry.js';
 import type { SabreLogger } from './logging/index.js';
 
@@ -36,6 +37,11 @@ interface SabreBaseConfig {
   retry?: Partial<RetryOptions>;
   /** `fetch` a usar en lugar del global (tests, proxies, runtimes edge). */
   fetch?: typeof fetch;
+  /**
+   * Almacén del token para reutilizarlo entre procesos (scripts, serverless). Sin él, el
+   * token se cachea solo en memoria.
+   */
+  tokenStore?: SabreTokenStore;
 }
 
 /** OAuth Token Create v3 (por defecto). */
@@ -68,6 +74,7 @@ export interface ResolvedConfig {
   logger: SabreLogger | undefined;
   retry: Readonly<RetryOptions>;
   fetch: typeof fetch;
+  tokenStore: SabreTokenStore | undefined;
 }
 
 const LOGGER_METHODS = ['debug', 'info', 'warn', 'error'] as const;
@@ -121,6 +128,13 @@ export function resolveConfig(config: SabreConfig): ResolvedConfig {
     validateRetryOptions(config.retry, 'retry');
   }
 
+  const { tokenStore } = config;
+  if (tokenStore !== undefined) {
+    if (!isObject(tokenStore) || typeof tokenStore.get !== 'function' || typeof tokenStore.set !== 'function') {
+      fail('tokenStore debe ser un objeto con get(key) y set(key, token)');
+    }
+  }
+
   const fetchImpl = config.fetch ?? globalThis.fetch;
   if (typeof fetchImpl !== 'function') fail('no hay fetch disponible: pasa config.fetch');
 
@@ -134,6 +148,7 @@ export function resolveConfig(config: SabreConfig): ResolvedConfig {
     retry: Object.freeze({ ...DEFAULT_RETRY, ...definedOnly(config.retry ?? {}) }),
     // Enlazado al global para evitar "Illegal invocation" en algunos runtimes.
     fetch: config.fetch ?? globalThis.fetch.bind(globalThis),
+    tokenStore,
   };
 }
 

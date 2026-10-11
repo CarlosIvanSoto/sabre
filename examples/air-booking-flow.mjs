@@ -46,6 +46,7 @@ export function oneWaySearch({ pcc, origin, destination, departureDateTime, maxS
  * y salta los que rechaza con `SabreBusinessError`). Solo si `book` es `true`, lo reserva por
  * `flightDetails` (ATPCO). Con `preview` arma el request de Create Booking y lo devuelve en
  * `bookingPreview` sin enviarlo: no crea PNR, así que sirve también en producción.
+ * `priceComparison` fija el umbral de precio de Create Booking sobre el precio revalidado.
  * Devuelve un resumen sin datos del pasajero ni credenciales.
  *
  * @param {import('sabre-client').Sabre} sabre
@@ -53,10 +54,11 @@ export function oneWaySearch({ pcc, origin, destination, departureDateTime, maxS
  *   search: import('sabre-client').BargainFinderMaxRequest,
  *   book?: boolean,
  *   preview?: boolean,
+ *   priceComparison?: import('sabre-client').BookingFlightDetailsSource['priceComparison'],
  *   onStep?: (step: string, detail: Record<string, unknown>) => void,
  * }} options
  */
-export async function airBookingFlow(sabre, { search, book = false, preview = false, onStep = () => {} }) {
+export async function airBookingFlow(sabre, { search, book = false, preview = false, priceComparison, onStep = () => {} }) {
   if (book && preview) throw new TypeError('book y preview son excluyentes');
   const found = await sabre.air.bargainFinderMax(search);
   const candidates = found.itineraryGroups.flatMap((group) =>
@@ -100,7 +102,7 @@ export async function airBookingFlow(sabre, { search, book = false, preview = fa
 
   /** @type {import('sabre-client').CreateBookingRequest} */
   const request = {
-    flightDetails: buildBookingFlightDetails({ group, itinerary }),
+    flightDetails: buildBookingFlightDetails({ group, itinerary, ...(priceComparison === undefined ? {} : { priceComparison }) }),
     travelers: [SYNTHETIC_TRAVELER],
     contactInfo: { emails: ['test@example.com'], phones: ['5550000000'] },
   };

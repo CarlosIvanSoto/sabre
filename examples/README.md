@@ -42,10 +42,10 @@ Variables de entorno:
 
 ### Producción
 
-En producción **solo se corren BFM y Revalidate**, que son de solo lectura. El script se niega a
-correr con `SABRE_CREATE_BOOKING=1` y `SABRE_ENVIRONMENT=production`, porque crearía un PNR real.
-Habilitar la reserva en producción depende de una decisión pendiente, por el riesgo de ADM (#47;
-ver `sabre-wiki/wiki/concepts/prevencion-de-adm.md`).
+Con este script, en producción **solo se corren BFM y Revalidate**, que son de solo lectura. Se
+niega a correr con `SABRE_CREATE_BOOKING=1` y `SABRE_ENVIRONMENT=production`, porque crearía un
+PNR real. La única reserva permitida en producción es el piloto de `run-booking-lifecycle.mjs`
+(ver abajo).
 
 La corrida recomendada busca un vuelo directo con fecha lejana, el perfil que usaría una futura
 reserva de prueba, y muestra sin enviarlo el `flightDetails` de Create Booking:
@@ -62,3 +62,60 @@ y revisa las URLs en el log.
 
 Las credenciales van en `.env` o `.env.production`, que git ignora. Nunca las pongas en el
 código ni en la línea de comandos.
+
+## Ciclo de vida de una reserva: Create → Get → Cancel → Get
+
+`run-booking-lifecycle.mjs` reserva el primer itinerario que Revalidate acepte, lo verifica con
+Get Booking, deja una ventana de revisión, lo cancela y comprueba que quedó sin vuelos. La lógica
+está en `booking-lifecycle.mjs`, con tests en `fetch` mockeado. Es la secuencia de prueba de
+`sabre-wiki/wiki/sdk/gestion-de-reserva.md`.
+
+1. BFM y Revalidate, como `air-booking-flow.mjs`.
+2. **Confirmación**: muestra vuelo, clase, precio y pasajero, y espera que escribas `reservar`.
+3. **Create Booking** sin pago ni emisión (`agency.ticketingPolicy: FUTURE_TICKETING`), con
+   `priceComparisons` que corta ante cualquier subida sobre el precio revalidado
+   (`INCREASE_BY_AMOUNT` `0`) y `HALT_ON_ERROR`, el default de Sabre. Sin reintento.
+4. **Get Booking** de verificación: vuelos iguales a los pedidos y en `HK`, y un pasajero `ADT`.
+5. **Ventana de revisión**: el PNR queda vivo para revisarlo (Get o Sabre Red). Enter lo cancela;
+   a los 15 minutos se cancela solo; Ctrl+C también cancela. Si algo falla antes, se cancela
+   enseguida.
+6. **Cancel Booking** `{ confirmationId, cancelAll: true }`. `NO_ITEMS_CANCELLED` cuenta como fallo.
+7. **Get Booking** final: `flights[]` tiene que quedar vacío. Si no, termina con código 1 y te deja
+   el localizador para cancelarlo a mano.
+
+Al final imprime un informe sin datos del pasajero: localizador, estados, warnings y tiempos.
+
+### Piloto de producción (una sola corrida)
+
+Lo decidió el usuario en #47 asumiendo un riesgo de ADM sin confirmar (ver
+`sabre-wiki/wiki/concepts/prevencion-de-adm.md`). Sin estas condiciones, el script no llama a
+Create Booking:
+
+- **Doble opt-in**: `SABRE_CREATE_BOOKING=1` y `SABRE_ALLOW_PRODUCTION_BOOKING` con la fecha de hoy
+  (`AAAA-MM-DD`, hora local).
+- **Pasajero real que consienta**, desde `.env.production`: `SABRE_TRAVELER_GIVEN_NAME`,
+  `SABRE_TRAVELER_SURNAME`, `SABRE_TRAVELER_EMAIL` y `SABRE_TRAVELER_PHONE`. Nunca se loguean.
+- **Vuelo directo** (`SABRE_MAX_STOPS` no se acepta) a 60–90 días: `SABRE_DEPARTURE_DAYS`, 75 por
+  defecto.
+- **Lejos del mantenimiento** de Sabre (00:15–00:25 CT): se niega desde las 23:55 hasta las 00:30 CT.
+- **Una sola corrida**: el localizador se escribe en `.sabre-pilot-pnr.json` (ignorado por git)
+  apenas llega. Si ese archivo existe, el script no crea otro PNR:
+  - si el PNR quedó sin cancelar, solo ofrece **retomar la cancelación** (escribe `cancelar`);
+  - si quedó cancelado, se niega: otra corrida requiere una nueva decisión;
+  - si Create terminó con resultado incierto (timeout, red, 5xx), el lock no tiene localizador:
+    revisa en Sabre Red si se creó algo y borra el archivo a mano.
+
+Si Sabre rechaza Create sin crear el PNR (por ejemplo `UNAUTHORIZED_ACCESS` con el token v3), no
+se escribe el lock y la corrida no se consume: se puede repetir con `SABRE_AUTH_VERSION=v2`
+(decisión de #50).
+
+```sh
+npm run build
+SABRE_ENVIRONMENT=production SABRE_TOKEN_STORE=file SABRE_CREATE_BOOKING=1 \
+  SABRE_ALLOW_PRODUCTION_BOOKING=$(date +%F) \
+  node --env-file=.env.production examples/run-booking-lifecycle.mjs
+```
+
+En sandbox basta `SABRE_CREATE_BOOKING=1`, no hay lock y, sin las variables `SABRE_TRAVELER_*`,
+usa el pasajero sintético. Acepta las mismas variables de búsqueda, auth y depuración que
+`run-air-booking-flow.mjs`.

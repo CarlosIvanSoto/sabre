@@ -5,9 +5,12 @@
 //   node --env-file=.env examples/run-air-booking-flow.mjs
 //   SABRE_CREATE_BOOKING=1 node --env-file=.env examples/run-air-booking-flow.mjs
 //   SABRE_ENVIRONMENT=production node --env-file=.env.production examples/run-air-booking-flow.mjs
+//   SABRE_ENVIRONMENT=production SABRE_MAX_STOPS=0 SABRE_DEPARTURE_DAYS=75 SABRE_PREVIEW_BOOKING=1 \
+//     node --env-file=.env.production examples/run-air-booking-flow.mjs
 //
 // Create Booking solo corre con SABRE_CREATE_BOOKING=1 y nunca en producción: crearía un PNR
-// real (decisión del 2026-10-11 en sabre-wiki/wiki/sdk/plan-tier-1.md).
+// real (decisión del 2026-10-11 en sabre-wiki/wiki/sdk/plan-tier-1.md). SABRE_PREVIEW_BOOKING=1
+// muestra el flightDetails que se mandaría, sin enviarlo, y sí se permite en producción.
 import { Sabre, SabreBusinessError, SabreError } from 'sabre-client';
 import { airBookingFlow, oneWaySearch } from './air-booking-flow.mjs';
 
@@ -30,6 +33,24 @@ if (book && environment === 'production') {
   console.error('Create Booking no se corre en producción: crearía un PNR real. Quita SABRE_CREATE_BOOKING.');
   process.exit(2);
 }
+const preview = process.env.SABRE_PREVIEW_BOOKING === '1';
+if (book && preview) {
+  console.error('SABRE_CREATE_BOOKING y SABRE_PREVIEW_BOOKING son excluyentes: usa uno solo.');
+  process.exit(2);
+}
+
+const integer = (name, fallback, min, max) => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    console.error(`${name} debe ser un entero entre ${min} y ${max} (recibido: ${raw})`);
+    process.exit(2);
+  }
+  return value;
+};
+const departureDays = integer('SABRE_DEPARTURE_DAYS', 30, 1, 330);
+const maxStops = integer('SABRE_MAX_STOPS', 1, 0, 3);
 
 const authVersion = process.env.SABRE_AUTH_VERSION ?? 'v3';
 const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
@@ -66,23 +87,36 @@ const sabre = new Sabre({
   ...(logger === undefined ? {} : { logger }),
 });
 
-const departure = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+const departure = new Date(Date.now() + departureDays * 86_400_000).toISOString().slice(0, 10);
+const origin = process.env.SABRE_ORIGIN ?? 'DFW';
+const destination = process.env.SABRE_DESTINATION ?? 'LAX';
 const search = oneWaySearch({
   pcc,
-  origin: process.env.SABRE_ORIGIN ?? 'DFW',
-  destination: process.env.SABRE_DESTINATION ?? 'LAX',
+  origin,
+  destination,
   departureDateTime: `${departure}T10:00:00`,
+  maxStops,
 });
 
-console.log(`entorno ${environment} · OAuth ${authVersion} · Create Booking ${book ? 'activado' : 'desactivado'}`);
+const mode = book ? 'activado' : preview ? 'solo vista previa' : 'desactivado';
+console.log(`entorno ${environment} · OAuth ${authVersion} · Create Booking ${mode}`);
+console.log(`búsqueda ${origin}→${destination} · salida ${departure} (+${departureDays} días) · máximo ${maxStops} escala(s)`);
 try {
   const summary = await airBookingFlow(sabre, {
     search,
     book,
+    preview,
     onStep: (step, detail) => console.log(`✓ ${step}`, detail),
   });
-  if (!book) console.log('- createBooking omitido (SABRE_CREATE_BOOKING=1 para activarlo, solo en sandbox)');
+  if (summary.bookingPreview !== undefined) {
+    // Solo flightDetails: el pasajero del preview es sintético y no aporta nada al contraste.
+    console.log('- createBooking NO enviado; flightDetails que se mandaría:');
+    console.log(JSON.stringify(summary.bookingPreview.flightDetails, null, 2));
+  } else if (!book) {
+    console.log('- createBooking omitido (SABRE_CREATE_BOOKING=1 para activarlo, solo en sandbox; SABRE_PREVIEW_BOOKING=1 para verlo sin enviarlo)');
+  }
   console.log(`precio en BFM ${summary.searchPrice} · revalidado ${summary.revalidatedPrice}`);
+  if (summary.searchPrice !== summary.revalidatedPrice) console.log('⚠ el precio cambió entre BFM y Revalidate');
 } catch (error) {
   if (!(error instanceof SabreError)) throw error;
   const warnings = error instanceof SabreBusinessError ? error.warnings.map((w) => w.code).join(', ') : '';

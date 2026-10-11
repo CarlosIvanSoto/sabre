@@ -23,7 +23,7 @@ El Tier 1 cubre el flujo básico de Air Booking por REST:
 | Búsqueda | Bargain Finder Max v5 | `sabre.air.bargainFinderMax` |
 | Revalidación | Revalidate Itinerary v5 | `sabre.air.revalidateItinerary` |
 | Reserva | Create Booking (Booking Management API v1, ATPCO por `flightDetails`) | `sabre.booking.create` |
-| Gestión de la reserva | Get Booking (Booking Management API v1) | `sabre.booking.get` |
+| Gestión de la reserva | Get Booking y Cancel Booking (Booking Management API v1) | `sabre.booking.get`, `sabre.booking.cancel` |
 
 Planeado: Get Seats y Get Ancillaries (Tier 2), y un cliente `SabreLegacy` para los servicios SOAP.
 
@@ -141,6 +141,22 @@ reserva existe, los problemas parciales vuelven en `pnr.warnings` y `pnr.errors`
 sin emitir suele traer el aviso `RESOURCE_UNAVAILABLE` porque todavía no tiene fare rules. Es
 una lectura, así que los fallos transitorios se reintentan.
 
+`sabre.booking.cancel` cancela la reserva entera (`cancelAll: true`) o productos concretos por
+el `itemId` que devuelve `get`:
+
+```ts
+await sabre.booking.cancel({ confirmationId: booking.confirmationId, cancelAll: true });
+await sabre.booking.cancel({ confirmationId: pnr.bookingId, flights: [{ itemId: '2' }] });
+```
+
+Como `create`, **nunca se reintenta automáticamente**. Las combinaciones que Sabre siempre
+rechaza (`cancelAll` junto con listas, ni `cancelAll` ni listas, `offerItemId` junto con
+`flightTicketOperation`) lanzan un `TypeError` antes de enviar nada. Si Sabre responde
+`NO_ITEMS_CANCELLED`, la llamada lanza `SabreBusinessError` aunque Sabre lo mande como aviso,
+porque no se canceló nada; los errores que explican el motivo están en `error.errors`. El aviso
+`END_TRANSACTION_PROBLEM` significa que la confirmación sigue pendiente: verifica el resultado
+con `sabre.booking.get`.
+
 Toda request acepta un `AbortSignal`. Las búsquedas aceptan además una política de reintentos
 propia:
 
@@ -156,7 +172,7 @@ Todos los errores que lanza el SDK extienden `SabreError`:
 | - | - | - |
 | `SabreGatewayError` | Falla HTTP o del gateway (`ERR.2SG.*`, `401`, `429`, `5xx`, errores de OAuth) | `protocol`, `status`, `code` |
 | `SabreOrchestrationError` | Error de un servicio orquestado dentro de un `200` (`SP.*`) | `code` |
-| `SabreBusinessError` | Error del catálogo propio de un servicio (p. ej. `No Availability`, una reserva que no se creó) | `service`, `code`, `warnings` |
+| `SabreBusinessError` | Error del catálogo propio de un servicio (p. ej. `No Availability`, una reserva que no se creó) | `service`, `code`, `warnings`, `errors` |
 | `SabreWarning` | Aviso no fatal (p. ej. `category: WARNING` en Create Booking) | `service`, `code` |
 
 Todos tienen `retryable`, que indica si la política de reintentos puede volver a intentar.

@@ -23,7 +23,7 @@ Tier 1 covers the core Air Booking flow over REST:
 | Shopping | Bargain Finder Max v5 | `sabre.air.bargainFinderMax` |
 | Revalidation | Revalidate Itinerary v5 | `sabre.air.revalidateItinerary` |
 | Booking | Create Booking (Booking Management API v1, ATPCO by `flightDetails`) | `sabre.booking.create` |
-| Booking management | Get Booking (Booking Management API v1) | `sabre.booking.get` |
+| Booking management | Get Booking and Cancel Booking (Booking Management API v1) | `sabre.booking.get`, `sabre.booking.cancel` |
 
 Planned: Get Seats and Get Ancillaries (Tier 2), and a `SabreLegacy` client for SOAP services.
 
@@ -141,6 +141,22 @@ It throws `SabreBusinessError` only when there is no booking (for example
 and `pnr.errors`; an unticketed booking usually carries a `RESOURCE_UNAVAILABLE` warning
 because it has no fare rules yet. It is a read, so transient failures are retried.
 
+`sabre.booking.cancel` cancels the whole booking (`cancelAll: true`) or specific items by the
+`itemId` that `get` returns:
+
+```ts
+await sabre.booking.cancel({ confirmationId: booking.confirmationId, cancelAll: true });
+await sabre.booking.cancel({ confirmationId: pnr.bookingId, flights: [{ itemId: '2' }] });
+```
+
+Like `create`, it is **never retried automatically**. Combinations that Sabre always rejects
+(`cancelAll` together with item lists, no `cancelAll` and no list, `offerItemId` together with
+`flightTicketOperation`) throw a `TypeError` before any request is sent. If Sabre answers
+`NO_ITEMS_CANCELLED`, the call throws `SabreBusinessError` even though Sabre sends it as a
+warning, because nothing was cancelled; the errors that explain why are in `error.errors`. An
+`END_TRANSACTION_PROBLEM` warning means the confirmation is still pending: check the result
+with `sabre.booking.get`.
+
 Every request accepts an `AbortSignal`. Shopping calls also accept a per-request retry policy:
 
 ```ts
@@ -155,7 +171,7 @@ Every error thrown by the SDK extends `SabreError`:
 | - | - | - |
 | `SabreGatewayError` | HTTP or gateway failure (`ERR.2SG.*`, `401`, `429`, `5xx`, OAuth errors) | `protocol`, `status`, `code` |
 | `SabreOrchestrationError` | Orchestrated service error inside a `200` (`SP.*`) | `code` |
-| `SabreBusinessError` | Error from a service's own catalog (e.g. `No Availability`, a booking that was not created) | `service`, `code`, `warnings` |
+| `SabreBusinessError` | Error from a service's own catalog (e.g. `No Availability`, a booking that was not created) | `service`, `code`, `warnings`, `errors` |
 | `SabreWarning` | Non-fatal warning (e.g. `category: WARNING` in Create Booking) | `service`, `code` |
 
 All of them have `retryable`, which says whether the retry policy may try again.

@@ -11,7 +11,7 @@ import {
   type RawGroupedItineraryResponse,
 } from './grouped-itinerary.js';
 import { type ItineraryFlight, itineraryFlights } from './itinerary-flights.js';
-import { classifyItineraryMessages } from './itinerary-messages.js';
+import { classifyItineraryMessages, type ItineraryMessageCatalogEntry } from './itinerary-messages.js';
 import type {
   LowFareSearchFlight,
   LowFareSearchOriginDestination,
@@ -52,11 +52,26 @@ export async function revalidateItinerary(
 }
 
 /**
- * Sin catálogo propio documentado: se hereda el de BFM, que comparte motor, request y
- * response. Ver `classifyItineraryMessages`.
+ * Catálogo de errores de Revalidate (guía oficial de errores de Revalidate Itinerary, en la
+ * documentación SOAP de BFM 7.2.0; ver sabre-wiki/wiki/entities/revalidate-itinerary.md).
+ * Las cinco condiciones describen un dato que no existe (tarifa, horario o disponibilidad):
+ * reintentar no cambia el resultado. En producción, `NO FARE FOR CLASS USED` llegó con
+ * `code: 'PROCESS'`; el catálogo le da un `code` estable.
+ *
+ * Los temporales se heredan de BFM (mismo motor), con `retryable: true`.
  */
+export const REVALIDATE_ITINERARY_CATALOG: ReadonlyArray<ItineraryMessageCatalogEntry> = [
+  { code: 'NO COMBINABLE FARES FOR CLASS USED', retryable: false },
+  { code: 'NO FARE FOR CLASS USED', retryable: false },
+  { code: 'NO FLIGHT SCHEDULES FOR QUALIFIERS USED', retryable: false },
+  { code: 'NO SUCH FLIGHT', retryable: false },
+  { code: 'NO AVAILABILITY', retryable: false },
+  ...BARGAIN_FINDER_MAX_CATALOG.filter((entry) => entry.retryable),
+];
+
+/** Ver `classifyItineraryMessages`. */
 export function classifyRevalidateItinerary(body: unknown): SabreError | undefined {
-  return classifyItineraryMessages(body, REVALIDATE_ITINERARY_SERVICE, BARGAIN_FINDER_MAX_CATALOG);
+  return classifyItineraryMessages(body, REVALIDATE_ITINERARY_SERVICE, REVALIDATE_ITINERARY_CATALOG);
 }
 
 export interface RevalidateItineraryRequestSource {

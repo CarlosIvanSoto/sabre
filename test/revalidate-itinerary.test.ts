@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { classifyRevalidateItinerary } from '../src/air/revalidate-itinerary.js';
+import { classifyRevalidateItinerary, REVALIDATE_ITINERARY_CATALOG } from '../src/air/revalidate-itinerary.js';
 import {
   type BargainFinderMaxRequest,
   buildRevalidateItineraryRequest,
@@ -124,7 +124,7 @@ describe('sabre.air.revalidateItinerary', () => {
     const error = await catchError(new Sabre(config({ fetch })).air.revalidateItinerary(request));
 
     expect(error).toBeInstanceOf(SabreBusinessError);
-    expect(error).toMatchObject({ service: 'revalidateItinerary', code: 'No Availability', retryable: false });
+    expect(error).toMatchObject({ service: 'revalidateItinerary', code: 'NO AVAILABILITY', retryable: false });
     expect(serviceCalls(fetch)).toHaveLength(1);
   });
 
@@ -140,6 +140,34 @@ describe('sabre.air.revalidateItinerary', () => {
 describe('classifyRevalidateItinerary', () => {
   it('sin mensajes de error es data válida', () => {
     expect(classifyRevalidateItinerary(revalidateExample)).toBeUndefined();
+  });
+
+  it.each([
+    'NO COMBINABLE FARES FOR CLASS USED',
+    'NO FARE FOR CLASS USED',
+    'NO FLIGHT SCHEDULES FOR QUALIFIERS USED',
+    'NO SUCH FLIGHT',
+    'NO AVAILABILITY',
+  ])('%s es del catálogo oficial y no es reintentable', (text) => {
+    expect(classifyRevalidateItinerary(errorResponse(text))).toMatchObject({
+      service: 'revalidateItinerary',
+      code: text,
+      retryable: false,
+    });
+  });
+
+  it('NO FARE FOR CLASS USED como llegó en producción (code PROCESS) sale con el code del catálogo', () => {
+    const error = classifyRevalidateItinerary(errorResponse('NO FARE FOR CLASS USED', 'PROCESS'));
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect(error).toMatchObject({ code: 'NO FARE FOR CLASS USED', retryable: false });
+    expect((error as Error).message).toBe('revalidateItinerary: NO FARE FOR CLASS USED');
+  });
+
+  it('NO COMBINABLE FARES no se confunde con NO FARE', () => {
+    expect(classifyRevalidateItinerary(errorResponse('NO COMBINABLE FARES FOR CLASS USED'))).toMatchObject({
+      code: 'NO COMBINABLE FARES FOR CLASS USED',
+    });
+    expect(REVALIDATE_ITINERARY_CATALOG.filter((e) => !e.retryable)).toHaveLength(5);
   });
 
   it('hereda los temporales reintentables del catálogo de BFM', () => {

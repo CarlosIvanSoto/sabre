@@ -95,6 +95,8 @@ export interface SabreBusinessErrorOptions extends SabreServiceErrorOptions {
    * La política de reintentos igual exige que la operación sea idempotente.
    */
   retryable?: boolean;
+  /** Avisos que llegaron junto con el error (p. ej. `category: WARNING` de Create Booking). */
+  warnings?: readonly SabreWarning[];
 }
 
 /**
@@ -105,11 +107,13 @@ export class SabreBusinessError extends SabreError {
   override name = 'SabreBusinessError';
   readonly service: string;
   readonly code: string;
+  readonly warnings: readonly SabreWarning[];
 
   constructor(message: string, options: SabreBusinessErrorOptions) {
     super(message, { ...options, retryable: options.retryable ?? false });
     this.service = options.service;
     this.code = options.code;
+    this.warnings = options.warnings ?? [];
   }
 }
 

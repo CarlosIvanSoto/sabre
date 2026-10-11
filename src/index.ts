@@ -26,6 +26,39 @@ export type {
   OtaAirLowFareSearchRq,
 } from './air/low-fare-search-request.js';
 export type { SabreTokenStore, StoredToken } from './auth/token-store.js';
+export type { BookingManagement } from './booking/booking-management.js';
+export type {
+  Booking,
+  CreateBookingOptions,
+  CreateBookingResponse,
+  CreateBookingResponseError,
+} from './booking/create-booking.js';
+export type {
+  BookContactInformation,
+  BookGenericSeat,
+  BookingAgency,
+  BookSeat,
+  BookTraveler,
+  BrandedFare,
+  CreateBookingErrorPolicy,
+  CreateBookingRequest,
+  FlightDetails,
+  FlightStatusCode,
+  FlightToBook,
+  PassengerPricing,
+  PaymentMethod,
+  PriceComparison,
+  PriceComparisonType,
+  PricingDetails,
+  PricingQualifiers,
+  SeatAreaPreference,
+  SpecificFare,
+  TicketingPolicy,
+  TravelerPhone,
+  TravelerTitle,
+} from './booking/create-booking-request.js';
+export { buildBookingFlightDetails } from './booking/flight-details.js';
+export type { BookingFlightDetailsSource } from './booking/flight-details.js';
 export type {
   SabreAuthVersion,
   SabreConfig,

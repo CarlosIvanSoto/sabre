@@ -65,6 +65,17 @@ export type {
   GetBookingResponse,
   GetBookingReturnOnly,
 } from './booking/get-booking.js';
+export type {
+  BookingItemReference,
+  CancelBookingErrorPolicy,
+  CancelBookingNotification,
+  CancelBookingOptions,
+  CancelBookingRequest,
+  CancelBookingResponse,
+  CancelSegmentReference,
+  FlightTicketOperation,
+  RefundDocumentsType,
+} from './booking/cancel-booking.js';
 export type { BookingResponseError } from './booking/booking-errors.js';
 export { buildBookingFlightDetails } from './booking/flight-details.js';
 export type { BookingFlightDetailsSource } from './booking/flight-details.js';

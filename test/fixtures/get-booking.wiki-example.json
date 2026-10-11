@@ -1,0 +1,95 @@
+{
+  "bookingId": "1SXXXCROMS3E3",
+  "startDate": "2026-05-17",
+  "endDate": "2026-05-17",
+  "isCancelable": false,
+  "isTicketed": false,
+  "creationDetails": {
+    "creationUserSine": "AWV",
+    "creationDate": "2026-03-18",
+    "creationTime": "04:28",
+    "userWorkPcc": "U9PK",
+    "userHomePcc": "U9PK",
+    "primeHostId": "1S",
+    "lastUpdateDate": "2026-03-18",
+    "lastUpdateTime": "04:28",
+    "numberOfUpdates": 1
+  },
+  "contactInfo": { "emails": ["TRAVEL@SABRE.COM"], "phones": ["123456"] },
+  "travelers": [
+    {
+      "givenName": "Yasmine",
+      "surname": "Koss",
+      "birthDate": "1970-01-23",
+      "type": "ADULT",
+      "passengerCode": "ADT",
+      "emails": ["travel@sabre.com"],
+      "phones": [{ "number": "123456" }]
+    }
+  ],
+  "flights": [
+    {
+      "itemId": "10",
+      "confirmationId": "Z6XNH2",
+      "sourceType": "NDC",
+      "flightNumber": 3835,
+      "airlineCode": "LO",
+      "airlineName": "LOT POLISH AIRLINES",
+      "operatingFlightNumber": 3835,
+      "operatingAirlineCode": "LO",
+      "operatingAirlineName": "LOT POLISH AIRLINES",
+      "fromAirportCode": "WAW",
+      "toAirportCode": "GDN",
+      "departureDate": "2026-05-17",
+      "departureTime": "10:25:00",
+      "arrivalDate": "2026-05-17",
+      "arrivalTime": "11:20:00",
+      "numberOfSeats": 1,
+      "cabinTypeName": "ECONOMY",
+      "cabinTypeCode": "Y",
+      "bookingClass": "L",
+      "flightStatusCode": "HK",
+      "flightStatusName": "Confirmed",
+      "durationInMinutes": 55,
+      "distanceInMiles": 180,
+      "travelerIndices": [1]
+    }
+  ],
+  "journeys": [
+    {
+      "firstAirportCode": "WAW",
+      "departureDate": "2026-05-17",
+      "departureTime": "10:25",
+      "lastAirportCode": "GDN",
+      "numberOfFlights": 1
+    }
+  ],
+  "fares": [
+    {
+      "isNegotiatedFare": false,
+      "totals": { "subtotal": "137.00", "taxes": "132.33", "total": "269.33", "currencyCode": "PLN" },
+      "hasValidPricing": true,
+      "pricedTravelerType": "ADT",
+      "recordTypeCode": "NDC",
+      "recordTypeName": "NDC order"
+    }
+  ],
+  "remarks": [{ "type": "HISTORICAL", "text": "NDC SEGMENT ADDED" }],
+  "allSegments": [
+    {
+      "id": "10",
+      "type": "FLIGHT",
+      "text": "3835",
+      "vendorCode": "LO",
+      "startDate": "2026-05-17",
+      "startTime": "10:25:00",
+      "startLocationCode": "WAW",
+      "endDate": "2026-05-17",
+      "endTime": "11:20:00",
+      "endLocationCode": "GDN"
+    }
+  ],
+  "timestamp": "2026-06-17T11:39:51",
+  "bookingSignature": "c137df6aadc891d725bbb6e23fa6bd41320de26e608815464563251da60024ef95befae6859415a555b4564f3812e871b7bd734ac40fe81e59345345e13558e35f4",
+  "request": { "confirmationId": "1SXXXCROMS3E3" }
+}

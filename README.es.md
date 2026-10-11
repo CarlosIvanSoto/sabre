@@ -23,6 +23,7 @@ El Tier 1 cubre el flujo básico de Air Booking por REST:
 | Búsqueda | Bargain Finder Max v5 | `sabre.air.bargainFinderMax` |
 | Revalidación | Revalidate Itinerary v5 | `sabre.air.revalidateItinerary` |
 | Reserva | Create Booking (Booking Management API v1, ATPCO por `flightDetails`) | `sabre.booking.create` |
+| Gestión de la reserva | Get Booking (Booking Management API v1) | `sabre.booking.get` |
 
 Planeado: Get Seats y Get Ancillaries (Tier 2), y un cliente `SabreLegacy` para los servicios SOAP.
 
@@ -122,6 +123,23 @@ sandbox, así que revisa el request antes de depender de él.
 `sabre.booking.create` **nunca se reintenta automáticamente**, porque no es idempotente. Si
 Sabre crea la reserva con avisos o errores no fatales, la llamada no lanza: revisa
 `booking.warnings` y `booking.errors`.
+
+`sabre.booking.get` lee una reserva por `confirmationId`. A diferencia de Create Booking, la
+respuesta trae los campos de la reserva en el primer nivel (`bookingId`, `flights`,
+`travelers`, …), tal como la define Sabre. Usa `returnOnly` para pedir solo las secciones que
+necesitas; además, la llamada es más rápida:
+
+```ts
+const pnr = await sabre.booking.get({
+  confirmationId: booking.confirmationId,
+  returnOnly: ['FLIGHTS', 'TRAVELERS'],
+});
+```
+
+Solo lanza `SabreBusinessError` si no hay reserva (por ejemplo, `BOOKING_NOT_FOUND`). Si la
+reserva existe, los problemas parciales vuelven en `pnr.warnings` y `pnr.errors`; una reserva
+sin emitir suele traer el aviso `RESOURCE_UNAVAILABLE` porque todavía no tiene fare rules. Es
+una lectura, así que los fallos transitorios se reintentan.
 
 Toda request acepta un `AbortSignal`. Las búsquedas aceptan además una política de reintentos
 propia:

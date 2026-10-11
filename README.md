@@ -23,6 +23,7 @@ Tier 1 covers the core Air Booking flow over REST:
 | Shopping | Bargain Finder Max v5 | `sabre.air.bargainFinderMax` |
 | Revalidation | Revalidate Itinerary v5 | `sabre.air.revalidateItinerary` |
 | Booking | Create Booking (Booking Management API v1, ATPCO by `flightDetails`) | `sabre.booking.create` |
+| Booking management | Get Booking (Booking Management API v1) | `sabre.booking.get` |
 
 Planned: Get Seats and Get Ancillaries (Tier 2), and a `SabreLegacy` client for SOAP services.
 
@@ -122,6 +123,23 @@ real sandbox booking yet, so review the request before you rely on it.
 `sabre.booking.create` is **never retried automatically**, because it is not idempotent. If
 Sabre creates the booking with warnings or non-fatal errors, the call does not throw. Check
 `booking.warnings` and `booking.errors`.
+
+`sabre.booking.get` reads a booking by `confirmationId`. Unlike Create Booking, the response
+has the booking fields at the top level (`bookingId`, `flights`, `travelers`, …), as Sabre
+defines it. Use `returnOnly` to ask only for the sections you need, which also makes the call
+faster:
+
+```ts
+const pnr = await sabre.booking.get({
+  confirmationId: booking.confirmationId,
+  returnOnly: ['FLIGHTS', 'TRAVELERS'],
+});
+```
+
+It throws `SabreBusinessError` only when there is no booking (for example
+`BOOKING_NOT_FOUND`). If the booking exists, partial problems come back in `pnr.warnings`
+and `pnr.errors`; an unticketed booking usually carries a `RESOURCE_UNAVAILABLE` warning
+because it has no fare rules yet. It is a read, so transient failures are retried.
 
 Every request accepts an `AbortSignal`. Shopping calls also accept a per-request retry policy:
 

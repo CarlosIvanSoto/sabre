@@ -1,13 +1,21 @@
 // Create Booking (`POST /v1/trip/orders/createBooking`).
 // Ver sabre-wiki/wiki/entities/booking-management-api.md y
 // sabre-wiki/wiki/sdk/manejo-y-mapeo-de-errores.md (éxito parcial de Create Booking).
-import { SabreBusinessError, SabreError, SabreWarning } from '../errors/index.js';
+import { type SabreBusinessError, SabreError, type SabreWarning } from '../errors/index.js';
 import type { RestTransport } from '../http/rest-transport.js';
+import {
+  type BookingResponseError,
+  isObject,
+  isWarning,
+  nonEmpty,
+  responseErrors,
+  toBusinessError,
+  toWarning,
+} from './booking-errors.js';
 import type { CreateBookingRequest } from './create-booking-request.js';
 
 export const CREATE_BOOKING_SERVICE = 'createBooking';
 const PATH = '/v1/trip/orders/createBooking';
-const WARNING = 'WARNING';
 /** Aviso cuyo `description` trae el `confirmationId` de una reserva que sí se creó. */
 const UNABLE_TO_RETRIEVE_BOOKING = 'UNABLE_TO_RETRIEVE_BOOKING';
 
@@ -15,18 +23,8 @@ export interface CreateBookingOptions {
   signal?: AbortSignal;
 }
 
-/** Elemento de `errors[]` tal cual lo manda Sabre (`Error` del spec; los avisos comparten forma). */
-export interface CreateBookingResponseError {
-  /** `BAD_REQUEST`, `APPLICATION_ERROR`, `WARNING`, … */
-  category: string;
-  /** P. ej. `UNABLE_TO_BOOK_FLIGHTS`. */
-  type: string;
-  description?: string;
-  fieldPath?: string;
-  fieldName?: string;
-  /** Puede traer datos del request (p. ej. un email): no se copia a los errores del SDK. */
-  fieldValue?: string;
-}
+/** Elemento de `errors[]` de Create Booking. */
+export type CreateBookingResponseError = BookingResponseError;
 
 /**
  * `Booking` del spec (mismo modelo que Get Booking). Se tipa el primer nivel; el detalle de
@@ -121,7 +119,7 @@ export function classifyCreateBooking(body: unknown): SabreError | undefined {
   }
   const items = responseErrors(response);
   const fatal = items.find((item) => !isWarning(item));
-  if (fatal !== undefined) return toBusinessError(fatal, items.filter(isWarning).map(toWarning));
+  if (fatal !== undefined) return toBusinessError(CREATE_BOOKING_SERVICE, fatal, items.filter(isWarning).map(warningOf));
   return new SabreError(`${CREATE_BOOKING_SERVICE}: respuesta malformada, sin confirmationId ni errores fatales`, {
     retryable: false,
     raw: body,
@@ -136,8 +134,8 @@ function toCreateBookingResponse(body: RawCreateBookingResponse): CreateBookingR
     ...(body.timestamp === undefined ? {} : { timestamp: body.timestamp }),
     ...(body.booking === undefined ? {} : { booking: body.booking }),
     ...(body.request === undefined ? {} : { request: body.request }),
-    warnings: items.filter(isWarning).map(toWarning),
-    errors: items.filter((item) => !isWarning(item)).map((item) => toBusinessError(item, [])),
+    warnings: items.filter(isWarning).map(warningOf),
+    errors: items.filter((item) => !isWarning(item)).map((item) => toBusinessError(CREATE_BOOKING_SERVICE, item, [])),
   };
 }
 
@@ -161,42 +159,6 @@ function locatorIn(description: string | undefined): string | undefined {
   return /\(([A-Z0-9]{6,})\)/.exec(description)?.[1] ?? /\b([A-Z0-9]{6,})\b/.exec(description)?.[1];
 }
 
-function responseErrors(response: RawCreateBookingResponse): CreateBookingResponseError[] {
-  return Array.isArray(response.errors) ? response.errors.filter(isObject) as CreateBookingResponseError[] : [];
-}
-
-function isWarning(item: CreateBookingResponseError): boolean {
-  return typeof item.category === 'string' && item.category.toUpperCase() === WARNING;
-}
-
-function toWarning(item: CreateBookingResponseError): SabreWarning {
-  return new SabreWarning(messageOf(item), { service: CREATE_BOOKING_SERVICE, code: codeOf(item), raw: item });
-}
-
-function toBusinessError(item: CreateBookingResponseError, warnings: SabreWarning[]): SabreBusinessError {
-  return new SabreBusinessError(messageOf(item), {
-    service: CREATE_BOOKING_SERVICE,
-    code: codeOf(item),
-    raw: item,
-    warnings,
-  });
-}
-
-function codeOf(item: CreateBookingResponseError): string {
-  return typeof item.type === 'string' && item.type !== '' ? item.type : String(item.category);
-}
-
-/** Sin `fieldValue`, que puede traer datos del pasajero; queda en `raw`. */
-function messageOf(item: CreateBookingResponseError): string {
-  const where = typeof item.fieldPath === 'string' && item.fieldPath !== '' ? ` en ${item.fieldPath}` : '';
-  const description = typeof item.description === 'string' && item.description !== '' ? `: ${item.description}` : '';
-  return `${CREATE_BOOKING_SERVICE}: ${String(item.category)} ${codeOf(item)}${where}${description}`;
-}
-
-function nonEmpty(value: unknown): value is string {
-  return typeof value === 'string' && value !== '';
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+function warningOf(item: BookingResponseError): SabreWarning {
+  return toWarning(CREATE_BOOKING_SERVICE, item);
 }

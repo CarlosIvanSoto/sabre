@@ -3,6 +3,7 @@
 import type { RestTransport } from '../http/rest-transport.js';
 import type { CreateBookingRequest } from './create-booking-request.js';
 import { createBooking, type CreateBookingOptions, type CreateBookingResponse } from './create-booking.js';
+import { getBooking, type GetBookingOptions, type GetBookingRequest, type GetBookingResponse } from './get-booking.js';
 
 export class BookingManagement {
   readonly #transport: RestTransport;
@@ -21,5 +22,18 @@ export class BookingManagement {
    */
   create(request: CreateBookingRequest, options?: CreateBookingOptions): Promise<CreateBookingResponse> {
     return createBooking(this.#transport, request, options);
+  }
+
+  /**
+   * Get Booking: lee la reserva por `confirmationId`. El `Booking` va en el primer nivel de la
+   * respuesta, a diferencia de `create`. Usa `returnOnly` para pedir solo las secciones que
+   * hacen falta: además acelera la respuesta.
+   *
+   * Si la reserva existe, no lanza: los avisos y errores parciales van en `warnings` y
+   * `errors`. Si no existe o no se pudo leer (p. ej. `BOOKING_NOT_FOUND`), lanza
+   * `SabreBusinessError`. Es una lectura: se reintenta ante fallos transitorios.
+   */
+  get(request: GetBookingRequest, options?: GetBookingOptions): Promise<GetBookingResponse> {
+    return getBooking(this.#transport, request, options);
   }
 }

@@ -57,6 +57,15 @@ export type {
   TravelerPhone,
   TravelerTitle,
 } from './booking/create-booking-request.js';
+export type {
+  BookingSource,
+  GetBookingExtraFeatures,
+  GetBookingOptions,
+  GetBookingRequest,
+  GetBookingResponse,
+  GetBookingReturnOnly,
+} from './booking/get-booking.js';
+export type { BookingResponseError } from './booking/booking-errors.js';
 export { buildBookingFlightDetails } from './booking/flight-details.js';
 export type { BookingFlightDetailsSource } from './booking/flight-details.js';
 export type {

@@ -31,6 +31,11 @@ Air Booking flow are done.
   path (`flightDetails`), plus `buildBookingFlightDetails` to build `flightDetails` from a
   revalidated itinerary. It is never retried automatically. Warnings and non-fatal errors are
   returned on the result instead of being thrown.
+- `sabre.booking.get`: Get Booking from the Booking Management API v1. The booking fields come
+  at the top level of the response, as Sabre defines them. It throws only when there is no
+  booking (for example `BOOKING_NOT_FOUND`); otherwise warnings and partial errors are
+  returned on the result. Transient failures (`INTERNAL_SERVER_TIMEOUT`,
+  `DOWNLINE_SERVICE_FAILURE`, gateway `429`/`5xx`) are retried.
 - Typed error hierarchy: `SabreError`, `SabreGatewayError`, `SabreOrchestrationError`,
   `SabreBusinessError` and `SabreWarning`, each with `retryable`. `SabreError.raw` keeps the
   original response fragment; it can contain credentials or passenger data and is not

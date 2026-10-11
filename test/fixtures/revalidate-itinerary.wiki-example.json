@@ -1,0 +1,394 @@
+{
+  "groupedItineraryResponse": {
+    "version": "v5",
+    "messages": [
+      {
+        "severity": "Info",
+        "type": "SERVER",
+        "code": "GCA14-ISELL-TN-00-2025-12-00-6GGX",
+        "text": "27131"
+      },
+      {
+        "severity": "Info",
+        "type": "WORKERTHREAD",
+        "code": "TRANSACTIONID",
+        "text": "7572545384752347605"
+      },
+      {
+        "severity": "Info",
+        "type": "DRE",
+        "code": "RULEID",
+        "text": "31929"
+      },
+      {
+        "severity": "Info",
+        "type": "DEFAULT",
+        "code": "RULEID",
+        "text": "31150"
+      }
+    ],
+    "statistics": {
+      "itineraryCount": 1
+    },
+    "scheduleDescs": [
+      {
+        "id": 1,
+        "frequency": "*****F*",
+        "stopCount": 0,
+        "eTicketable": true,
+        "totalMilesFlown": 408,
+        "elapsedTime": 95,
+        "departure": {
+          "airport": "LHR",
+          "city": "LON",
+          "country": "GB",
+          "time": "06:55:00+01:00",
+          "terminal": "5"
+        },
+        "arrival": {
+          "airport": "FRA",
+          "city": "FRA",
+          "country": "DE",
+          "time": "09:30:00+02:00",
+          "terminal": "2"
+        },
+        "carrier": {
+          "marketing": "BA",
+          "marketingFlightNumber": 902,
+          "operating": "BA",
+          "operatingFlightNumber": 902,
+          "alliances": "OW ",
+          "equipment": {
+            "code": "320",
+            "typeForFirstLeg": "N",
+            "typeForLastLeg": "N"
+          }
+        }
+      }
+    ],
+    "taxDescs": [
+      {
+        "id": 1,
+        "code": "UB",
+        "amount": 30.4,
+        "currency": "USD",
+        "description": "PASSENGER SERVICE CHARGE DEPARTURES",
+        "publishedAmount": 23.05,
+        "publishedCurrency": "GBP",
+        "station": "LHR",
+        "country": "GB"
+      },
+      {
+        "id": 2,
+        "code": "YQI",
+        "amount": 3.3,
+        "currency": "USD",
+        "description": "SERVICE FEE - CARRIER-IMPOSED MISC",
+        "publishedAmount": 2.5,
+        "publishedCurrency": "GBP",
+        "station": "LHR"
+      },
+      {
+        "id": 3,
+        "code": "GB",
+        "amount": 19.8,
+        "currency": "USD",
+        "description": "AIR PASSENGER DUTY APD",
+        "publishedAmount": 15,
+        "publishedCurrency": "GBP",
+        "station": "LHR",
+        "country": "GB"
+      },
+      {
+        "id": 4,
+        "code": "YRI",
+        "amount": 2,
+        "currency": "USD",
+        "description": "SERVICE FEE - CARRIER-IMPOSED MISC",
+        "publishedAmount": 1.5,
+        "publishedCurrency": "GBP",
+        "station": "LHR"
+      }
+    ],
+    "taxSummaryDescs": [
+      {
+        "id": 1,
+        "code": "UB",
+        "amount": 30.4,
+        "currency": "USD",
+        "description": "PASSENGER SERVICE CHARGE DEPARTURES",
+        "publishedAmount": 23.05,
+        "publishedCurrency": "GBP",
+        "station": "LHR",
+        "country": "GB"
+      },
+      {
+        "id": 2,
+        "code": "YQI",
+        "amount": 3.3,
+        "currency": "USD",
+        "description": "SERVICE FEE - CARRIER-IMPOSED MISC",
+        "publishedAmount": 2.5,
+        "publishedCurrency": "GBP",
+        "station": "LHR"
+      },
+      {
+        "id": 3,
+        "code": "GB",
+        "amount": 19.8,
+        "currency": "USD",
+        "description": "AIR PASSENGER DUTY APD",
+        "publishedAmount": 15,
+        "publishedCurrency": "GBP",
+        "station": "LHR",
+        "country": "GB"
+      },
+      {
+        "id": 4,
+        "code": "YRI",
+        "amount": 2,
+        "currency": "USD",
+        "description": "SERVICE FEE - CARRIER-IMPOSED MISC",
+        "publishedAmount": 1.5,
+        "publishedCurrency": "GBP",
+        "station": "LHR"
+      }
+    ],
+    "obFeeDescs": [
+      {
+        "id": 1,
+        "amount": 0,
+        "currency": "USD"
+      }
+    ],
+    "fareComponentDescs": [
+      {
+        "id": 1,
+        "governingCarrier": "BA",
+        "fareAmount": 12.08,
+        "fareCurrency": "NUC",
+        "fareBasisCode": "VTEST/ROBB",
+        "farePassengerType": "ADT",
+        "ticketDesignator": "ROBB",
+        "publishedFareAmount": 9,
+        "publishedFareCurrency": "GBP",
+        "mileageSurcharge": 0,
+        "mileage": true,
+        "oneWayFare": true,
+        "negotiatedFare": true,
+        "privateFare": true,
+        "directionality": "FROM",
+        "direction": "EH",
+        "notValidAfter": "2027-09-11",
+        "applicablePricingCategories": "10 25 35",
+        "vendorCode": "ATP",
+        "fareTypeBitmap": "0E",
+        "fareType": "ER",
+        "fareTariff": "930",
+        "fareRule": "XX23",
+        "cabinCode": "Y",
+        "segments": [
+          {
+            "segment": {}
+          }
+        ]
+      }
+    ],
+    "validatingCarrierDescs": [
+      {
+        "id": 1,
+        "settlementMethod": "ARC",
+        "newVcxProcess": true,
+        "default": {
+          "code": "BA"
+        }
+      }
+    ],
+    "baggageAllowanceDescs": [
+      {
+        "id": 1,
+        "pieceCount": 1
+      }
+    ],
+    "legDescs": [
+      {
+        "id": 1,
+        "elapsedTime": 95,
+        "schedules": [
+          {
+            "ref": 1
+          }
+        ]
+      }
+    ],
+    "itineraryGroups": [
+      {
+        "groupDescription": {
+          "legDescriptions": [
+            {
+              "departureDate": "2026-09-11",
+              "departureLocation": "LHR",
+              "arrivalLocation": "FRA"
+            }
+          ]
+        },
+        "itineraries": [
+          {
+            "id": 1,
+            "pricingSource": "WPNI1_ITIN",
+            "currentItinerary": true,
+            "legs": [
+              {
+                "ref": 1
+              }
+            ],
+            "pricingInformation": [
+              {
+                "pricingSubsource": "MIP",
+                "distributionModel": "ATPCO",
+                "fare": {
+                  "validatingCarrierCode": "BA",
+                  "vita": true,
+                  "eTicketable": true,
+                  "lastTicketDate": "2026-09-11",
+                  "lastTicketTime": "00:55",
+                  "governingCarriers": "BA",
+                  "passengerInfoList": [
+                    {
+                      "passengerInfo": {
+                        "passengerType": "ADT",
+                        "passengerNumber": 1,
+                        "nonRefundable": false,
+                        "fareComponents": [
+                          {
+                            "ref": 1,
+                            "beginAirport": "LHR",
+                            "endAirport": "FRA",
+                            "segments": [
+                              {
+                                "segment": {
+                                  "bookingCode": "V",
+                                  "cabinCode": "Y",
+                                  "mealCode": "G",
+                                  "seatsAvailable": 9,
+                                  "availabilityBreak": true,
+                                  "fareBreakPoint": true
+                                }
+                              }
+                            ]
+                          }
+                        ],
+                        "taxes": [
+                          {
+                            "ref": 2
+                          },
+                          {
+                            "ref": 4
+                          },
+                          {
+                            "ref": 3
+                          },
+                          {
+                            "ref": 1
+                          }
+                        ],
+                        "taxSummaries": [
+                          {
+                            "ref": 2
+                          },
+                          {
+                            "ref": 4
+                          },
+                          {
+                            "ref": 3
+                          },
+                          {
+                            "ref": 1
+                          }
+                        ],
+                        "obFees": [
+                          {
+                            "ref": 1
+                          }
+                        ],
+                        "currencyConversion": {
+                          "from": "GBP",
+                          "to": "USD",
+                          "exchangeRateUsed": 1.31791092
+                        },
+                        "fareMessages": [
+                          {
+                            "type": "W",
+                            "code": "0",
+                            "info": "PRIVATE FARE APPLIED - CHECK RULES FOR CORRECT TICKETING"
+                          },
+                          {
+                            "type": "W",
+                            "code": "0",
+                            "info": "VALIDATING CARRIER - BA"
+                          }
+                        ],
+                        "passengerTotalFare": {
+                          "totalFare": 67.5,
+                          "totalTaxAmount": 55.5,
+                          "currency": "USD",
+                          "baseFareAmount": 9,
+                          "baseFareCurrency": "GBP",
+                          "equivalentAmount": 12,
+                          "equivalentCurrency": "USD",
+                          "constructionAmount": 12.08,
+                          "constructionCurrency": "NUC",
+                          "commissionPercentage": 3,
+                          "commissionAmount": 0.36,
+                          "exchangeRateOne": 0.744929,
+                          "cat35CommissionPercentage": 3,
+                          "cat35CommissionAmount": 0.36,
+                          "cat35MarkupAmount": 0,
+                          "commissionAmountInEquivalent": 0.36,
+                          "commissionSource": "C"
+                        },
+                        "baggageInformation": [
+                          {
+                            "provisionType": "A",
+                            "airlineCode": "BA",
+                            "segments": [
+                              {
+                                "id": 0
+                              }
+                            ],
+                            "allowance": {
+                              "ref": 1
+                            }
+                          }
+                        ],
+                        "fareCalcLine": {
+                          "info": "LON BA FRA12.08NUC12.08END ROE0.744929"
+                        }
+                      }
+                    }
+                  ],
+                  "totalFare": {
+                    "totalPrice": 67.5,
+                    "totalTaxAmount": 55.5,
+                    "currency": "USD",
+                    "baseFareAmount": 9,
+                    "baseFareCurrency": "GBP",
+                    "constructionAmount": 12.08,
+                    "constructionCurrency": "NUC",
+                    "equivalentAmount": 12,
+                    "equivalentCurrency": "USD"
+                  },
+                  "validatingCarriers": [
+                    {
+                      "ref": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

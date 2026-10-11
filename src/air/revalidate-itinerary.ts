@@ -8,9 +8,9 @@ import {
   type GroupedItineraryResponse,
   type Itinerary,
   type ItineraryGroup,
-  type LegSchedule,
   type RawGroupedItineraryResponse,
 } from './grouped-itinerary.js';
+import { type ItineraryFlight, itineraryFlights } from './itinerary-flights.js';
 import { classifyItineraryMessages } from './itinerary-messages.js';
 import type {
   LowFareSearchFlight,
@@ -71,10 +71,7 @@ export interface RevalidateItineraryRequestSource {
  * Arma el request de Revalidate Itinerary para un itinerario devuelto por BFM, fijando cada
  * vuelo en `OriginDestinationInformation[].TPA_Extensions.Flight[]`.
  *
- * - La clase de servicio de cada vuelo sale de `fareComponents[].segments[].bookingCode` del
- *   primer pasajero de la primera cotización, en el orden de los vuelos del itinerario.
- * - Las fechas salen de `legDescriptions[].departureDate` más `departureDateAdjustment` del
- *   schedule (salida) y `arrival.dateAdjustment` (llegada); las horas, de `time` sin el offset.
+ * - Clases de servicio y fechas: ver `itineraryFlights`. Las horas salen de `time` sin el offset.
  * - `MaxStopsQuantity` es el máximo de conexiones de un tramo, para no rechazar itinerarios
  *   con escala.
  * - `Fixed: false` y `VerificationItinCallLogic: "L"` se copian del ejemplo de Sabre; su
@@ -82,32 +79,18 @@ export interface RevalidateItineraryRequestSource {
  */
 export function buildRevalidateItineraryRequest(source: RevalidateItineraryRequestSource): RevalidateItineraryRequest {
   const { search, group, itinerary } = source;
-  const { legDescriptions } = group.groupDescription;
-  if (legDescriptions.length !== itinerary.legs.length) {
-    throw new TypeError(
-      `sabre-client: el itinerario tiene ${itinerary.legs.length} tramos y el grupo ${legDescriptions.length}`,
-    );
-  }
-  const classes = bookingCodes(itinerary);
-  const flightCount = itinerary.legs.reduce((n, leg) => n + leg.schedules.length, 0);
-  if (classes.length !== flightCount) {
-    throw new TypeError(
-      `sabre-client: el itinerario tiene ${flightCount} vuelos y ${classes.length} clases de servicio en fareComponents`,
-    );
-  }
+  const flights = itineraryFlights(group, itinerary);
 
-  let next = 0;
-  const originDestinations = itinerary.legs.map((leg, i): LowFareSearchOriginDestination => {
-    const legDate = legDescriptions[i]!.departureDate;
-    const flights = leg.schedules.map((schedule) => flight(schedule, legDate, classes[next++]!));
-    const first = flights[0]!;
-    const last = flights.at(-1)!;
+  const originDestinations = itinerary.legs.map((_leg, i): LowFareSearchOriginDestination => {
+    const legFlights = flights.filter((f) => f.legIndex === i).map(flight);
+    const first = legFlights[0]!;
+    const last = legFlights.at(-1)!;
     return {
       Fixed: false,
       DepartureDateTime: first.DepartureDateTime,
       OriginLocation: { LocationCode: first.OriginLocation.LocationCode },
       DestinationLocation: { LocationCode: last.DestinationLocation.LocationCode },
-      TPA_Extensions: { Flight: flights },
+      TPA_Extensions: { Flight: legFlights },
     };
   });
 
@@ -127,28 +110,14 @@ export function buildRevalidateItineraryRequest(source: RevalidateItineraryReque
   };
 }
 
-function bookingCodes(itinerary: Itinerary): string[] {
-  const passenger = itinerary.pricingInformation[0]?.fare.passengerInfoList[0]?.passengerInfo;
-  return (passenger?.fareComponents ?? []).flatMap((component) =>
-    (component.segments ?? []).map(({ segment }) => {
-      if (segment.bookingCode === undefined) {
-        throw new TypeError('sabre-client: un segmento de fareComponents no trae bookingCode');
-      }
-      return segment.bookingCode;
-    }),
-  );
-}
-
-function flight(schedule: LegSchedule, legDate: string, classOfService: string): LowFareSearchFlight {
-  const departureDate = addDays(legDate, schedule.departureDateAdjustment ?? 0);
-  const arrivalDate = addDays(departureDate, schedule.arrival.dateAdjustment ?? 0);
+function flight({ schedule, departureDate, arrivalDate, bookingCode }: ItineraryFlight): LowFareSearchFlight {
   const { carrier } = schedule;
   return {
     Type: 'A',
     Number: carrier.marketingFlightNumber,
     DepartureDateTime: `${departureDate}T${localTime(schedule.departure.time)}`,
     ArrivalDateTime: `${arrivalDate}T${localTime(schedule.arrival.time)}`,
-    ClassOfService: classOfService,
+    ClassOfService: bookingCode,
     OriginLocation: { LocationCode: schedule.departure.airport },
     DestinationLocation: { LocationCode: schedule.arrival.airport },
     Airline: {
@@ -161,11 +130,4 @@ function flight(schedule: LegSchedule, legDate: string, classOfService: string):
 /** `17:10:00+02:00` → `17:10:00`. */
 function localTime(time: string): string {
   return time.slice(0, 8);
-}
-
-/** `2026-09-11` + n días, en calendario puro (sin zona horaria). */
-function addDays(date: string, days: number): string {
-  if (days === 0) return date;
-  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
-  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }

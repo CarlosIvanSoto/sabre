@@ -6,6 +6,11 @@ import {
   type BargainFinderMaxResponse,
   type RequestOptions,
 } from './bargain-finder-max.js';
+import {
+  revalidateItinerary,
+  type RevalidateItineraryRequest,
+  type RevalidateItineraryResponse,
+} from './revalidate-itinerary.js';
 
 export class Air {
   readonly #transport: RestTransport;
@@ -21,5 +26,16 @@ export class Air {
    */
   bargainFinderMax(request: BargainFinderMaxRequest, options?: RequestOptions): Promise<BargainFinderMaxResponse> {
     return bargainFinderMax(this.#transport, request, options);
+  }
+
+  /**
+   * Revalidate Itinerary v5: revalida disponibilidad y precio de un itinerario ya elegido,
+   * sin sostener inventario. El request se arma con `buildRevalidateItineraryRequest`.
+   */
+  revalidateItinerary(
+    request: RevalidateItineraryRequest,
+    options?: RequestOptions,
+  ): Promise<RevalidateItineraryResponse> {
+    return revalidateItinerary(this.#transport, request, options);
   }
 }

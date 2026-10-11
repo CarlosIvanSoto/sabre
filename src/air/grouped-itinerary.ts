@@ -19,6 +19,8 @@ export interface ScheduleEndpoint {
   /** Hora local con offset, p. ej. `17:10:00+02:00`. */
   time: string;
   terminal?: string;
+  /** Días que se suman a la fecha de salida del vuelo. Visto en sandbox (`arrival`). */
+  dateAdjustment?: number;
 }
 
 export interface ScheduleEquipment {
@@ -57,7 +59,16 @@ export interface LegDesc {
   id: number;
   /** Minutos. */
   elapsedTime?: number;
-  schedules: Ref[];
+  schedules: LegScheduleRef[];
+}
+
+/**
+ * Schedule dentro de un tramo. `departureDateAdjustment`: días que se suman a la fecha del
+ * tramo para la salida de este vuelo (conexión al día siguiente). Visto en sandbox, sin
+ * documentar en los ejemplos de Sabre.
+ */
+export interface LegScheduleRef extends Ref {
+  departureDateAdjustment?: number;
 }
 
 /** Impuesto individual (`taxDescs[]`). */
@@ -211,6 +222,8 @@ export interface FareComponentSegmentDetail {
 export interface FareMessage {
   type: string;
   code: string;
+  /** Visto en sandbox de Revalidate. */
+  carrier?: string;
   info: string;
 }
 
@@ -306,8 +319,11 @@ export interface RawGroupedItineraryResponse {
 
 /** Tramo con sus schedules resueltos. */
 export interface Leg extends Omit<LegDesc, 'schedules'> {
-  schedules: ScheduleDesc[];
+  schedules: LegSchedule[];
 }
+
+/** Schedule resuelto, con lo que la referencia del tramo agrega. */
+export type LegSchedule = ScheduleDesc & Omit<LegScheduleRef, 'ref'>;
 
 /** Segmento de un componente de tarifa: lo del descriptor más la disponibilidad del itinerario. */
 export interface FareComponentSegment {

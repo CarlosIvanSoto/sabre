@@ -23,11 +23,33 @@ export interface LowFareSearchSource {
   [key: string]: unknown;
 }
 
+/** Vuelo exacto a revalidar (`OriginDestinationInformation[].TPA_Extensions.Flight[]`). */
+export interface LowFareSearchFlight {
+  /** `"A"` en el ejemplo de Sabre; significado sin confirmar. */
+  Type: string;
+  Number: number;
+  /** Fecha y hora local sin offset. */
+  DepartureDateTime: string;
+  ArrivalDateTime: string;
+  ClassOfService: string;
+  OriginLocation: LowFareSearchLocation;
+  DestinationLocation: LowFareSearchLocation;
+  Airline: { Marketing: string; Operating?: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
 export interface LowFareSearchOriginDestination {
   /** Fecha y hora local sin offset, p. ej. `2026-09-11T20:00:00`. */
   DepartureDateTime: string;
   OriginLocation: LowFareSearchLocation;
   DestinationLocation: LowFareSearchLocation;
+  /** Solo Revalidate Itinerary. `false` en el ejemplo de Sabre; efecto de `true` sin confirmar. */
+  Fixed?: boolean;
+  TPA_Extensions?: {
+    /** Solo Revalidate Itinerary: fija los vuelos exactos del tramo. */
+    Flight?: LowFareSearchFlight[];
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 }
 
@@ -36,6 +58,11 @@ export interface LowFareSearchTravelPreferences {
   MaxStopsQuantity?: number;
   /** Filtro por aerolínea. */
   VendorPref?: Array<{ Code: string; [key: string]: unknown }>;
+  TPA_Extensions?: {
+    /** Solo Revalidate Itinerary. `"L"` en el ejemplo de Sabre; significado sin confirmar. */
+    VerificationItinCallLogic?: { Value: string; [key: string]: unknown };
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 }
 

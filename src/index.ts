@@ -7,7 +7,14 @@ export type {
   BargainFinderMaxResponse,
   RequestOptions,
 } from './air/bargain-finder-max.js';
+export { buildRevalidateItineraryRequest } from './air/revalidate-itinerary.js';
 export type {
+  RevalidateItineraryRequest,
+  RevalidateItineraryRequestSource,
+  RevalidateItineraryResponse,
+} from './air/revalidate-itinerary.js';
+export type {
+  LowFareSearchFlight,
   LowFareSearchLocation,
   LowFareSearchOriginDestination,
   LowFareSearchPassengerTypeQuantity,
@@ -47,6 +54,8 @@ export type {
   ItineraryMessage,
   Leg,
   LegDesc,
+  LegSchedule,
+  LegScheduleRef,
   LegDescription,
   ObFeeDesc,
   PassengerInfo,

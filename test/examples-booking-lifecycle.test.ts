@@ -149,6 +149,7 @@ describe('examples/booking-lifecycle: secuencia', () => {
     expect(create!.agency).toEqual({ ticketingPolicy: 'FUTURE_TICKETING', futureTicketingPolicy: { ticketingDate, ticketingPcc: 'XXXX' } });
     expect(preview.ticketingDate).toBe(ticketingDate);
     expect(create).not.toHaveProperty('payment');
+    expect(create).not.toHaveProperty('targetPcc');
     expect(create).not.toHaveProperty('errorHandlingPolicy');
     const pricing = (create!.flightDetails as { flightPricing: Array<{ priceComparisons: unknown[] }> }).flightPricing[0]!;
     const total = direct.response.body.groupedItineraryResponse.itineraryGroups[0]!.itineraries[0]!.pricingInformation[0]!.fare
@@ -169,6 +170,20 @@ describe('examples/booking-lifecycle: secuencia', () => {
     ]);
     // Ni el informe ni el lock llevan datos del pasajero.
     expect(JSON.stringify([report, lock.writes])).not.toMatch(/REAL|5551234567/);
+  });
+
+  it('con targetPcc: Create, Get, Cancel y el lock usan ese PCC, y también la emisión', async () => {
+    const { fetch, sabre } = client();
+    const { promise, lock } = run(sabre, { targetPcc: 'T9PK', ticketingPcc: 'T9PK' });
+    const report = await promise;
+
+    expect(report.ok).toBe(true);
+    const [create] = calls(fetch, '/createBooking');
+    expect(create).toMatchObject({ targetPcc: 'T9PK', agency: { futureTicketingPolicy: { ticketingPcc: 'T9PK' } } });
+    for (const body of [...calls(fetch, '/getBooking'), ...calls(fetch, '/cancelBooking')]) {
+      expect(body.targetPcc).toBe('T9PK');
+    }
+    expect(lock.writes.map((w) => w.targetPcc)).toEqual(['T9PK', 'T9PK']);
   });
 
   it('si la verificación falla, cancela enseguida sin ventana de revisión', async () => {
@@ -324,6 +339,19 @@ describe('examples/booking-lifecycle: resumeCancellation', () => {
     expect(calls(fetch, '/cancelBooking')).toEqual([{ confirmationId: LOCATOR, cancelAll: true }]);
     expect(calls(fetch, '/createBooking')).toHaveLength(0);
     expect(lock.writes.at(-1)).toMatchObject({ confirmationId: LOCATOR, status: 'cancelled' });
+  });
+
+  it('retoma con el targetPcc guardado en el lock', async () => {
+    const { fetch, sabre } = client({
+      gets: [() => json(200, { bookingId: LOCATOR, flights: [{ itemId: '1' }] }), () => emptyBooking()],
+    });
+    const lock = memoryLock({ confirmationId: LOCATOR, status: 'cancel-pending', targetPcc: 'T9PK' });
+    const result = await resumeCancellation(sabre, { lock: lock.store });
+    expect(result.ok).toBe(true);
+    for (const body of [...calls(fetch, '/getBooking'), ...calls(fetch, '/cancelBooking')]) {
+      expect(body.targetPcc).toBe('T9PK');
+    }
+    expect(lock.writes.at(-1)).toMatchObject({ status: 'cancelled', targetPcc: 'T9PK' });
   });
 
   it('no cancela si el PNR ya no tiene vuelos', async () => {

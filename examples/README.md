@@ -110,9 +110,20 @@ Si Sabre rechaza Create sin crear el PNR (por ejemplo `MANDATORY_DATA_MISSING` o
 de la cuenta), no se escribe el lock y la corrida no se consume: se puede repetir una vez
 resuelto (decisión de #50).
 
-**Prerrequisito de la cuenta**: el PCC necesita la opción "Store Passenger Type In PNR" activa en
-el Travel Journal Record (TJR). Sin ella, Create falla con
-`UNABLE_TO_ADD_TRAVELER_PASSENGER_TYPE_NOT_ENABLED`.
+**Prerrequisito de la cuenta**: el PCC donde se crea el PNR necesita la opción "Store Passenger
+Type In PNR" activa en el Travel Journal Record (TJR). Sin ella, Create falla con
+`UNABLE_TO_ADD_TRAVELER_PASSENGER_TYPE_NOT_ENABLED`. Si el PCC de tus credenciales no la tiene,
+usa otro que sí con `SABRE_TARGET_PCC`:
+
+- la auth sigue con `SABRE_PCC` o `SABRE_ORGANIZATION`;
+- el POS de la búsqueda, el `targetPcc` de Create, Get y Cancel, y el `ticketingPcc` de
+  `futureTicketingPolicy` usan `SABRE_TARGET_PCC`;
+- el lock guarda ese PCC, así que retomar la cancelación también lo usa.
+
+Sin `SABRE_TARGET_PCC`, todo usa el PCC de la auth y no se manda `targetPcc`. Sabre no revierte
+el cambio de contexto después de reservar, y la sesión tiene que tener permiso sobre ese PCC. Si
+no lo tiene, lo esperable es `UNABLE_TO_CHANGE_CONTEXT`, sin PNR (sin confirmar con una corrida
+real).
 
 ```sh
 npm run build

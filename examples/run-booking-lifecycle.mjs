@@ -108,7 +108,21 @@ if (production && process.env.SABRE_MAX_STOPS !== undefined && process.env.SABRE
 }
 
 const authVersion = process.env.SABRE_AUTH_VERSION ?? 'v3';
+// `pcc` solo sirve para autenticar. Todo lo demás (POS de la búsqueda, contexto de Create, Get y
+// Cancel, y PCC de emisión) usa `bookingPcc`: un PCC con los permisos activos, por ejemplo el TJR
+// "Store Passenger Type In PNR". Sin SABRE_TARGET_PCC es el mismo de la auth.
 const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
+const targetPccEnv = process.env.SABRE_TARGET_PCC;
+if (targetPccEnv !== undefined && targetPccEnv !== '' && !/^[A-Z0-9]{3,4}$/.test(targetPccEnv)) {
+  fail(`SABRE_TARGET_PCC debe tener 3 o 4 letras mayúsculas o dígitos (recibido: ${targetPccEnv})`);
+}
+const bookingPcc = targetPccEnv || pcc;
+// Número DK del cliente de la agencia: algunos PCC lo exigen para cerrar el PNR.
+const agencyCustomerNumber = process.env.SABRE_AGENCY_CUSTOMER_NUMBER || undefined;
+if (agencyCustomerNumber !== undefined && !/^[0-9A-Z]{6}([1-9A-Z*]|[0-9A-Z]{4})?$/.test(agencyCustomerNumber)) {
+  fail('SABRE_AGENCY_CUSTOMER_NUMBER debe ser un número DK de 6, 7 o 10 caracteres (mayúsculas y dígitos)');
+}
+const targetPcc = bookingPcc === pcc ? undefined : bookingPcc;
 const user = env('SABRE_USERNAME');
 const isEpr = user.includes('-') || user.includes(':');
 const username = isEpr ? user : authVersion === 'v3' ? `${user}-${pcc}-AA` : `V1:${user}:${pcc}:AA`;
@@ -167,19 +181,26 @@ try {
     const origin = process.env.SABRE_ORIGIN ?? 'DFW';
     const destination = process.env.SABRE_DESTINATION ?? 'LAX';
     console.log(`entorno ${environment} · OAuth ${authVersion} · ${production ? 'PILOTO DE PRODUCCIÓN (una sola corrida)' : 'sandbox'}`);
+    console.log(`PCC de auth ${pcc} · PCC de búsqueda y reserva ${bookingPcc}${targetPcc === undefined ? '' : ' (targetPcc)'}`);
     console.log(`búsqueda ${origin}→${destination} · salida ${departure} (+${departureDays} días) · máximo ${maxStops} escala(s)`);
     const result = await bookingLifecycle(sabre, {
       environment,
-      search: oneWaySearch({ pcc, origin, destination, departureDateTime: `${departure}T10:00:00`, maxStops }),
+      search: oneWaySearch({ pcc: bookingPcc, origin, destination, departureDateTime: `${departure}T10:00:00`, maxStops }),
       ...passenger,
+      ticketingPcc: bookingPcc,
+      ...(targetPcc === undefined ? {} : { targetPcc }),
+      ...(agencyCustomerNumber === undefined ? {} : { agencyCustomerNumber }),
       ...(lock === undefined ? {} : { lock }),
       signal: interrupt.signal,
       onStep,
       confirm: async (preview) => {
-        console.log('\nSe va a crear este PNR (sin pago ni emisión, ticketingPolicy FUTURE_TICKETING):');
+        console.log(
+          `\nSe va a crear este PNR (sin pago ni emisión, FUTURE_TICKETING con fecha ${preview.ticketingDate} en el PCC ${bookingPcc}):`,
+        );
         for (const f of preview.flights) console.log(`  ${f.flight} · ${f.departure} · clase ${f.bookingClass}`);
         console.log(`  precio revalidado ${preview.price} (BFM ${preview.searchPrice}) · umbral: ninguna subida`);
         console.log(`  pasajero ${preview.traveler}`);
+        console.log(`  número DK ${agencyCustomerNumber ?? '(no se manda)'}`);
         const answer = await ask(`Escribe "reservar" para crear el PNR${production ? ' en PRODUCCIÓN' : ''}: `);
         return answer?.trim() === 'reservar';
       },
@@ -209,7 +230,6 @@ try {
       console.error('⚠ resultado incierto: revisa en Sabre Red si se creó un PNR. El lock bloquea nuevas corridas.');
     } else {
       console.error('No se creó ningún PNR: la corrida del piloto no se consumió.');
-      if (authVersion === 'v3') console.error('Si fue UNAUTHORIZED, prueba con SABRE_AUTH_VERSION=v2 (decisión de #50).');
     }
     process.exitCode = 1;
   } else {

@@ -72,7 +72,8 @@ está en `booking-lifecycle.mjs`, con tests en `fetch` mockeado. Es la secuencia
 
 1. BFM y Revalidate, como `air-booking-flow.mjs`.
 2. **Confirmación**: muestra vuelo, clase, precio y pasajero, y espera que escribas `reservar`.
-3. **Create Booking** sin pago ni emisión (`agency.ticketingPolicy: FUTURE_TICKETING`), con
+3. **Create Booking** sin pago ni emisión (`agency.ticketingPolicy: FUTURE_TICKETING`, con
+   `futureTicketingPolicy` de fecha mañana en tu PCC, que Sabre exige con esa política), con
    `priceComparisons` que corta ante cualquier subida sobre el precio revalidado
    (`INCREASE_BY_AMOUNT` `0`) y `HALT_ON_ERROR`, el default de Sabre. Sin reintento.
 4. **Get Booking** de verificación: vuelos iguales a los pedidos y en `HK`, y un pasajero `ADT`.
@@ -105,9 +106,28 @@ Create Booking:
   - si Create terminó con resultado incierto (timeout, red, 5xx), el lock no tiene localizador:
     revisa en Sabre Red si se creó algo y borra el archivo a mano.
 
-Si Sabre rechaza Create sin crear el PNR (por ejemplo `UNAUTHORIZED_ACCESS` con el token v3), no
-se escribe el lock y la corrida no se consume: se puede repetir con `SABRE_AUTH_VERSION=v2`
-(decisión de #50).
+Si Sabre rechaza Create sin crear el PNR (por ejemplo `MANDATORY_DATA_MISSING` o un prerrequisito
+de la cuenta), no se escribe el lock y la corrida no se consume: se puede repetir una vez
+resuelto (decisión de #50).
+
+**Prerrequisito de la cuenta**: el PCC donde se crea el PNR necesita la opción "Store Passenger
+Type In PNR" activa en el Travel Journal Record (TJR). Sin ella, Create falla con
+`UNABLE_TO_ADD_TRAVELER_PASSENGER_TYPE_NOT_ENABLED`. Si el PCC de tus credenciales no la tiene,
+usa otro que sí con `SABRE_TARGET_PCC`:
+
+- la auth sigue con `SABRE_PCC` o `SABRE_ORGANIZATION`;
+- el POS de la búsqueda, el `targetPcc` de Create, Get y Cancel, y el `ticketingPcc` de
+  `futureTicketingPolicy` usan `SABRE_TARGET_PCC`;
+- el lock guarda ese PCC, así que retomar la cancelación también lo usa.
+
+Algunos PCC exigen además el número DK del cliente para cerrar el PNR. Sin él, Create falla en End
+Transaction con `UNABLE_TO_END_TRANSACTION_ADD_AGENCY_CUSTOMER_IDENTIFIER`, sin PNR. Pásalo en
+`SABRE_AGENCY_CUSTOMER_NUMBER` (6, 7 o 10 caracteres) y va en `agency.agencyCustomerNumber`.
+
+Sin `SABRE_TARGET_PCC`, todo usa el PCC de la auth y no se manda `targetPcc`. Sabre no revierte
+el cambio de contexto después de reservar, y la sesión tiene que tener permiso sobre ese PCC. Si
+no lo tiene, lo esperable es `UNABLE_TO_CHANGE_CONTEXT`, sin PNR (sin confirmar con una corrida
+real).
 
 ```sh
 npm run build

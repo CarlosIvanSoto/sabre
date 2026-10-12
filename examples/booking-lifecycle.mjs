@@ -47,10 +47,12 @@ export class NotBookedError extends Error {
  *   confirmationId: string | null,
  *   status: 'created' | 'uncertain' | 'cancel-pending' | 'cancelled',
  *   flights: string,
+ *   targetPcc?: string,
  *   createdAt: string,
  *   updatedAt: string,
  * }} PilotLock
- * Estado persistido del piloto. Sin datos del pasajero.
+ * Estado persistido del piloto. Sin datos del pasajero. `targetPcc` es el PCC donde vive el
+ * PNR cuando no es el de la sesión: Get y Cancel lo necesitan para encontrarlo.
  *
  * @typedef {{ read(): Promise<PilotLock | undefined>, write(lock: PilotLock): Promise<void> }} LockStore
  */
@@ -164,10 +166,29 @@ export function reviewWindow({ enter, timeoutMs = REVIEW_TIMEOUT_MS, signal }) {
 }
 
 /**
+ * `agency` del Create del piloto: `FUTURE_TICKETING` sin emisión. Sabre exige
+ * `futureTicketingPolicy` con esa política (`MANDATORY_DATA_MISSING` en producción,
+ * 2026-10-11); el spec no marca campos obligatorios. Decidido por el usuario: fecha de emisión
+ * mañana (antes de la salida, y el PNR se cancela antes) y el PCC propio.
+ *
+ * @param {{ ticketingPcc: string, now: Date }} options
+ * @returns {import('sabre-client').BookingAgency}
+ */
+export function futureTicketing({ ticketingPcc, now }) {
+  const tomorrow = new Date(now.getTime() + 86_400_000);
+  return {
+    ticketingPolicy: 'FUTURE_TICKETING',
+    futureTicketingPolicy: { ticketingDate: localDate(tomorrow), ticketingPcc },
+  };
+}
+
+/**
  * Corre la secuencia completa sobre el primer itinerario que Revalidate acepte.
  *
  * - Antes de Create: si hay lock, se niega; si `confirm` no aprueba o llega `signal`, no crea.
- * - Create sin `payment`, con `FUTURE_TICKETING`, `priceComparisons` y `HALT_ON_ERROR` (default).
+ * - Create sin `payment`, con `FUTURE_TICKETING` (ver `futureTicketing`), `priceComparisons` y
+ *   `HALT_ON_ERROR` (default). Con `targetPcc`, Create, Get y Cancel cambian de contexto a ese
+ *   PCC: la sesión sigue autenticada con el PCC de las credenciales.
  *   Sin reintento. Si falla sin PNR, no escribe lock; si el resultado es incierto, escribe un
  *   lock sin localizador.
  * - Con localizador: lock, Get de verificación y ventana de revisión. Pase lo que pase, Cancel
@@ -181,6 +202,9 @@ export function reviewWindow({ enter, timeoutMs = REVIEW_TIMEOUT_MS, signal }) {
  *   search: import('sabre-client').BargainFinderMaxRequest,
  *   traveler: import('sabre-client').BookTraveler,
  *   contactInfo: import('sabre-client').BookContactInformation,
+ *   ticketingPcc: string,
+ *   targetPcc?: string,
+ *   agencyCustomerNumber?: string,
  *   lock?: LockStore,
  *   confirm: (preview: BookingPreview) => Promise<boolean>,
  *   review: (context: { confirmationId: string, signal?: AbortSignal }) => Promise<'enter' | 'timeout' | 'interrupt'>,
@@ -190,8 +214,21 @@ export function reviewWindow({ enter, timeoutMs = REVIEW_TIMEOUT_MS, signal }) {
  * }} options
  */
 export async function bookingLifecycle(sabre, options) {
-  const { environment, search, traveler, contactInfo, lock, confirm, review, signal, onStep = () => {}, now = () => new Date() } =
-    options;
+  const {
+    environment,
+    search,
+    traveler,
+    contactInfo,
+    ticketingPcc,
+    targetPcc,
+    agencyCustomerNumber,
+    lock,
+    confirm,
+    review,
+    signal,
+    onStep = () => {},
+    now = () => new Date(),
+  } = options;
   const existing = await lock?.read();
   if (existing !== undefined) throw new PilotLockedError(existing);
 
@@ -199,7 +236,13 @@ export async function bookingLifecycle(sabre, options) {
   /** @type {import('sabre-client').CreateBookingRequest} */
   const request = {
     ...summary.bookingPreview,
-    agency: { ticketingPolicy: 'FUTURE_TICKETING' },
+    ...(targetPcc === undefined ? {} : { targetPcc }),
+    agency: {
+      ...futureTicketing({ ticketingPcc, now: now() }),
+      // Número DK. Sin él, un PCC de producción cortó en End Transaction con
+      // UNABLE_TO_END_TRANSACTION_ADD_AGENCY_CUSTOMER_IDENTIFIER (2026-10-11).
+      ...(agencyCustomerNumber === undefined ? {} : { agencyCustomerNumber }),
+    },
     travelers: [traveler],
     contactInfo,
   };
@@ -216,12 +259,14 @@ export async function bookingLifecycle(sabre, options) {
     searchPrice: summary.searchPrice,
     traveler: `${traveler.surname}/${traveler.givenName} (${traveler.passengerCode})`,
     ticketingPolicy: 'FUTURE_TICKETING',
+    ticketingDate: request.agency?.futureTicketingPolicy?.ticketingDate,
   };
   if (signal?.aborted) throw new NotBookedError('interrumpido antes de Create: no se creó ningún PNR');
   if (!(await confirm(preview))) throw new NotBookedError('Create no confirmado: no se creó ningún PNR');
   if (signal?.aborted) throw new NotBookedError('interrumpido antes de Create: no se creó ningún PNR');
 
   const flights = summary.flights;
+  const context = targetPcc === undefined ? {} : { targetPcc };
   const stamp = () => now().toISOString();
   const createdAt = stamp();
   const timings = {};
@@ -240,7 +285,7 @@ export async function bookingLifecycle(sabre, options) {
     booking = await timed('createMs', () => sabre.booking.create(request));
   } catch (error) {
     if (!createFailedWithoutBooking(error)) {
-      await lock?.write({ environment, confirmationId: null, status: 'uncertain', flights, createdAt, updatedAt: stamp() });
+      await lock?.write({ environment, confirmationId: null, status: 'uncertain', flights, ...context, createdAt, updatedAt: stamp() });
     }
     throw error;
   }
@@ -263,9 +308,9 @@ export async function bookingLifecycle(sabre, options) {
   onStep('createBooking', { confirmationId, ...report.create });
 
   try {
-    await lock?.write({ environment, confirmationId, status: 'created', flights, createdAt, updatedAt: stamp() });
+    await lock?.write({ environment, confirmationId, status: 'created', flights, ...context, createdAt, updatedAt: stamp() });
     if (signal?.aborted) throw new Error('interrumpido con Ctrl+C');
-    report.verification = await timed('verifyMs', () => verifyBooking(sabre, { confirmationId, requested, signal }));
+    report.verification = await timed('verifyMs', () => verifyBooking(sabre, { confirmationId, ...context, requested, signal }));
     onStep('getBooking', report.verification);
     if (!report.verification.ok) throw new Error(`la reserva no coincide con lo pedido: ${report.verification.problems.join('; ')}`);
     report.review = await timed('reviewMs', () => review({ confirmationId, ...(signal === undefined ? {} : { signal }) }));
@@ -274,12 +319,13 @@ export async function bookingLifecycle(sabre, options) {
     report.failure = describeError(error);
     onStep('failure', report.failure);
   } finally {
-    await cancelAndVerify(sabre, { confirmationId, report, onStep });
+    await cancelAndVerify(sabre, { confirmationId, ...context, report, onStep });
     await lock?.write({
       environment,
       confirmationId,
       status: report.final?.ok ? 'cancelled' : 'cancel-pending',
       flights,
+      ...context,
       createdAt,
       updatedAt: stamp(),
     });
@@ -302,7 +348,8 @@ export async function resumeCancellation(sabre, { lock, onStep = () => {}, now =
     throw new TypeError('no hay un localizador que cancelar en el lock');
   }
   const { confirmationId } = existing;
-  const before = await sabre.booking.get({ confirmationId, returnOnly: ['FLIGHTS'] });
+  const context = existing.targetPcc === undefined ? {} : { targetPcc: existing.targetPcc };
+  const before = await sabre.booking.get({ confirmationId, ...context, returnOnly: ['FLIGHTS'] });
   const live = flightsOf(before).length;
   onStep('getBooking', { flights: live });
 
@@ -312,7 +359,7 @@ export async function resumeCancellation(sabre, { lock, onStep = () => {}, now =
     report.cancel = { ok: true, skipped: true, warnings: [] };
     report.final = { ok: true, flights: 0 };
   } else {
-    await cancelAndVerify(sabre, { confirmationId, report, onStep });
+    await cancelAndVerify(sabre, { confirmationId, ...context, report, onStep });
   }
   await lock.write({
     ...existing,
@@ -323,9 +370,9 @@ export async function resumeCancellation(sabre, { lock, onStep = () => {}, now =
 }
 
 /** Paso 5: vuelos en `HK` iguales a los pedidos, y un único pasajero `ADT`. */
-export async function verifyBooking(sabre, { confirmationId, requested, signal }) {
+export async function verifyBooking(sabre, { confirmationId, targetPcc, requested, signal }) {
   const booking = await sabre.booking.get(
-    { confirmationId, returnOnly: VERIFY_RETURN_ONLY },
+    { confirmationId, ...(targetPcc === undefined ? {} : { targetPcc }), returnOnly: VERIFY_RETURN_ONLY },
     ...(signal === undefined ? [] : [{ signal }]),
   );
   const flights = flightsOf(booking);
@@ -363,10 +410,11 @@ export async function verifyBooking(sabre, { confirmationId, requested, signal }
 }
 
 /** Pasos 6 y 7: Cancel `cancelAll` y Get final. Nunca lanza: el resultado queda en `report`. */
-async function cancelAndVerify(sabre, { confirmationId, report, onStep }) {
+async function cancelAndVerify(sabre, { confirmationId, targetPcc, report, onStep }) {
+  const context = targetPcc === undefined ? {} : { targetPcc };
   const start = Date.now();
   try {
-    const cancelled = await sabre.booking.cancel({ confirmationId, cancelAll: true });
+    const cancelled = await sabre.booking.cancel({ confirmationId, ...context, cancelAll: true });
     const warnings = codes(cancelled.warnings);
     report.cancel = { ok: true, warnings, ...(warnings.includes(END_TRANSACTION_PROBLEM) ? { pendingConfirmation: true } : {}) };
   } catch (error) {
@@ -378,7 +426,7 @@ async function cancelAndVerify(sabre, { confirmationId, report, onStep }) {
 
   const finalStart = Date.now();
   try {
-    const after = await sabre.booking.get({ confirmationId, returnOnly: ['FLIGHTS'] });
+    const after = await sabre.booking.get({ confirmationId, ...context, returnOnly: ['FLIGHTS'] });
     const left = flightsOf(after).length;
     report.final = { ok: left === 0, flights: left };
   } catch (error) {
@@ -418,6 +466,7 @@ export function describeError(error) {
  *   searchPrice: string | undefined,
  *   traveler: string,
  *   ticketingPolicy: 'FUTURE_TICKETING',
+ *   ticketingDate: unknown,
  * }} BookingPreview
  * Lo que se muestra en la confirmación antes de Create. Lleva el nombre del pasajero: solo va
  * a la pantalla, nunca al logger ni al informe.

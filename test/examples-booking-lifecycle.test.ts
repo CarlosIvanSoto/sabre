@@ -174,12 +174,15 @@ describe('examples/booking-lifecycle: secuencia', () => {
 
   it('con targetPcc: Create, Get, Cancel y el lock usan ese PCC, y también la emisión', async () => {
     const { fetch, sabre } = client();
-    const { promise, lock } = run(sabre, { targetPcc: 'T9PK', ticketingPcc: 'T9PK' });
+    const { promise, lock } = run(sabre, { targetPcc: 'T9PK', ticketingPcc: 'T9PK', agencyCustomerNumber: '1234567' });
     const report = await promise;
 
     expect(report.ok).toBe(true);
     const [create] = calls(fetch, '/createBooking');
-    expect(create).toMatchObject({ targetPcc: 'T9PK', agency: { futureTicketingPolicy: { ticketingPcc: 'T9PK' } } });
+    expect(create).toMatchObject({
+      targetPcc: 'T9PK',
+      agency: { agencyCustomerNumber: '1234567', futureTicketingPolicy: { ticketingPcc: 'T9PK' } },
+    });
     for (const body of [...calls(fetch, '/getBooking'), ...calls(fetch, '/cancelBooking')]) {
       expect(body.targetPcc).toBe('T9PK');
     }

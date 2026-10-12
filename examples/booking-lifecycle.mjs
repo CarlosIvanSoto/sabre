@@ -204,6 +204,7 @@ export function futureTicketing({ ticketingPcc, now }) {
  *   contactInfo: import('sabre-client').BookContactInformation,
  *   ticketingPcc: string,
  *   targetPcc?: string,
+ *   agencyCustomerNumber?: string,
  *   lock?: LockStore,
  *   confirm: (preview: BookingPreview) => Promise<boolean>,
  *   review: (context: { confirmationId: string, signal?: AbortSignal }) => Promise<'enter' | 'timeout' | 'interrupt'>,
@@ -220,6 +221,7 @@ export async function bookingLifecycle(sabre, options) {
     contactInfo,
     ticketingPcc,
     targetPcc,
+    agencyCustomerNumber,
     lock,
     confirm,
     review,
@@ -235,7 +237,12 @@ export async function bookingLifecycle(sabre, options) {
   const request = {
     ...summary.bookingPreview,
     ...(targetPcc === undefined ? {} : { targetPcc }),
-    agency: futureTicketing({ ticketingPcc, now: now() }),
+    agency: {
+      ...futureTicketing({ ticketingPcc, now: now() }),
+      // Número DK. Sin él, un PCC de producción cortó en End Transaction con
+      // UNABLE_TO_END_TRANSACTION_ADD_AGENCY_CUSTOMER_IDENTIFIER (2026-10-11).
+      ...(agencyCustomerNumber === undefined ? {} : { agencyCustomerNumber }),
+    },
     travelers: [traveler],
     contactInfo,
   };

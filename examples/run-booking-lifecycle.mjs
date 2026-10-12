@@ -117,6 +117,11 @@ if (targetPccEnv !== undefined && targetPccEnv !== '' && !/^[A-Z0-9]{3,4}$/.test
   fail(`SABRE_TARGET_PCC debe tener 3 o 4 letras mayúsculas o dígitos (recibido: ${targetPccEnv})`);
 }
 const bookingPcc = targetPccEnv || pcc;
+// Número DK del cliente de la agencia: algunos PCC lo exigen para cerrar el PNR.
+const agencyCustomerNumber = process.env.SABRE_AGENCY_CUSTOMER_NUMBER || undefined;
+if (agencyCustomerNumber !== undefined && !/^[0-9A-Z]{6}([1-9A-Z*]|[0-9A-Z]{4})?$/.test(agencyCustomerNumber)) {
+  fail('SABRE_AGENCY_CUSTOMER_NUMBER debe ser un número DK de 6, 7 o 10 caracteres (mayúsculas y dígitos)');
+}
 const targetPcc = bookingPcc === pcc ? undefined : bookingPcc;
 const user = env('SABRE_USERNAME');
 const isEpr = user.includes('-') || user.includes(':');
@@ -184,6 +189,7 @@ try {
       ...passenger,
       ticketingPcc: bookingPcc,
       ...(targetPcc === undefined ? {} : { targetPcc }),
+      ...(agencyCustomerNumber === undefined ? {} : { agencyCustomerNumber }),
       ...(lock === undefined ? {} : { lock }),
       signal: interrupt.signal,
       onStep,
@@ -194,6 +200,7 @@ try {
         for (const f of preview.flights) console.log(`  ${f.flight} · ${f.departure} · clase ${f.bookingClass}`);
         console.log(`  precio revalidado ${preview.price} (BFM ${preview.searchPrice}) · umbral: ninguna subida`);
         console.log(`  pasajero ${preview.traveler}`);
+        console.log(`  número DK ${agencyCustomerNumber ?? '(no se manda)'}`);
         const answer = await ask(`Escribe "reservar" para crear el PNR${production ? ' en PRODUCCIÓN' : ''}: `);
         return answer?.trim() === 'reservar';
       },

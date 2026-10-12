@@ -120,6 +120,10 @@ usa otro que sí con `SABRE_TARGET_PCC`:
   `futureTicketingPolicy` usan `SABRE_TARGET_PCC`;
 - el lock guarda ese PCC, así que retomar la cancelación también lo usa.
 
+Algunos PCC exigen además el número DK del cliente para cerrar el PNR. Sin él, Create falla en End
+Transaction con `UNABLE_TO_END_TRANSACTION_ADD_AGENCY_CUSTOMER_IDENTIFIER`, sin PNR. Pásalo en
+`SABRE_AGENCY_CUSTOMER_NUMBER` (6, 7 o 10 caracteres) y va en `agency.agencyCustomerNumber`.
+
 Sin `SABRE_TARGET_PCC`, todo usa el PCC de la auth y no se manda `targetPcc`. Sabre no revierte
 el cambio de contexto después de reservar, y la sesión tiene que tener permiso sobre ese PCC. Si
 no lo tiene, lo esperable es `UNABLE_TO_CHANGE_CONTEXT`, sin PNR (sin confirmar con una corrida

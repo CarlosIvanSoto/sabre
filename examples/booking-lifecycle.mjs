@@ -164,10 +164,28 @@ export function reviewWindow({ enter, timeoutMs = REVIEW_TIMEOUT_MS, signal }) {
 }
 
 /**
+ * `agency` del Create del piloto: `FUTURE_TICKETING` sin emisión. Sabre exige
+ * `futureTicketingPolicy` con esa política (`MANDATORY_DATA_MISSING` en producción,
+ * 2026-10-11); el spec no marca campos obligatorios. Decidido por el usuario: fecha de emisión
+ * mañana (antes de la salida, y el PNR se cancela antes) y el PCC propio.
+ *
+ * @param {{ ticketingPcc: string, now: Date }} options
+ * @returns {import('sabre-client').BookingAgency}
+ */
+export function futureTicketing({ ticketingPcc, now }) {
+  const tomorrow = new Date(now.getTime() + 86_400_000);
+  return {
+    ticketingPolicy: 'FUTURE_TICKETING',
+    futureTicketingPolicy: { ticketingDate: localDate(tomorrow), ticketingPcc },
+  };
+}
+
+/**
  * Corre la secuencia completa sobre el primer itinerario que Revalidate acepte.
  *
  * - Antes de Create: si hay lock, se niega; si `confirm` no aprueba o llega `signal`, no crea.
- * - Create sin `payment`, con `FUTURE_TICKETING`, `priceComparisons` y `HALT_ON_ERROR` (default).
+ * - Create sin `payment`, con `FUTURE_TICKETING` (ver `futureTicketing`), `priceComparisons` y
+ *   `HALT_ON_ERROR` (default).
  *   Sin reintento. Si falla sin PNR, no escribe lock; si el resultado es incierto, escribe un
  *   lock sin localizador.
  * - Con localizador: lock, Get de verificación y ventana de revisión. Pase lo que pase, Cancel
@@ -181,6 +199,7 @@ export function reviewWindow({ enter, timeoutMs = REVIEW_TIMEOUT_MS, signal }) {
  *   search: import('sabre-client').BargainFinderMaxRequest,
  *   traveler: import('sabre-client').BookTraveler,
  *   contactInfo: import('sabre-client').BookContactInformation,
+ *   ticketingPcc: string,
  *   lock?: LockStore,
  *   confirm: (preview: BookingPreview) => Promise<boolean>,
  *   review: (context: { confirmationId: string, signal?: AbortSignal }) => Promise<'enter' | 'timeout' | 'interrupt'>,
@@ -190,8 +209,19 @@ export function reviewWindow({ enter, timeoutMs = REVIEW_TIMEOUT_MS, signal }) {
  * }} options
  */
 export async function bookingLifecycle(sabre, options) {
-  const { environment, search, traveler, contactInfo, lock, confirm, review, signal, onStep = () => {}, now = () => new Date() } =
-    options;
+  const {
+    environment,
+    search,
+    traveler,
+    contactInfo,
+    ticketingPcc,
+    lock,
+    confirm,
+    review,
+    signal,
+    onStep = () => {},
+    now = () => new Date(),
+  } = options;
   const existing = await lock?.read();
   if (existing !== undefined) throw new PilotLockedError(existing);
 
@@ -199,7 +229,7 @@ export async function bookingLifecycle(sabre, options) {
   /** @type {import('sabre-client').CreateBookingRequest} */
   const request = {
     ...summary.bookingPreview,
-    agency: { ticketingPolicy: 'FUTURE_TICKETING' },
+    agency: futureTicketing({ ticketingPcc, now: now() }),
     travelers: [traveler],
     contactInfo,
   };
@@ -216,6 +246,7 @@ export async function bookingLifecycle(sabre, options) {
     searchPrice: summary.searchPrice,
     traveler: `${traveler.surname}/${traveler.givenName} (${traveler.passengerCode})`,
     ticketingPolicy: 'FUTURE_TICKETING',
+    ticketingDate: request.agency?.futureTicketingPolicy?.ticketingDate,
   };
   if (signal?.aborted) throw new NotBookedError('interrumpido antes de Create: no se creó ningún PNR');
   if (!(await confirm(preview))) throw new NotBookedError('Create no confirmado: no se creó ningún PNR');
@@ -418,6 +449,7 @@ export function describeError(error) {
  *   searchPrice: string | undefined,
  *   traveler: string,
  *   ticketingPolicy: 'FUTURE_TICKETING',
+ *   ticketingDate: unknown,
  * }} BookingPreview
  * Lo que se muestra en la confirmación antes de Create. Lleva el nombre del pasajero: solo va
  * a la pantalla, nunca al logger ni al informe.

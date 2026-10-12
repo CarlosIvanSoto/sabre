@@ -98,7 +98,9 @@ function run(sabre: Sabre, overrides: Record<string, unknown> = {}) {
     search,
     traveler,
     contactInfo,
+    ticketingPcc: 'XXXX',
     lock: lock.store,
+    now: () => new Date('2026-10-11T18:00:00Z'),
     confirm,
     review,
     onStep: (step: string) => steps.push(step),
@@ -140,7 +142,12 @@ describe('examples/booking-lifecycle: secuencia', () => {
     expect(preview.price).toBe(report.price);
 
     const [create] = calls(fetch, '/createBooking');
-    expect(create).toMatchObject({ agency: { ticketingPolicy: 'FUTURE_TICKETING' }, travelers: [traveler], contactInfo });
+    const tomorrow = new Date('2026-10-12T18:00:00Z');
+    const ticketingDate = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+    expect(create).toMatchObject({ travelers: [traveler], contactInfo });
+    // Sabre exige futureTicketingPolicy con FUTURE_TICKETING (MANDATORY_DATA_MISSING en producción).
+    expect(create!.agency).toEqual({ ticketingPolicy: 'FUTURE_TICKETING', futureTicketingPolicy: { ticketingDate, ticketingPcc: 'XXXX' } });
+    expect(preview.ticketingDate).toBe(ticketingDate);
     expect(create).not.toHaveProperty('payment');
     expect(create).not.toHaveProperty('errorHandlingPolicy');
     const pricing = (create!.flightDetails as { flightPricing: Array<{ priceComparisons: unknown[] }> }).flightPricing[0]!;

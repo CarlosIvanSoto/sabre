@@ -172,11 +172,14 @@ try {
       environment,
       search: oneWaySearch({ pcc, origin, destination, departureDateTime: `${departure}T10:00:00`, maxStops }),
       ...passenger,
+      ticketingPcc: pcc,
       ...(lock === undefined ? {} : { lock }),
       signal: interrupt.signal,
       onStep,
       confirm: async (preview) => {
-        console.log('\nSe va a crear este PNR (sin pago ni emisión, ticketingPolicy FUTURE_TICKETING):');
+        console.log(
+          `\nSe va a crear este PNR (sin pago ni emisión, FUTURE_TICKETING con fecha ${preview.ticketingDate} en el PCC ${pcc}):`,
+        );
         for (const f of preview.flights) console.log(`  ${f.flight} · ${f.departure} · clase ${f.bookingClass}`);
         console.log(`  precio revalidado ${preview.price} (BFM ${preview.searchPrice}) · umbral: ninguna subida`);
         console.log(`  pasajero ${preview.traveler}`);

@@ -72,7 +72,8 @@ está en `booking-lifecycle.mjs`, con tests en `fetch` mockeado. Es la secuencia
 
 1. BFM y Revalidate, como `air-booking-flow.mjs`.
 2. **Confirmación**: muestra vuelo, clase, precio y pasajero, y espera que escribas `reservar`.
-3. **Create Booking** sin pago ni emisión (`agency.ticketingPolicy: FUTURE_TICKETING`), con
+3. **Create Booking** sin pago ni emisión (`agency.ticketingPolicy: FUTURE_TICKETING`, con
+   `futureTicketingPolicy` de fecha mañana en tu PCC, que Sabre exige con esa política), con
    `priceComparisons` que corta ante cualquier subida sobre el precio revalidado
    (`INCREASE_BY_AMOUNT` `0`) y `HALT_ON_ERROR`, el default de Sabre. Sin reintento.
 4. **Get Booking** de verificación: vuelos iguales a los pedidos y en `HK`, y un pasajero `ADT`.

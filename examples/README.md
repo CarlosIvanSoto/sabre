@@ -106,9 +106,13 @@ Create Booking:
   - si Create terminó con resultado incierto (timeout, red, 5xx), el lock no tiene localizador:
     revisa en Sabre Red si se creó algo y borra el archivo a mano.
 
-Si Sabre rechaza Create sin crear el PNR (por ejemplo `UNAUTHORIZED_ACCESS` con el token v3), no
-se escribe el lock y la corrida no se consume: se puede repetir con `SABRE_AUTH_VERSION=v2`
-(decisión de #50).
+Si Sabre rechaza Create sin crear el PNR (por ejemplo `MANDATORY_DATA_MISSING` o un prerrequisito
+de la cuenta), no se escribe el lock y la corrida no se consume: se puede repetir una vez
+resuelto (decisión de #50).
+
+**Prerrequisito de la cuenta**: el PCC necesita la opción "Store Passenger Type In PNR" activa en
+el Travel Journal Record (TJR). Sin ella, Create falla con
+`UNABLE_TO_ADD_TRAVELER_PASSENGER_TYPE_NOT_ENABLED`.
 
 ```sh
 npm run build

@@ -212,7 +212,6 @@ try {
       console.error('⚠ resultado incierto: revisa en Sabre Red si se creó un PNR. El lock bloquea nuevas corridas.');
     } else {
       console.error('No se creó ningún PNR: la corrida del piloto no se consumió.');
-      if (authVersion === 'v3') console.error('Si fue UNAUTHORIZED, prueba con SABRE_AUTH_VERSION=v2 (decisión de #50).');
     }
     process.exitCode = 1;
   } else {

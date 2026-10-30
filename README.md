@@ -12,8 +12,16 @@ TypeScript SDK for the Sabre APIs.
 
 ## Status
 
-`0.3.0` is **not published to npm yet**. It will be released once both Tier 1 and Tier 2
-of the Air Booking flow are done. Until then, `npm install sabre-client` installs `0.2.4`.
+`0.3.0` is **not released yet**. It will be released once both Tier 1 and Tier 2 of the
+Air Booking flow are done. Until then, `npm install sabre-client` installs `0.2.4`.
+
+Prereleases of the rewrite are published under the `next` tag:
+
+```sh
+npm install sabre-client@next
+```
+
+The API may still change before `0.3.0`.
 
 Tier 1 covers the core Air Booking flow over REST:
 

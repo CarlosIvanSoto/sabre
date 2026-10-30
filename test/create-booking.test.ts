@@ -194,6 +194,44 @@ describe('sabre.booking.create', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('FUTURE_TICKETING sin futureTicketingPolicy lanza TypeError sin llamar a la red', async () => {
+    const fetch = router([]);
+    const error = await catchError(
+      new Sabre(config({ fetch })).booking.create({ ...request, agency: { ticketingPolicy: 'FUTURE_TICKETING' } }),
+    );
+
+    expect(error).toBeInstanceOf(TypeError);
+    expect((error as Error).message).toMatch(/^sabre-client: .*futureTicketingPolicy/);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('FUTURE_TICKETING con futureTicketingPolicy se envía tal cual', async () => {
+    const fetch = router([json(200, { confirmationId: 'GLEBNY' })]);
+    const withPolicy: CreateBookingRequest = {
+      ...request,
+      agency: {
+        ticketingPolicy: 'FUTURE_TICKETING',
+        futureTicketingPolicy: { ticketingDate: '2026-11-01', ticketingPcc: 'XXXX' },
+      },
+    };
+    await new Sabre(config({ fetch })).booking.create(withPolicy);
+
+    const [[, init]] = serviceCalls(fetch) as [[string, RequestInit]];
+    expect(JSON.parse(init.body as string)).toEqual(withPolicy);
+  });
+
+  it.each(['TODAY', 'ALREADY_TICKETED', 'TICKETING_TIME_LIMIT'] as const)(
+    '%s sin futureTicketingPolicy se envía igual que antes',
+    async (ticketingPolicy) => {
+      const fetch = router([json(200, { confirmationId: 'GLEBNY' })]);
+      const other: CreateBookingRequest = { ...request, agency: { ticketingPolicy } };
+      await new Sabre(config({ fetch })).booking.create(other);
+
+      const [[, init]] = serviceCalls(fetch) as [[string, RequestInit]];
+      expect(JSON.parse(init.body as string)).toEqual(other);
+    },
+  );
+
   it('ningún dato del pasajero llega al logger, ni en éxito ni en error', async () => {
     const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const fetch = router([

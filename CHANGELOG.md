@@ -32,7 +32,9 @@ Air Booking flow are done.
 - `sabre.booking.create`: Create Booking from the Booking Management API v1 through the ATPCO
   path (`flightDetails`), plus `buildBookingFlightDetails` to build `flightDetails` from a
   revalidated itinerary. It is never retried automatically. Warnings and non-fatal errors are
-  returned on the result instead of being thrown.
+  returned on the result instead of being thrown. A request with
+  `agency.ticketingPolicy: 'FUTURE_TICKETING'` and no `agency.futureTicketingPolicy` throws a
+  `TypeError` before calling the network, since Sabre always rejects it.
 - `sabre.booking.get`: Get Booking from the Booking Management API v1. The booking fields come
   at the top level of the response, as Sabre defines them. It throws only when there is no
   booking (for example `BOOKING_NOT_FOUND`); otherwise warnings and partial errors are

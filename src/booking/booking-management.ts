@@ -25,6 +25,8 @@ export class BookingManagement {
    *
    * Nunca se reintenta automáticamente. Si la reserva se crea con avisos o errores no fatales,
    * no lanza: los devuelve en `warnings` y `errors`. Si no se crea, lanza `SabreBusinessError`.
+   * Con `agency.ticketingPolicy: 'FUTURE_TICKETING'` y sin `agency.futureTicketingPolicy`, lanza
+   * `TypeError` sin llamar a la red: Sabre lo rechaza seguro.
    */
   create(request: CreateBookingRequest, options?: CreateBookingOptions): Promise<CreateBookingResponse> {
     return createBooking(this.#transport, request, options);

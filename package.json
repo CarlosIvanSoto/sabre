@@ -1,7 +1,12 @@
 {
   "name": "sabre-client",
-  "version": "0.3.0",
-  "description": "SDK de TypeScript para las APIs de Sabre (REST y SOAP)",
+  "version": "0.3.0-next.0",
+  "description": "TypeScript SDK for the Sabre GDS APIs: managed OAuth, air shopping, itinerary revalidation and booking over REST, built on Web Standard APIs to run on any server runtime.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CarlosIvanSoto/sabre.git"
+  },
   "type": "module",
   "exports": {
     ".": {

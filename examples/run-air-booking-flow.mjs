@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Smoke manual del Tier 1 con credenciales propias: auth → BFM → Revalidate → Create Booking.
+// Smoke manual con credenciales propias: auth → BFM → Revalidate → (Get Seats) → Create Booking.
 // Lo corre el usuario; nunca la CI. Necesita `npm run build` antes. Ver examples/README.md.
 //
 //   node --env-file=.env examples/run-air-booking-flow.mjs
@@ -7,10 +7,14 @@
 //   SABRE_ENVIRONMENT=production node --env-file=.env.production examples/run-air-booking-flow.mjs
 //   SABRE_ENVIRONMENT=production SABRE_MAX_STOPS=0 SABRE_DEPARTURE_DAYS=75 SABRE_PREVIEW_BOOKING=1 \
 //     node --env-file=.env.production examples/run-air-booking-flow.mjs
+//   SABRE_ENVIRONMENT=production SABRE_GET_SEATS=1 SABRE_PREVIEW_BOOKING=1 \
+//     node --env-file=.env.production examples/run-air-booking-flow.mjs
 //
 // Create Booking solo corre con SABRE_CREATE_BOOKING=1 y nunca en producción: crearía un PNR
 // real (decisión del 2026-10-11 en sabre-wiki/wiki/sdk/plan-tier-1.md). SABRE_PREVIEW_BOOKING=1
 // muestra el flightDetails que se mandaría, sin enviarlo, y sí se permite en producción.
+// SABRE_GET_SEATS=1 pide el mapa de asientos por payload (solo lectura, permitido en
+// producción) y, con el preview, agrega al flightDetails un asiento libre y sin cargo por vuelo.
 import { Sabre, SabreBusinessError, SabreError } from 'sabre-client';
 import { airBookingFlow, oneWaySearch } from './air-booking-flow.mjs';
 
@@ -38,6 +42,8 @@ if (book && preview) {
   console.error('SABRE_CREATE_BOOKING y SABRE_PREVIEW_BOOKING son excluyentes: usa uno solo.');
   process.exit(2);
 }
+
+const seats = process.env.SABRE_GET_SEATS === '1';
 
 const integer = (name, fallback, min, max) => {
   const raw = process.env[name];
@@ -99,13 +105,14 @@ const search = oneWaySearch({
 });
 
 const mode = book ? 'activado' : preview ? 'solo vista previa' : 'desactivado';
-console.log(`entorno ${environment} · OAuth ${authVersion} · Create Booking ${mode}`);
+console.log(`entorno ${environment} · OAuth ${authVersion} · Get Seats ${seats ? 'activado' : 'desactivado'} · Create Booking ${mode}`);
 console.log(`búsqueda ${origin}→${destination} · salida ${departure} (+${departureDays} días) · máximo ${maxStops} escala(s)`);
 try {
   const summary = await airBookingFlow(sabre, {
     search,
     book,
     preview,
+    seats,
     onStep: (step, detail) => console.log(`✓ ${step}`, detail),
   });
   if (summary.bookingPreview !== undefined) {
@@ -116,6 +123,17 @@ try {
     console.log('- createBooking omitido (SABRE_CREATE_BOOKING=1 para activarlo, solo en sandbox; SABRE_PREVIEW_BOOKING=1 para verlo sin enviarlo)');
   }
   console.log(`precio en BFM ${summary.searchPrice} · revalidado ${summary.revalidatedPrice}`);
+  if (summary.seatMaps !== undefined) {
+    for (const map of summary.seatMaps) {
+      console.log(
+        `asientos ${map.segment} ${map.flight}: ${map.seatMap ? `${map.seats} en el mapa, ${map.free} libres, ${map.paid} pagos, primero sin cargo ${map.firstFreeSeat ?? '-'}` : 'SIN MAPA'}`,
+      );
+    }
+    if (summary.seatMaps.some((map) => !map.seatMap)) {
+      console.error('✗ Get Seats no devolvió mapa para todos los segmentos');
+      process.exitCode = 1;
+    }
+  }
   if (summary.searchPrice !== summary.revalidatedPrice) console.log('⚠ el precio cambió entre BFM y Revalidate');
 } catch (error) {
   if (!(error instanceof SabreError)) throw error;

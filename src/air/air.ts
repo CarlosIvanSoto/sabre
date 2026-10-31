@@ -42,7 +42,7 @@ export class Air {
 
   /**
    * Get Seats v3: mapa de asientos con disponibilidad y precio. Sin `pnrLocator` va a
-   * `byReservationPayload` (la reserva va en el request).
+   * `byReservationPayload`, armado con `buildSeatAvailabilityRequest`.
    */
   getSeats(request: GetSeatsRequest, options?: RequestOptions): Promise<GetSeatsResponse> {
     return getSeats(this.#transport, request, options);

@@ -42,7 +42,9 @@ export class Air {
 
   /**
    * Get Seats v3: mapa de asientos con disponibilidad y precio. Sin `pnrLocator` va a
-   * `byReservationPayload`, armado con `buildSeatAvailabilityRequest`.
+   * `byReservationPayload`, armado con `buildSeatAvailabilityRequest`; con `pnrLocator`, a
+   * `byPnrLocator`. Un `pnrLocator` vacío o mezclado con `segments`, `passengers` o
+   * `returnSeatMapsOnlyForSegmentRefs` lanza `TypeError` sin llamar a la red.
    */
   getSeats(request: GetSeatsRequest, options?: RequestOptions): Promise<GetSeatsResponse> {
     return getSeats(this.#transport, request, options);

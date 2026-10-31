@@ -13,6 +13,7 @@ export type {
   RawSeatAvailabilityRs,
   Seat,
   SeatAvailabilityByPayloadRq,
+  SeatAvailabilityByPnrLocatorRq,
   SeatAvailabilityIssue,
   SeatAvailabilityResponse,
   SeatCabinCompartment,

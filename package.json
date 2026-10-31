@@ -1,6 +1,6 @@
 {
   "name": "sabre-client",
-  "version": "0.3.0-next.0",
+  "version": "0.3.0-next.1",
   "description": "TypeScript SDK for the Sabre GDS APIs: managed OAuth, air shopping, itinerary revalidation and booking over REST, built on Web Standard APIs to run on any server runtime.",
   "license": "MIT",
   "repository": {

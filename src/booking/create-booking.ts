@@ -75,9 +75,7 @@ export async function createBooking(
   request: CreateBookingRequest,
   options: CreateBookingOptions = {},
 ): Promise<CreateBookingResponse> {
-  if (typeof request !== 'object' || request === null) {
-    throw new TypeError('sabre-client: booking.create espera un objeto CreateBookingRequest');
-  }
+  validateCreateBookingRequest(request);
   const body = await transport.request<RawCreateBookingResponse>({
     method: 'POST',
     path: PATH,
@@ -88,6 +86,23 @@ export async function createBooking(
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
   return toCreateBookingResponse(body);
+}
+
+/**
+ * Reglas de la API que Sabre rechaza seguro, iguales para todas las agencias:
+ * `FUTURE_TICKETING` sin `futureTicketingPolicy` vuelve como `MANDATORY_DATA_MISSING`. Solo se
+ * revisa que la policy esté, no su contenido; los valores de la agencia van tal cual.
+ */
+function validateCreateBookingRequest(request: CreateBookingRequest): void {
+  if (typeof request !== 'object' || request === null) {
+    throw new TypeError('sabre-client: booking.create espera un objeto CreateBookingRequest');
+  }
+  const agency = request.agency;
+  if (agency?.ticketingPolicy === 'FUTURE_TICKETING' && agency.futureTicketingPolicy === undefined) {
+    throw new TypeError(
+      'sabre-client: booking.create con agency.ticketingPolicy FUTURE_TICKETING necesita agency.futureTicketingPolicy',
+    );
+  }
 }
 
 /**

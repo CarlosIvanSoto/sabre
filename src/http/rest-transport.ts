@@ -3,6 +3,7 @@
 import { definedOnly, type ResolvedConfig } from '../config.js';
 import { SabreError, SabreGatewayError } from '../errors/index.js';
 import { EventLogger } from '../logging/logger.js';
+import type { SabreRawResponse, SabreRawResponseCallback } from './raw-response.js';
 import { type RetryOptions, retryDelay, shouldRetry, validateRetryOptions } from './retry.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -37,6 +38,15 @@ export interface RestRequest {
   classify?: ResponseClassifier;
   retry?: Partial<RetryOptions>;
   signal?: AbortSignal;
+  /** Método público sin `sabre.`, p. ej. `'booking.get'`. Lo recibe `onRawResponse`. */
+  operation?: string;
+  onRawResponse?: SabreRawResponseCallback;
+}
+
+/** Último intento con respuesta HTTP. Solo se lleva si hay `onRawResponse`. */
+interface RawCapture {
+  attempts: number;
+  last?: { status: number; headers: Headers; body: string };
 }
 
 /** Fuente del header `Authorization` de los servicios (la implementa `AuthManager`). */
@@ -77,6 +87,16 @@ export class RestTransport {
 
   async request<T>(request: RestRequest): Promise<T> {
     if (request.retry !== undefined) validateRetryOptions(request.retry, 'retry');
+    const capture: RawCapture | undefined = request.onRawResponse === undefined ? undefined : { attempts: 0 };
+    try {
+      return await this.#attempts<T>(request, capture);
+    } finally {
+      // Antes de devolver o de lanzar, con el último intento que tuvo respuesta HTTP.
+      if (capture?.last !== undefined) this.#deliverRaw(request, { ...capture.last, attempts: capture.attempts });
+    }
+  }
+
+  async #attempts<T>(request: RestRequest, capture: RawCapture | undefined): Promise<T> {
     const retry = { ...this.#config.retry, ...definedOnly(request.retry ?? {}) };
 
     let reauthorized = false;
@@ -84,7 +104,7 @@ export class RestTransport {
       // Fuera del try: un fallo al obtener el token ya pasó por sus propios reintentos.
       const authorization = await this.#authorizationFor(request);
       try {
-        return await this.#send<T>(request, attempt, authorization);
+        return await this.#send<T>(request, attempt, authorization, capture);
       } catch (error) {
         // Refresco reactivo: un solo reintento con token nuevo, fuera del presupuesto genérico.
         // Aplica también a escrituras: el 401 del gateway rechaza la request antes del proveedor.
@@ -118,12 +138,31 @@ export class RestTransport {
     }
   }
 
+  /** Un callback que lanza no rompe la operación: Create Booking no puede perder su localizador. */
+  #deliverRaw(request: RestRequest, raw: Omit<SabreRawResponse, 'operation' | 'protocol'>): void {
+    const operation = request.operation ?? request.service;
+    try {
+      request.onRawResponse?.({ operation, protocol: 'rest', ...raw });
+    } catch (error) {
+      this.#log.emit('warn', 'sabre.request.rawResponseHookFailed', {
+        service: request.service,
+        operation,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
+  }
+
   async #authorizationFor(request: RestRequest): Promise<string | undefined> {
     if (request.auth === false || this.#authorization === undefined) return undefined;
     return this.#authorization.get();
   }
 
-  async #send<T>(request: RestRequest, attempt: number, authorization: string | undefined): Promise<T> {
+  async #send<T>(
+    request: RestRequest,
+    attempt: number,
+    authorization: string | undefined,
+    capture: RawCapture | undefined,
+  ): Promise<T> {
     const url = this.#url(request);
     const headers = new Headers({ Accept: 'application/json', ...request.headers });
     const form = request.body instanceof URLSearchParams;
@@ -137,6 +176,7 @@ export class RestTransport {
     const startedAt = Date.now();
 
     let response: Response;
+    if (capture !== undefined) capture.attempts++;
     try {
       response = await this.#config.fetch(url, {
         method: request.method,
@@ -155,7 +195,9 @@ export class RestTransport {
       throw error;
     }
 
-    const body = await readBody(response);
+    const text = await response.text();
+    if (capture !== undefined) capture.last = { status: response.status, headers: response.headers, body: text };
+    const body = parseBody(text);
     const endContext = { ...logContext, status: response.status, durationMs: Date.now() - startedAt };
 
     // Paso 1: HTTP status de gateway.
@@ -188,8 +230,7 @@ export class RestTransport {
 }
 
 /** Body parseado como JSON; si no es JSON, el texto tal cual; vacío → `undefined`. */
-async function readBody(response: Response): Promise<unknown> {
-  const text = await response.text();
+function parseBody(text: string): unknown {
   if (text === '') return undefined;
   try {
     return JSON.parse(text) as unknown;

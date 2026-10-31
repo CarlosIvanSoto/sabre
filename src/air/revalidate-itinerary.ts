@@ -47,6 +47,9 @@ export async function revalidateItinerary(
     classify: classifyRevalidateItinerary,
     ...(options.retry === undefined ? {} : { retry: options.retry }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.onRawResponse === undefined
+      ? {}
+      : { operation: 'air.revalidateItinerary', onRawResponse: options.onRawResponse }),
   });
   return denormalizeGroupedItineraryResponse(body.groupedItineraryResponse, REVALIDATE_ITINERARY_SERVICE);
 }

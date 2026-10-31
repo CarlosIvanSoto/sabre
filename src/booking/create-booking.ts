@@ -2,6 +2,7 @@
 // Ver sabre-wiki/wiki/entities/booking-management-api.md y
 // sabre-wiki/wiki/sdk/manejo-y-mapeo-de-errores.md (éxito parcial de Create Booking).
 import { type SabreBusinessError, SabreError, type SabreWarning } from '../errors/index.js';
+import type { SabreRawResponseCallback } from '../http/raw-response.js';
 import type { RestTransport } from '../http/rest-transport.js';
 import {
   type BookingResponseError,
@@ -21,6 +22,8 @@ const UNABLE_TO_RETRIEVE_BOOKING = 'UNABLE_TO_RETRIEVE_BOOKING';
 
 export interface CreateBookingOptions {
   signal?: AbortSignal;
+  /** Respuesta cruda del último intento HTTP. El body trae PII: ver `SabreRawResponse`. */
+  onRawResponse?: SabreRawResponseCallback;
 }
 
 /** Elemento de `errors[]` de Create Booking. */
@@ -84,6 +87,9 @@ export async function createBooking(
     body: request,
     classify: classifyCreateBooking,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.onRawResponse === undefined
+      ? {}
+      : { operation: 'booking.create', onRawResponse: options.onRawResponse }),
   });
   return toCreateBookingResponse(body);
 }

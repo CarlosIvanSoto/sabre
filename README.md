@@ -205,6 +205,35 @@ try {
 > `JSON.stringify` or object spreads, but you can still read `error.raw`. Never send it to a
 > logger, error tracker or monitoring service without sanitizing it first.
 
+## Raw response
+
+Every REST operation (`air.bargainFinderMax`, `air.revalidateItinerary`, `booking.create`,
+`booking.get` and `booking.cancel`) accepts an `onRawResponse` callback in its options, next to
+`signal`. It receives Sabre's response as it arrived, for example to store it next to the typed
+result:
+
+```ts
+import type { SabreRawResponse } from 'sabre-client';
+
+let raw: SabreRawResponse | undefined;
+const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r) => (raw = r) });
+// raw: { operation: 'booking.get', protocol: 'rest', status, headers, body, attempts }
+```
+
+- It is called **once**, with the last HTTP attempt, before the operation returns or throws.
+  It is also called when the operation throws `SabreBusinessError` (a `200` with `errors[]`) or
+  `SabreGatewayError` (a non-`2xx`). After retries, `attempts` counts every HTTP attempt.
+- It is not called if no attempt got an HTTP response (network error, abort), nor for token
+  requests. After a `401`, it gets the response of the retry with the new token.
+- It is synchronous and its return value is ignored. If it throws, the SDK catches it, logs
+  `sabre.request.rawResponseHookFailed` without the body, and the operation carries on: a
+  failing callback never makes `booking.create` lose its `confirmationId`. To persist
+  asynchronously, keep the value and write it after the call returns.
+
+> [!WARNING]
+> `body` is the raw response and **contains passenger data**. The SDK never sends it to the
+> logger. Where you store it is up to you.
+
 ## Retries
 
 Only idempotent operations are retried: Bargain Finder Max and Revalidate Itinerary (both
@@ -255,7 +284,8 @@ const sabre = new Sabre({
 ```
 
 The SDK logs structured events (`sabre.request.start`, `sabre.request.end`,
-`sabre.request.retry`, `sabre.auth.token.refresh`, `sabre.auth.token.store`), never raw
+`sabre.request.retry`, `sabre.request.rawResponseHookFailed`, `sabre.auth.token.refresh`,
+`sabre.auth.token.store`), never raw
 request or response bodies. Secrets, the `Authorization` header and passenger data are always
 redacted before they reach your logger.
 

@@ -1,6 +1,7 @@
 // Bargain Finder Max v5 (`POST /v5/offers/shop`).
 // Ver sabre-wiki/wiki/entities/bargain-finder-max.md.
 import type { SabreError } from '../errors/index.js';
+import type { SabreRawResponseCallback } from '../http/raw-response.js';
 import type { RestTransport } from '../http/rest-transport.js';
 import type { RetryOptions } from '../http/retry.js';
 import {
@@ -24,6 +25,8 @@ export type BargainFinderMaxResponse = GroupedItineraryResponse;
 
 export interface RequestOptions {
   signal?: AbortSignal;
+  /** Respuesta cruda del último intento HTTP. El body trae PII: ver `SabreRawResponse`. */
+  onRawResponse?: SabreRawResponseCallback;
   /** Pisa los reintentos del cliente solo para esta request. */
   retry?: Partial<RetryOptions>;
 }
@@ -60,6 +63,9 @@ export async function bargainFinderMax(
     classify: classifyBargainFinderMax,
     ...(options.retry === undefined ? {} : { retry: options.retry }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.onRawResponse === undefined
+      ? {}
+      : { operation: 'air.bargainFinderMax', onRawResponse: options.onRawResponse }),
   });
   return denormalizeGroupedItineraryResponse(body.groupedItineraryResponse, BARGAIN_FINDER_MAX_SERVICE);
 }

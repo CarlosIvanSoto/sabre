@@ -206,6 +206,35 @@ try {
 > `JSON.stringify` ni en un spread, pero sigue accesible como `error.raw`. Nunca lo mandes a un
 > logger, a un tracker de errores ni a un servicio de monitoreo sin sanitizarlo antes.
 
+## Respuesta cruda
+
+Toda operación REST (`air.bargainFinderMax`, `air.revalidateItinerary`, `booking.create`,
+`booking.get` y `booking.cancel`) acepta un callback `onRawResponse` en sus opciones, junto a
+`signal`. Recibe la respuesta de Sabre tal cual llegó, por ejemplo para guardarla junto al
+resultado tipado:
+
+```ts
+import type { SabreRawResponse } from 'sabre-client';
+
+let raw: SabreRawResponse | undefined;
+const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r) => (raw = r) });
+// raw: { operation: 'booking.get', protocol: 'rest', status, headers, body, attempts }
+```
+
+- Se llama **una vez**, con el último intento HTTP, antes de que la operación devuelva o lance.
+  También se llama cuando la operación lanza `SabreBusinessError` (un `200` con `errors[]`) o
+  `SabreGatewayError` (un no `2xx`). Si hubo reintentos, `attempts` cuenta todos los intentos HTTP.
+- No se llama si ningún intento tuvo respuesta HTTP (error de red, abort), ni con las llamadas de
+  token. Tras un `401`, recibe la respuesta del reintento con el token nuevo.
+- Es síncrono y su retorno se ignora. Si lanza, el SDK lo atrapa, registra
+  `sabre.request.rawResponseHookFailed` sin el body y la operación sigue: un callback que falla
+  nunca hace que `booking.create` pierda su `confirmationId`. Para guardar de forma asíncrona,
+  conserva el valor y escríbelo cuando la llamada vuelva.
+
+> [!WARNING]
+> `body` es la respuesta cruda y **trae datos de pasajeros**. El SDK nunca lo manda al logger.
+> Dónde lo guardas es tu responsabilidad.
+
 ## Reintentos
 
 Solo se reintentan las operaciones idempotentes: Bargain Finder Max y Revalidate Itinerary
@@ -255,7 +284,8 @@ const sabre = new Sabre({
 ```
 
 El SDK registra eventos estructurados (`sabre.request.start`, `sabre.request.end`,
-`sabre.request.retry`, `sabre.auth.token.refresh`, `sabre.auth.token.store`) y nunca los bodies
+`sabre.request.retry`, `sabre.request.rawResponseHookFailed`, `sabre.auth.token.refresh`,
+`sabre.auth.token.store`) y nunca los bodies
 crudos de request o response. Los secretos, el header `Authorization` y los datos de pasajeros
 se redactan siempre antes de llegar a tu logger.
 

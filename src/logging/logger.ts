@@ -21,7 +21,8 @@ export type SabreLogEvent =
   | 'sabre.request.retry'
   | 'sabre.request.rawResponseHookFailed'
   | 'sabre.auth.token.refresh'
-  | 'sabre.auth.token.store';
+  | 'sabre.auth.token.store'
+  | 'sabre.booking.seat.priced';
 
 /** Logger interno: redacta siempre el contexto y no hace nada si no hay logger. */
 export class EventLogger {

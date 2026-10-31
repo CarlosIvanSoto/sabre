@@ -14,6 +14,7 @@ import {
   toWarning,
 } from './booking-errors.js';
 import type { CreateBookingRequest } from './create-booking-request.js';
+import { pricedSeatsOf } from './flight-details.js';
 
 export const CREATE_BOOKING_SERVICE = 'createBooking';
 const PATH = '/v1/trip/orders/createBooking';
@@ -79,6 +80,10 @@ export async function createBooking(
   options: CreateBookingOptions = {},
 ): Promise<CreateBookingResponse> {
   validateCreateBookingRequest(request);
+  // Decidido en #62: un asiento con precio solo se avisa; la reserva se envía igual.
+  for (const seat of pricedSeatsOf(request.flightDetails)) {
+    transport.log.emit('warn', 'sabre.booking.seat.priced', { service: CREATE_BOOKING_SERVICE, ...seat });
+  }
   const body = await transport.request<RawCreateBookingResponse>({
     method: 'POST',
     path: PATH,
@@ -108,6 +113,17 @@ function validateCreateBookingRequest(request: CreateBookingRequest): void {
     throw new TypeError(
       'sabre-client: booking.create con agency.ticketingPolicy FUTURE_TICKETING necesita agency.futureTicketingPolicy',
     );
+  }
+  // `BookGenericSeat.travelerIndex` es 1-based sobre `travelers[]`.
+  const travelers = Array.isArray(request.travelers) ? request.travelers.length : 0;
+  for (const flight of request.flightDetails?.flights ?? []) {
+    for (const seat of flight.seats ?? []) {
+      if (seat.travelerIndex < 1 || seat.travelerIndex > travelers) {
+        throw new TypeError(
+          `sabre-client: booking.create con un asiento para el viajero ${seat.travelerIndex}, y travelers tiene ${travelers}`,
+        );
+      }
+    }
   }
 }
 

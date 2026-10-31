@@ -80,6 +80,11 @@ export class RestTransport {
     this.#sleep = options.sleep ?? sleep;
   }
 
+  /** @internal Para los avisos de las operaciones que no son de una request (p. ej. asientos con precio). */
+  get log(): EventLogger {
+    return this.#log;
+  }
+
   /** Punto de enganche para `AuthManager`. */
   setAuthorizationProvider(provider: AuthorizationProvider | undefined): void {
     this.#authorization = provider;

@@ -114,7 +114,7 @@ export type {
 } from './booking/cancel-booking.js';
 export type { BookingResponseError } from './booking/booking-errors.js';
 export { buildBookingFlightDetails } from './booking/flight-details.js';
-export type { BookingFlightDetailsSource } from './booking/flight-details.js';
+export type { BookingFlightDetailsSource, BookingSeatSelection, PricedSeat } from './booking/flight-details.js';
 export type {
   SabreAuthVersion,
   SabreConfig,

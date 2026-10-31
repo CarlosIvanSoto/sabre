@@ -49,6 +49,12 @@ Air Booking flow are done.
   enumerable.
 - Retries with exponential backoff and full jitter (500 ms floor), only for idempotent
   operations, configurable per client and per request.
+- `onRawResponse` request option on every REST operation: it receives Sabre's raw response
+  (`SabreRawResponse`: `operation`, `status`, `headers`, `body` as text, `attempts`) once, from
+  the last HTTP attempt, before the operation returns or throws. Token requests are not
+  delivered. If the callback throws, the operation carries on and the SDK logs
+  `sabre.request.rawResponseHookFailed` without the body. The body contains passenger data and
+  never reaches the logger.
 - Injectable `logger` that emits structured events and always redacts secrets, the
   `Authorization` header and passenger data.
 - Web Standard APIs only: runs on Node.js `>=22.12` and on server-side edge runtimes.

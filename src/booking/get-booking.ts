@@ -1,6 +1,7 @@
 // Get Booking (`POST /v1/trip/orders/getBooking`).
 // Ver sabre-wiki/wiki/sdk/gestion-de-reserva.md y sabre-wiki/wiki/sources/get-booking.md.
 import { type SabreBusinessError, SabreError, type SabreWarning } from '../errors/index.js';
+import type { SabreRawResponseCallback } from '../http/raw-response.js';
 import type { RestTransport } from '../http/rest-transport.js';
 import {
   type BookingResponseError,
@@ -87,6 +88,8 @@ export interface GetBookingRequest {
 
 export interface GetBookingOptions {
   signal?: AbortSignal;
+  /** Respuesta cruda del último intento HTTP. El body trae PII: ver `SabreRawResponse`. */
+  onRawResponse?: SabreRawResponseCallback;
 }
 
 /** `GetBookingResponse` tal cual llega de Sabre: el `Booking` va en el primer nivel. */
@@ -141,6 +144,9 @@ export async function getBooking(
     body: request,
     classify: classifyGetBooking,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.onRawResponse === undefined
+      ? {}
+      : { operation: 'booking.get', onRawResponse: options.onRawResponse }),
   });
   return toGetBookingResponse(body);
 }

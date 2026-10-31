@@ -19,6 +19,7 @@ export type SabreLogEvent =
   | 'sabre.request.start'
   | 'sabre.request.end'
   | 'sabre.request.retry'
+  | 'sabre.request.rawResponseHookFailed'
   | 'sabre.auth.token.refresh'
   | 'sabre.auth.token.store';
 

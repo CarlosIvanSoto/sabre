@@ -1,6 +1,7 @@
 // Cancel Booking (`POST /v1/trip/orders/cancelBooking`).
 // Ver sabre-wiki/wiki/sdk/gestion-de-reserva.md y sabre-wiki/wiki/sources/cancel-booking.md.
 import { SabreError, type SabreWarning } from '../errors/index.js';
+import type { SabreRawResponseCallback } from '../http/raw-response.js';
 import type { RestTransport } from '../http/rest-transport.js';
 import {
   type BookingResponseError,
@@ -86,6 +87,8 @@ export interface CancelBookingRequest {
 
 export interface CancelBookingOptions {
   signal?: AbortSignal;
+  /** Respuesta cruda del último intento HTTP. El body trae PII: ver `SabreRawResponse`. */
+  onRawResponse?: SabreRawResponseCallback;
 }
 
 /** `CancelBookingResponse` tal cual llega de Sabre. */
@@ -136,6 +139,9 @@ export async function cancelBooking(
     body: request,
     classify: classifyCancelBooking,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.onRawResponse === undefined
+      ? {}
+      : { operation: 'booking.cancel', onRawResponse: options.onRawResponse }),
   });
   return toCancelBookingResponse(body);
 }

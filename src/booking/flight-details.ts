@@ -194,7 +194,8 @@ function seatPrice(
     const item = response.offerItems.find((i) => i.id === itemId);
     const price = response.priceDefinitions?.find((p) => p.id === item?.priceDefinitionRef);
     if (price !== undefined && Number(price.totalPrice.amount) > 0) {
-      return { amount: price.totalPrice.amount, currencyCode: price.currencyCode };
+      // Sabre manda número aunque el spec diga string: se normaliza para el evento.
+      return { amount: String(price.totalPrice.amount), currencyCode: price.currencyCode };
     }
   }
   return undefined;

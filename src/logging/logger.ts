@@ -22,7 +22,10 @@ export type SabreLogEvent =
   | 'sabre.request.rawResponseHookFailed'
   | 'sabre.auth.token.refresh'
   | 'sabre.auth.token.store'
-  | 'sabre.booking.seat.priced';
+  | 'sabre.booking.seat.priced'
+  | 'sabre.session.open'
+  | 'sabre.session.close'
+  | 'sabre.session.closeFailed';
 
 /** Logger interno: redacta siempre el contexto y no hace nada si no hay logger. */
 export class EventLogger {

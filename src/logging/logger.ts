@@ -27,7 +27,8 @@ export type SabreLogEvent =
   | 'sabre.session.close'
   | 'sabre.session.closeFailed'
   | 'sabre.session.keepAliveFailed'
-  | 'sabre.queue.exitTolerated';
+  | 'sabre.queue.exitTolerated'
+  | 'sabre.queue.exitFailed';
 
 /** Logger interno: redacta siempre el contexto y no hace nada si no hay logger. */
 export class EventLogger {

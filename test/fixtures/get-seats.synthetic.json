@@ -1,0 +1,46 @@
+{
+  "response": {
+    "offerId": "OFFER_1",
+    "offerExpirationDateTime": "2026-11-20T16:00:00Z",
+    "segments": [
+      {
+        "id": "1",
+        "bookingAirlineCode": "AA",
+        "bookingFlightNumber": 1234,
+        "departureAirportCode": "DFW",
+        "arrivalAirportCode": "LAX",
+        "departureDate": "2026-12-10",
+        "bookingClassCode": "Y",
+        "flightLegs": [{ "id": "L1", "departureAirportCode": "DFW", "arrivalAirportCode": "LAX", "aircraftCode": "321" }]
+      }
+    ],
+    "passengers": [{ "id": "P1", "passengerType": "ADT" }],
+    "serviceDefinitions": [{ "id": "SD1", "serviceCode": "0B5", "airlineCode": "AA", "commercialName": "PREFERRED SEAT", "groupCode": "SA" }],
+    "priceDefinitions": [{ "id": "PD1", "currencyCode": "USD", "totalPrice": { "amount": "35.00", "amountWithoutTaxes": "35.00", "taxesTotal": "0.00" } }],
+    "offerItems": [
+      { "id": "OI1", "serviceDefinitionRef": "SD1", "priceDefinitionRef": "PD1", "segmentRefs": ["1"], "passengerRefs": ["P1"] }
+    ],
+    "displayOnlyItems": [
+      { "id": "DO1", "serviceDefinitionRef": "SD1", "segmentRefs": ["1"], "passengerRefs": ["P1"], "displayOnlyReason": "Restricted" }
+    ],
+    "seatMaps": [
+      {
+        "segmentRef": "1",
+        "flightLegRef": "L1",
+        "cabinCompartments": [
+          {
+            "firstRow": 8,
+            "lastRow": 9,
+            "columnIds": ["A", "B"],
+            "cabinCode": "Y",
+            "cabinName": "Economy",
+            "seatRows": [
+              { "row": 8, "seats": [{ "column": "A", "occupationStatusCode": "F", "offerItemRefIds": ["OI1"] }, { "column": "B", "occupationStatusCode": "O" }] },
+              { "row": 9, "characteristics": [{ "code": "E", "description": "Exit row" }], "seats": [{ "column": "A", "occupationStatusCode": "F" }, { "column": "B", "occupationStatusCode": "F", "displayOnlyItemRefIds": ["DO1"] }] }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

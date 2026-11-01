@@ -6,6 +6,7 @@ import {
   type BargainFinderMaxResponse,
   type RequestOptions,
 } from './bargain-finder-max.js';
+import { getSeats, type GetSeatsRequest, type GetSeatsResponse } from './get-seats.js';
 import {
   revalidateItinerary,
   type RevalidateItineraryRequest,
@@ -37,5 +38,13 @@ export class Air {
     options?: RequestOptions,
   ): Promise<RevalidateItineraryResponse> {
     return revalidateItinerary(this.#transport, request, options);
+  }
+
+  /**
+   * Get Seats v3: mapa de asientos con disponibilidad y precio. Sin `pnrLocator` va a
+   * `byReservationPayload` (la reserva va en el request).
+   */
+  getSeats(request: GetSeatsRequest, options?: RequestOptions): Promise<GetSeatsResponse> {
+    return getSeats(this.#transport, request, options);
   }
 }

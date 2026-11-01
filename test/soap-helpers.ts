@@ -2,6 +2,7 @@
 import { vi } from 'vitest';
 import { resolveConfig } from '../src/config.js';
 import { type SoapRequest, SoapTransport } from '../src/http/soap-transport.js';
+import { SabreLegacy } from '../src/sabre-legacy.js';
 import type { SabreLogger } from '../src/logging/index.js';
 import { config, mockFetch } from './helpers.js';
 
@@ -89,4 +90,39 @@ export async function rejection(promise: Promise<unknown>): Promise<unknown> {
     return error;
   }
   throw new Error('se esperaba que la promesa fallara');
+}
+
+/** `SessionCreateRS` aprobado, con el token de sesión en el header. */
+export function sessionOpened(): Response {
+  return xml(
+    200,
+    soap(
+      '<SessionCreateRS xmlns="http://www.opentravel.org/OTA/2002/11" version="1" status="Approved"><ConversationId>conv</ConversationId></SessionCreateRS>',
+      tokenHeader(SESSION_TOKEN),
+    ),
+  );
+}
+
+/** Un `SabreLegacy` de producción con PCC `H8GI`, sin reintentos por defecto y logger en memoria. */
+export function legacyClient(fetch: typeof globalThis.fetch) {
+  const { logger, calls } = memoryLogger();
+  const client = new SabreLegacy({
+    environment: 'production',
+    authVersion: 'v2',
+    credentials: { username: 'V1:7971:H8GI:AA', password: 'epr-pass' },
+    fetch,
+    logger,
+    retry: { maxRetries: 0 },
+  });
+  return { client, calls };
+}
+
+/** El cuerpo de la llamada `call` al fetch mockeado. */
+export function sentBody(fetch: ReturnType<typeof mockFetch>, call: number): string {
+  return String(fetch.mock.calls[call]?.[1]?.body);
+}
+
+/** El texto de un elemento simple del sobre, p. ej. `eb:Action`. */
+export function sentTag(envelope: string, name: string): string | undefined {
+  return new RegExp(`<${name}>([^<]*)</${name}>`).exec(envelope)?.[1];
 }

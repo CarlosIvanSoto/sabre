@@ -24,6 +24,11 @@ export interface SessionCredentials {
 /** 3 o 4 caracteres alfanuméricos. */
 const PCC = /^[A-Za-z0-9]{3,4}$/;
 
+/** Si el texto es un PCC: 3 o 4 caracteres alfanuméricos. */
+export function isPseudoCityCode(value: unknown): value is string {
+  return typeof value === 'string' && PCC.test(value);
+}
+
 /** Prefijo del EPR de OAuth v2: `V1:<user>:<PCC>:<domain>`. */
 const V2_PREFIX = 'V1:';
 

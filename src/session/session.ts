@@ -4,6 +4,7 @@
 import type { RequestOptions } from '../air/bargain-finder-max.js';
 import { SabreError, SabreGatewayError, SabreSessionError, type SabreSessionErrorKind } from '../errors/index.js';
 import { type SoapRequest, type SoapResponse, type SoapSecurity, type SoapTransport, xmlEscape } from '../http/soap-transport.js';
+import { QueueManagement } from '../queue/queue-management.js';
 import type { SessionCredentials } from './credentials.js';
 
 const OTA_NAMESPACE = 'http://www.opentravel.org/OTA/2002/11';
@@ -76,6 +77,8 @@ export const KEEP_ALIVE_IDLE_MS = 13 * 60_000;
  * se abrió con `withSession`.
  */
 export class SabreSession {
+  /** Queue Management: contar, recorrer y colocar en colas, dentro de esta sesión. */
+  readonly queue: QueueManagement;
   readonly #transport: SoapTransport;
   readonly #pcc: string;
   readonly #conversationId: string;
@@ -108,6 +111,7 @@ export class SabreSession {
     this.#pcc = internal.pcc;
     this.#conversationId = internal.conversationId;
     this.#security = { binarySecurityToken: internal.token };
+    this.queue = new QueueManagement({ send: (request) => this[sessionSend](request), pcc: internal.pcc });
     if (internal.keepAlive) this.#scheduleKeepAlive(KEEP_ALIVE_IDLE_MS);
   }
 

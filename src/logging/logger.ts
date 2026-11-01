@@ -25,7 +25,8 @@ export type SabreLogEvent =
   | 'sabre.booking.seat.priced'
   | 'sabre.session.open'
   | 'sabre.session.close'
-  | 'sabre.session.closeFailed';
+  | 'sabre.session.closeFailed'
+  | 'sabre.session.keepAliveFailed';
 
 /** Logger interno: redacta siempre el contexto y no hace nada si no hay logger. */
 export class EventLogger {

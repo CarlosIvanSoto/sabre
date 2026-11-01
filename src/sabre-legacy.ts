@@ -1,10 +1,9 @@
 // Cliente SOAP. Ver sabre-wiki/wiki/sdk/arquitectura-clientes-transporte.md y
 // tier-3-sesion-y-colas-soap.md.
-import type { RequestOptions } from './air/bargain-finder-max.js';
 import { type ResolvedConfig, resolveConfig, type SabreConfig, type SabreEnvironment } from './config.js';
 import { SoapTransport } from './http/soap-transport.js';
 import { resolveSessionCredentials, type SessionCredentials } from './session/credentials.js';
-import { openSession, type SabreSession } from './session/session.js';
+import { type OpenSessionOptions, openSession, type SabreSession } from './session/session.js';
 
 export class SabreLegacy {
   readonly #config: ResolvedConfig;
@@ -35,9 +34,10 @@ export class SabreLegacy {
 
   /**
    * Abre una sesión SOAP. Quien la abre la cierra: `try { … } finally { await session.close() }`.
-   * Para el caso común, `withSession` la cierra sola.
+   * Para el caso común, `withSession` la cierra sola. Con `keepAlive: true`, manda un ping a los
+   * 13 minutos de inactividad.
    */
-  openSession(options: RequestOptions = {}): Promise<SabreSession> {
+  openSession(options: OpenSessionOptions = {}): Promise<SabreSession> {
     return openSession(this.#transport, this.#session, options);
   }
 

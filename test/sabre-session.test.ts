@@ -1,7 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SabreConfig } from '../src/config.js';
 import { SabreBusinessError, SabreGatewayError, SabreLegacy, type SabreSession, SabreSessionError } from '../src/index.js';
-import { installAsyncDispose, sessionCreatePayload, sessionSend, toSessionError } from '../src/session/session.js';
+import {
+  installAsyncDispose,
+  KEEP_ALIVE_IDLE_MS,
+  sessionCreatePayload,
+  sessionSend,
+  toSessionError,
+} from '../src/session/session.js';
 import { mockFetch } from './helpers.js';
 import { entry, fault, memoryLogger, queueRS, rejection, SESSION_TOKEN, soap, tokenHeader, xml } from './soap-helpers.js';
 
@@ -428,5 +434,200 @@ describe('sesión inutilizable', () => {
     // Una sola apertura, ninguna reapertura, y el cierre no va a la red.
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(calls.some(([, event]) => event === 'sabre.session.closeFailed')).toBe(false);
+  });
+});
+
+const MINUTE = 60_000;
+
+/** `fetch` cuya siguiente respuesta queda pendiente hasta `release`. */
+function pendingOnce(fetch: ReturnType<typeof mockFetch>) {
+  let release!: (response: Response) => void;
+  fetch.mockImplementationOnce(() => new Promise<Response>((resolve) => (release = resolve)));
+  return (response: Response) => release(response);
+}
+
+const actions = (fetch: ReturnType<typeof mockFetch>) =>
+  fetch.mock.calls.map(([, init]) => tag(String(init?.body), 'eb:Action'));
+
+describe('ping', () => {
+  it('manda OTA_PingRQ 1.0.0 con el token de la sesión', async () => {
+    const fetch = mockFetch(opened(), pinged());
+    const session = await legacy(fetch).client.openSession();
+    await session.ping();
+
+    const envelope = body(fetch, 1);
+    expect(tag(envelope, 'eb:Action')).toBe('OTA_PingRQ');
+    expect(envelope).toMatch(
+      /<soap-env:Body><OTA_PingRQ TimeStamp="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z" Version="1.0.0"><EchoData>sabre-client<\/EchoData><\/OTA_PingRQ><\/soap-env:Body>/,
+    );
+    expect(envelope).toContain(`>${SESSION_TOKEN}</wsse:BinarySecurityToken>`);
+  });
+
+  it('es idempotente: se reintenta ante un fallo de red', async () => {
+    const fetch = mockFetch(opened(), new TypeError('fetch failed'), pinged());
+    const session = await legacy(fetch).client.openSession();
+    await session.ping({ retry: { maxRetries: 1, baseDelayMs: 0 } });
+    expect(actions(fetch)).toEqual(['SessionCreateRQ', 'OTA_PingRQ', 'OTA_PingRQ']);
+  });
+
+  it('entrega la respuesta cruda como ping', async () => {
+    const onRawResponse = vi.fn();
+    const session = await legacy(mockFetch(opened(), pinged())).client.openSession();
+    await session.ping({ onRawResponse });
+    expect(onRawResponse.mock.calls[0]?.[0]).toMatchObject({ operation: 'ping', protocol: 'soap' });
+  });
+
+  it('respeta el uso exclusivo y la sesión cerrada', async () => {
+    const fetch = mockFetch(opened(), closed());
+    const session = await legacy(fetch).client.openSession();
+    await session.close();
+    expect(((await rejection(session.ping())) as Error).message).toBe('sabre-client: session closed');
+  });
+});
+
+describe('idleMs y keepAlive', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date('2026-11-01T12:00:00Z') });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('idleMs cuenta desde la última respuesta de Sabre, y vale 0 con una llamada en vuelo', async () => {
+    const fetch = mockFetch(opened());
+    const session = await legacy(fetch).client.openSession();
+    expect(session.idleMs).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(5 * MINUTE);
+    expect(session.idleMs).toBe(5 * MINUTE);
+
+    const release = pendingOnce(fetch);
+    const ping = session.ping();
+    expect(session.idleMs).toBe(0);
+    await vi.advanceTimersByTimeAsync(MINUTE);
+    release(pinged());
+    await ping;
+    expect(session.idleMs).toBe(0);
+    await vi.advanceTimersByTimeAsync(2 * MINUTE);
+    expect(session.idleMs).toBe(2 * MINUTE);
+  });
+
+  it('un error que respondió Sabre reinicia idleMs; un fallo de red no', async () => {
+    const fetch = mockFetch(opened(), usgFault('USG_INVALID_ACTION'), new TypeError('fetch failed'));
+    const session = await legacy(fetch).client.openSession();
+    await vi.advanceTimersByTimeAsync(4 * MINUTE);
+    await rejection(session.ping());
+    expect(session.idleMs).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(3 * MINUTE);
+    await rejection(session.ping());
+    expect(session.idleMs).toBe(3 * MINUTE);
+  });
+
+  it('keepAlive viene apagado: no hay ping aunque pasen 20 minutos', async () => {
+    const fetch = mockFetch(opened());
+    await legacy(fetch).client.openSession();
+    await vi.advanceTimersByTimeAsync(20 * MINUTE);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('con keepAlive, manda el ping a los 13 minutos de inactividad, una y otra vez', async () => {
+    expect(KEEP_ALIVE_IDLE_MS).toBe(13 * MINUTE);
+    const fetch = mockFetch(opened(), pinged(), pinged());
+    await legacy(fetch).client.openSession({ keepAlive: true });
+
+    await vi.advanceTimersByTimeAsync(13 * MINUTE - 1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(actions(fetch)).toEqual(['SessionCreateRQ', 'OTA_PingRQ']);
+    await vi.advanceTimersByTimeAsync(13 * MINUTE);
+    expect(actions(fetch)).toEqual(['SessionCreateRQ', 'OTA_PingRQ', 'OTA_PingRQ']);
+  });
+
+  it('cada respuesta de Sabre corre el ping de keepAlive', async () => {
+    const fetch = mockFetch(opened(), pinged(), pinged());
+    const session = await legacy(fetch).client.openSession({ keepAlive: true });
+
+    await vi.advanceTimersByTimeAsync(10 * MINUTE);
+    await session.ping();
+    await vi.advanceTimersByTimeAsync(12 * MINUTE);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(MINUTE);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('close() apaga keepAlive', async () => {
+    const fetch = mockFetch(opened(), closed());
+    const session = await legacy(fetch).client.openSession({ keepAlive: true });
+    await session.close();
+    await vi.advanceTimersByTimeAsync(60 * MINUTE);
+    expect(actions(fetch)).toEqual(['SessionCreateRQ', 'SessionCloseRQ']);
+  });
+
+  it('una llamada del consumidor durante el ping de keepAlive lo espera, sin session busy', async () => {
+    const fetch = mockFetch(opened());
+    const release = pendingOnce(fetch);
+    fetch.mockResolvedValueOnce(pinged());
+    const session = await legacy(fetch).client.openSession({ keepAlive: true });
+
+    await vi.advanceTimersByTimeAsync(13 * MINUTE);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const consumer = session.ping();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    release(pinged());
+    await consumer;
+    expect(actions(fetch)).toEqual(['SessionCreateRQ', 'OTA_PingRQ', 'OTA_PingRQ']);
+  });
+
+  it('close() durante el ping de keepAlive cierra cuando termina', async () => {
+    const fetch = mockFetch(opened());
+    const release = pendingOnce(fetch);
+    fetch.mockResolvedValueOnce(closed());
+    const session = await legacy(fetch).client.openSession({ keepAlive: true });
+
+    await vi.advanceTimersByTimeAsync(13 * MINUTE);
+    const closing = session.close();
+    expect(session.close()).toBe(closing);
+    release(pinged());
+    await closing;
+    expect(actions(fetch)).toEqual(['SessionCreateRQ', 'OTA_PingRQ', 'SessionCloseRQ']);
+  });
+
+  it('si el ping de keepAlive falla, emite un warn y keepAlive se apaga', async () => {
+    const fetch = mockFetch(opened(), new TypeError('fetch failed'), pinged());
+    const { client, calls } = legacy(fetch);
+    const session = await client.openSession({ keepAlive: true });
+
+    await vi.advanceTimersByTimeAsync(13 * MINUTE);
+    const warn = calls.find(([, event]) => event === 'sabre.session.keepAliveFailed');
+    expect(warn?.[0]).toBe('warn');
+    expect(warn?.[2]?.error).toMatchObject({ name: 'SabreGatewayError' });
+    await vi.advanceTimersByTimeAsync(60 * MINUTE);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    // La sesión sigue usable: el fallo de red no es un error de sesión.
+    await session.ping();
+  });
+
+  it('si el ping de keepAlive recibe un error de sesión, la sesión queda inutilizable', async () => {
+    const fetch = mockFetch(opened(), usgFault('USG_INVALID_SECURITY_TOKEN'));
+    const { client, calls } = legacy(fetch);
+    const session = await client.openSession({ keepAlive: true });
+
+    await vi.advanceTimersByTimeAsync(13 * MINUTE);
+    expect(calls.find(([, event]) => event === 'sabre.session.keepAliveFailed')?.[2]?.error).toMatchObject({
+      name: 'SabreSessionError',
+      kind: 'expired',
+    });
+    expect(((await rejection(session.ping())) as Error).message).toBe('sabre-client: session unusable (expired)');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('keepAlive tiene que ser un boolean', async () => {
+    const fetch = mockFetch();
+    const error = await rejection(legacy(fetch).client.openSession({ keepAlive: 'yes' as never }));
+    expect(error).toBeInstanceOf(TypeError);
+    expect((error as Error).message).toBe('sabre-client: keepAlive debe ser un boolean');
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

@@ -246,18 +246,23 @@ function parseBody(text: string): unknown {
 
 function gatewayError(service: string, status: number, body: unknown): SabreGatewayError {
   const code = extractCode(body);
-  return new SabreGatewayError(`${service}: HTTP ${status}${code === undefined ? '' : ` ${code}`}`, {
-    protocol: 'rest',
-    status,
-    retryable: RETRYABLE_STATUS.has(status),
-    raw: body,
-    ...(code === undefined ? {} : { code }),
-  });
+  const detail = extractDescription(body);
+  return new SabreGatewayError(
+    `${service}: HTTP ${status}${code === undefined ? '' : ` ${code}`}${detail === undefined ? '' : `: ${detail}`}`,
+    {
+      protocol: 'rest',
+      status,
+      retryable: RETRYABLE_STATUS.has(status),
+      raw: body,
+      ...(code === undefined ? {} : { code }),
+    },
+  );
 }
 
 /**
- * Best-effort: el campo exacto del código `ERR.2SG.*` no está confirmado
- * (issue de fuente #21). Se prueban `errorCode` y `error`.
+ * Best-effort: el campo del código `ERR.2SG.*` no está confirmado (issue de fuente #21). Se
+ * prueban `errorCode`, `error` y `errors[0].code`; este último, visto en un 401 de Get Seats
+ * en CERT (`{ errors: [{ code: '305', descriptionText, statusText }] }`, 2026-10-31).
  */
 function extractCode(body: unknown): string | undefined {
   if (typeof body !== 'object' || body === null) return undefined;
@@ -265,7 +270,21 @@ function extractCode(body: unknown): string | undefined {
     const value = (body as Record<string, unknown>)[key];
     if (typeof value === 'string' && value !== '') return value;
   }
-  return undefined;
+  return firstErrorField(body, 'code');
+}
+
+/** `errors[0].descriptionText`, si viene: el único detalle legible de esa forma. */
+function extractDescription(body: unknown): string | undefined {
+  return firstErrorField(body, 'descriptionText');
+}
+
+function firstErrorField(body: unknown, key: string): string | undefined {
+  if (typeof body !== 'object' || body === null) return undefined;
+  const errors = (body as { errors?: unknown }).errors;
+  const first: unknown = Array.isArray(errors) ? errors[0] : undefined;
+  if (typeof first !== 'object' || first === null) return undefined;
+  const value = (first as Record<string, unknown>)[key];
+  return typeof value === 'string' && value !== '' ? value : undefined;
 }
 
 function isUnauthorized(error: unknown): boolean {

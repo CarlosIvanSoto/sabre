@@ -174,6 +174,7 @@ describe('onRawResponse', () => {
       (s: Sabre, o: object) =>
         s.air.getSeats({ returnSeatMapsOnlyForSegmentRefs: [], segments: [], passengers: [] }, o),
     ],
+    ['air.getSeatsByPnrLocator', (s: Sabre, o: object) => s.air.getSeats({ pnrLocator: 'GLEBNY' }, o)],
     ['booking.create', (s: Sabre, o: object) => s.booking.create({}, o)],
     ['booking.get', (s: Sabre, o: object) => s.booking.get({ confirmationId: 'GLEBNY' }, o)],
     ['booking.cancel', (s: Sabre, o: object) => s.booking.cancel({ confirmationId: 'GLEBNY', cancelAll: true }, o)],

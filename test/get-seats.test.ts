@@ -184,6 +184,66 @@ describe('sabre.air.getSeats por payload', () => {
   });
 });
 
+describe('sabre.air.getSeats por localizador', () => {
+  it('con pnrLocator hace POST /v3/offers/getseats/byPnrLocator con el body tal cual', async () => {
+    const fetch = router([json(200, synthetic)]);
+    const pnr = { pnrLocator: 'GLEBNY', returnSeatMapsOnlyForSegmentIds: ['1'], currencyCode: 'USD' };
+    const result = await sabre(fetch).air.getSeats(pnr);
+
+    const [[url, init]] = serviceCalls(fetch) as [[string, RequestInit]];
+    expect(url).toBe('https://api.cert.platform.sabre.com/v3/offers/getseats/byPnrLocator');
+    expect(JSON.parse(init.body as string)).toEqual(pnr);
+    expect(result).toEqual({ response: synthetic.response, warnings: [], errors: [] });
+  });
+
+  it('con y sin pnrLocator, cada request llega a su endpoint', async () => {
+    const fetch = router([json(200, synthetic), json(200, synthetic)]);
+    const client = sabre(fetch);
+    await client.air.getSeats({ pnrLocator: 'GLEBNY' });
+    await client.air.getSeats(request);
+
+    expect(serviceCalls(fetch).map(([url]) => new URL(String(url)).pathname)).toEqual([
+      '/v3/offers/getseats/byPnrLocator',
+      '/v3/offers/getseats/byReservationPayload',
+    ]);
+  });
+
+  it('errors[] sin response lanza SabreBusinessError con service getSeatsByPnrLocator', async () => {
+    const body = { errors: [issue('NOT_FOUND', 'PNR_NOT_FOUND', 'PNR not found')] };
+    const error = await catchError(sabre(router([json(200, body)])).air.getSeats({ pnrLocator: 'ZZZZZZ' }));
+
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect(error).toMatchObject({ service: 'getSeatsByPnrLocator', code: 'PNR_NOT_FOUND', retryable: false });
+  });
+
+  it('onRawResponse recibe operation air.getSeatsByPnrLocator, y los logs service getSeatsByPnrLocator', async () => {
+    const raws: SabreRawResponse[] = [];
+    const log = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    await sabre(router([json(200, synthetic)]), log).air.getSeats(
+      { pnrLocator: 'GLEBNY' },
+      { onRawResponse: (raw) => raws.push(raw) },
+    );
+
+    expect(raws).toEqual([expect.objectContaining({ operation: 'air.getSeatsByPnrLocator', status: 200 })]);
+    expect(log.info).toHaveBeenCalledWith(
+      'sabre.request.end',
+      expect.objectContaining({ service: 'getSeatsByPnrLocator', path: '/v3/offers/getseats/byPnrLocator' }),
+    );
+  });
+
+  it.each([
+    ['vacío', { pnrLocator: '' }],
+    ['no string', { pnrLocator: 123 }],
+    ['con segments', { pnrLocator: 'GLEBNY', segments: request.segments }],
+    ['con passengers', { pnrLocator: 'GLEBNY', passengers: request.passengers }],
+    ['con returnSeatMapsOnlyForSegmentRefs', { pnrLocator: 'GLEBNY', returnSeatMapsOnlyForSegmentRefs: ['1'] }],
+  ])('pnrLocator %s lanza TypeError sin llamar a la red', async (_name, rq) => {
+    const fetch = router([]);
+    await expect(sabre(fetch).air.getSeats(rq as never)).rejects.toThrow(/^sabre-client: /);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('classifyGetSeats', () => {
   it('body que no es objeto, o sin response ni errors: SabreError de respuesta malformada', () => {
     for (const body of [undefined, 'texto', {}, { errors: [] }]) {

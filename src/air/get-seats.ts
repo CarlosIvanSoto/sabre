@@ -1,6 +1,6 @@
 // Get Seats v3 (`POST /v3/offers/getseats/...`).
 // Ver sabre-wiki/wiki/entities/get-seats.md y sabre-wiki/wiki/sdk/get-seats-en-el-sdk.md.
-import { isObject, toBusinessError, toWarning } from '../booking/booking-errors.js';
+import { isObject, nonEmpty, toBusinessError, toWarning } from '../booking/booking-errors.js';
 import { type SabreBusinessError, SabreError, type SabreWarning } from '../errors/index.js';
 import type { RestTransport } from '../http/rest-transport.js';
 import type { RequestOptions } from './bargain-finder-max.js';
@@ -8,6 +8,10 @@ import type { RequestOptions } from './bargain-finder-max.js';
 /** `service` de errores y logs; distinto por endpoint para que no quede oculto (ADR, opción C). */
 export const GET_SEATS_BY_PAYLOAD_SERVICE = 'getSeatsByPayload';
 const BY_PAYLOAD_PATH = '/v3/offers/getseats/byReservationPayload';
+export const GET_SEATS_BY_PNR_LOCATOR_SERVICE = 'getSeatsByPnrLocator';
+const BY_PNR_LOCATOR_PATH = '/v3/offers/getseats/byPnrLocator';
+/** Campos del payload que no pueden ir junto con `pnrLocator`. */
+const PAYLOAD_FIELDS = ['segments', 'passengers', 'returnSeatMapsOnlyForSegmentRefs'] as const;
 
 // ─── Request ────────────────────────────────────────────────────────────────
 
@@ -116,8 +120,24 @@ export interface SeatAvailabilityByPayloadRq {
   customAttributes?: SeatKeyValuePair[];
 }
 
-/** Entrada de `sabre.air.getSeats`. */
-export type GetSeatsRequest = SeatAvailabilityByPayloadRq;
+/**
+ * `SeatAvailabilityByPnrLocatorRq` del spec 3.0: un PNR ya creado. Sabre lo lee sin estado,
+ * así que no ve los cambios sin confirmar.
+ */
+export interface SeatAvailabilityByPnrLocatorRq {
+  /** Localizador del PNR (`^[A-Z]{6}$`). */
+  pnrLocator: string;
+  /** IDs de segmento del PNR para los que se piden mapas. */
+  returnSeatMapsOnlyForSegmentIds?: string[];
+  /** Name reference numbers del PNR, p. ej. `'01.01'`. */
+  returnSeatOffersOnlyForPassengerNameReferenceNumbers?: string[];
+  currencyCode?: string;
+  isCheckinMode?: boolean;
+  customAttributes?: SeatKeyValuePair[];
+}
+
+/** Entrada de `sabre.air.getSeats`: con `pnrLocator` va a `byPnrLocator`; sin él, a `byReservationPayload`. */
+export type GetSeatsRequest = SeatAvailabilityByPayloadRq | SeatAvailabilityByPnrLocatorRq;
 
 // ─── Response ───────────────────────────────────────────────────────────────
 
@@ -343,8 +363,15 @@ export async function getSeats(
     throw new TypeError('sabre-client: air.getSeats espera un objeto');
   }
   if ('pnrLocator' in request) {
-    // Rama `byPnrLocator` pendiente (#64): sin esto, el request caería en el endpoint de payload.
-    throw new TypeError('sabre-client: air.getSeats todavía no soporta pnrLocator');
+    // Una mezcla nunca cae en silencio en un endpoint (ADR, opción C).
+    if (!nonEmpty(request.pnrLocator)) {
+      throw new TypeError('sabre-client: air.getSeats con pnrLocator vacío');
+    }
+    const mixed = PAYLOAD_FIELDS.filter((field) => field in request);
+    if (mixed.length > 0) {
+      throw new TypeError(`sabre-client: air.getSeats con pnrLocator no acepta ${mixed.join(', ')}`);
+    }
+    return send(transport, BY_PNR_LOCATOR_PATH, GET_SEATS_BY_PNR_LOCATOR_SERVICE, request, options);
   }
   if (!Array.isArray(request.segments) || !Array.isArray(request.passengers)) {
     throw new TypeError('sabre-client: air.getSeats espera { segments: [...], passengers: [...], ... } o { pnrLocator }');

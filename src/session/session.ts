@@ -2,7 +2,7 @@
 // con uso exclusivo. Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md (punto 1 y
 // decisiones de la revisión), wiki/entities/create-session.md y gestion-de-sesion-soap.md.
 import type { RequestOptions } from '../air/bargain-finder-max.js';
-import { SabreGatewayError } from '../errors/index.js';
+import { SabreGatewayError, SabreSessionError, type SabreSessionErrorKind } from '../errors/index.js';
 import { type SoapRequest, type SoapResponse, type SoapSecurity, type SoapTransport, xmlEscape } from '../http/soap-transport.js';
 import type { SessionCredentials } from './credentials.js';
 
@@ -23,6 +23,40 @@ function fail(message: string): never {
 }
 
 /**
+ * `USG_*` que dejan la sesión inutilizable (punto 4). Ninguna fuente documenta el código de una
+ * sesión vencida: `'expired'` se mapea tentativamente y se confirma en #95.
+ */
+const SESSION_ERROR_KINDS: ReadonlyMap<string, SabreSessionErrorKind> = new Map([
+  ['USG_RESOURCE_UNAVAILABLE', 'limit'],
+  ['USG_INVALID_SESSION', 'invalid'],
+  ['USG_INVALID_SECURITY_TOKEN', 'expired'],
+  ['USG_AUTHENTICATION_FAILED', 'expired'],
+  ['USG_RESOURCE_BLOCKED', 'blocked'],
+]);
+
+/**
+ * Al abrir todavía no hay sesión que pueda vencer ni usarse en paralelo: ahí un
+ * `USG_AUTHENTICATION_FAILED` son credenciales mal configuradas, y sigue como `SabreGatewayError`.
+ */
+const OPEN_ERROR_KINDS: ReadonlySet<SabreSessionErrorKind> = new Set(['limit', 'blocked']);
+
+/** Convierte un fault de sesión en `SabreSessionError`; cualquier otro error sale igual. */
+export function toSessionError(error: unknown, allowed?: ReadonlySet<SabreSessionErrorKind>): unknown {
+  if (!(error instanceof SabreGatewayError) || error instanceof SabreSessionError) return error;
+  if (error.protocol !== 'soap' || error.code === undefined) return error;
+  const kind = SESSION_ERROR_KINDS.get(error.code);
+  if (kind === undefined || (allowed !== undefined && !allowed.has(kind))) return error;
+  return new SabreSessionError(error.message, {
+    kind,
+    code: error.code,
+    retryable: error.retryable,
+    raw: error.raw,
+    cause: error.cause,
+    ...(error.status === undefined ? {} : { status: error.status }),
+  });
+}
+
+/**
  * Una sesión SOAP abierta con `SessionCreateRQ`. Es exclusiva: Sabre no admite llamadas
  * concurrentes en la misma sesión (`USG_INVALID_SESSION`), así que una segunda llamada mientras
  * otra está en vuelo lanza `TypeError` sin llamar a la red. Se cierra con `close()`, o sola si
@@ -35,6 +69,8 @@ export class SabreSession {
   readonly #security: SoapSecurity;
   #busy = false;
   #closing: Promise<void> | undefined;
+  /** El `SabreSessionError` que dejó la sesión inutilizable. */
+  #unusable: SabreSessionError | undefined;
 
   static {
     // `await using` es un extra: solo si el runtime tiene el símbolo (Node 22 no tiene la
@@ -54,11 +90,16 @@ export class SabreSession {
    * Cierra la sesión con `SessionCloseRQ`: Sabre descarta el AAA e invalida el token. Es
    * idempotente: las llamadas siguientes devuelven la misma promesa, sin volver a la red. Si el
    * cierre falla, la sesión queda cerrada igual del lado del SDK; la de Sabre vence sola a los
-   * 15 minutos.
+   * 15 minutos. Una sesión inutilizable (ver `SabreSessionError`) se cierra sin red: Sabre ya no
+   * la reconoce.
    */
   close(options: RequestOptions = {}): Promise<void> {
     if (this.#closing !== undefined) return this.#closing;
     if (this.#busy) return Promise.reject(new TypeError('sabre-client: session busy'));
+    if (this.#unusable !== undefined) {
+      this.#closing = Promise.resolve();
+      return this.#closing;
+    }
     this.#busy = true;
     this.#closing = this.#transport
       .request({
@@ -71,7 +112,12 @@ export class SabreSession {
         operation: 'close',
         ...options,
       })
-      .then(() => this.#transport.log.emit('info', 'sabre.session.close', { pseudoCityCode: this.#pcc }))
+      .then(
+        () => this.#transport.log.emit('info', 'sabre.session.close', { pseudoCityCode: this.#pcc }),
+        (error: unknown) => {
+          throw this.#markUnusable(error);
+        },
+      )
       .finally(() => {
         this.#busy = false;
       });
@@ -81,13 +127,25 @@ export class SabreSession {
   /** @internal Una llamada a Sabre dentro de la sesión, con uso exclusivo. */
   async [sessionSend](request: SessionRequest): Promise<SoapResponse> {
     if (this.#closing !== undefined) fail('session closed');
+    if (this.#unusable !== undefined) {
+      throw new TypeError(`sabre-client: session unusable (${this.#unusable.kind})`, { cause: this.#unusable });
+    }
     if (this.#busy) fail('session busy');
     this.#busy = true;
     try {
       return await this.#transport.request({ ...request, ...this.#envelopeFields() });
+    } catch (error) {
+      throw this.#markUnusable(error);
     } finally {
       this.#busy = false;
     }
+  }
+
+  /** Un error de sesión deja la sesión inutilizable. No se reabre sola: el cursor ya se perdió. */
+  #markUnusable(error: unknown): unknown {
+    const mapped = toSessionError(error);
+    if (mapped instanceof SabreSessionError) this.#unusable = mapped;
+    return mapped;
   }
 
   #envelopeFields(): Pick<SoapRequest, 'cpaId' | 'conversationId' | 'security'> {
@@ -139,7 +197,7 @@ export async function openSession(
   options: RequestOptions = {},
 ): Promise<SabreSession> {
   const conversationId = globalThis.crypto.randomUUID();
-  const response = await transport.request({
+  const request: SoapRequest = {
     service: 'sessionCreate',
     action: 'SessionCreateRQ',
     payload: sessionCreatePayload(credentials),
@@ -150,6 +208,9 @@ export async function openSession(
     readSecurityToken: true,
     operation: 'openSession',
     ...options,
+  };
+  const response = await transport.request(request).catch((error: unknown) => {
+    throw toSessionError(error, OPEN_ERROR_KINDS);
   });
 
   const status = response.payload['@status'];

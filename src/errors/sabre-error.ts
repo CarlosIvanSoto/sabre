@@ -62,6 +62,31 @@ export class SabreGatewayError extends SabreError {
   }
 }
 
+/**
+ * Por qué una sesión SOAP no sirve: `'limit'` (más de 50 sesiones), `'invalid'` (uso
+ * concurrente de la sesión), `'expired'` (sesión vencida) o `'blocked'` (creación de sesión
+ * bloqueada para el usuario).
+ */
+export type SabreSessionErrorKind = 'limit' | 'invalid' | 'expired' | 'blocked';
+
+export interface SabreSessionErrorOptions extends Omit<SabreGatewayErrorOptions, 'protocol'> {
+  kind: SabreSessionErrorKind;
+}
+
+/**
+ * Error de la sesión SOAP de `SabreLegacy`. Se distingue con `instanceof` y `kind`, sin comparar
+ * mensajes. La sesión que lo lanzó queda inutilizable: las llamadas siguientes lanzan sin red.
+ */
+export class SabreSessionError extends SabreGatewayError {
+  override name = 'SabreSessionError';
+  readonly kind: SabreSessionErrorKind;
+
+  constructor(message: string, options: SabreSessionErrorOptions) {
+    super(message, { ...options, protocol: 'soap' });
+    this.kind = options.kind;
+  }
+}
+
 export interface SabreOrchestrationErrorOptions extends Omit<SabreErrorOptions, 'retryable'> {
   /** `SP.PROVIDER_ERROR` o `SP.INTERNAL_ERROR`. */
   code: string;

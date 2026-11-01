@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SabreConfig } from '../src/config.js';
-import { SabreGatewayError, SabreLegacy, type SabreSession } from '../src/index.js';
-import { installAsyncDispose, sessionCreatePayload, sessionSend } from '../src/session/session.js';
+import { SabreBusinessError, SabreGatewayError, SabreLegacy, type SabreSession, SabreSessionError } from '../src/index.js';
+import { installAsyncDispose, sessionCreatePayload, sessionSend, toSessionError } from '../src/session/session.js';
 import { mockFetch } from './helpers.js';
-import { fault, memoryLogger, rejection, SESSION_TOKEN, soap, tokenHeader, xml } from './soap-helpers.js';
+import { entry, fault, memoryLogger, queueRS, rejection, SESSION_TOKEN, soap, tokenHeader, xml } from './soap-helpers.js';
 
 const password = 'epr-pass';
 const clientId = 'app-client-id';
@@ -276,7 +276,7 @@ describe('withSession', () => {
 
     const warn = calls.find(([, event]) => event === 'sabre.session.closeFailed');
     expect(warn?.[0]).toBe('warn');
-    expect(warn?.[2]?.error).toMatchObject({ name: 'SabreGatewayError', code: 'USG_INVALID_SESSION' });
+    expect(warn?.[2]?.error).toMatchObject({ name: 'SabreSessionError', kind: 'invalid', code: 'USG_INVALID_SESSION' });
     expect(JSON.stringify(calls)).not.toContain(SESSION_TOKEN);
   });
 
@@ -308,5 +308,125 @@ describe('withSession', () => {
     expect(error).toBeInstanceOf(SabreGatewayError);
     expect(callback).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+const usgFault = (code: string) => xml(500, soap(fault('soap-env:Client', code)));
+
+describe('SabreSessionError', () => {
+  it('es un SabreGatewayError SOAP con kind, y toJSON lo incluye sin raw', () => {
+    const error = new SabreSessionError('ping: SOAP fault', {
+      kind: 'expired',
+      code: 'USG_INVALID_SECURITY_TOKEN',
+      retryable: false,
+      raw: '<sobre/>',
+    });
+    expect(error).toBeInstanceOf(SabreSessionError);
+    expect(error).toBeInstanceOf(SabreGatewayError);
+    expect(error.name).toBe('SabreSessionError');
+    expect(error.protocol).toBe('soap');
+    expect(error.kind).toBe('expired');
+    expect(error.raw).toBe('<sobre/>');
+    expect(JSON.parse(JSON.stringify(error))).toMatchObject({ kind: 'expired', code: 'USG_INVALID_SECURITY_TOKEN' });
+    expect(JSON.stringify(error)).not.toContain('<sobre/>');
+  });
+
+  it.each<[string, string]>([
+    ['USG_RESOURCE_UNAVAILABLE', 'limit'],
+    ['USG_INVALID_SESSION', 'invalid'],
+    ['USG_INVALID_SECURITY_TOKEN', 'expired'],
+    ['USG_AUTHENTICATION_FAILED', 'expired'],
+    ['USG_RESOURCE_BLOCKED', 'blocked'],
+  ])('dentro de la sesión, %s es kind %s', async (code, kind) => {
+    const fetch = mockFetch(opened(), usgFault(code));
+    const session = await legacy(fetch).client.openSession();
+    const error = await rejection(ping(session));
+    expect(error).toBeInstanceOf(SabreSessionError);
+    expect(error).toMatchObject({ kind, code, protocol: 'soap', status: 500, retryable: false });
+    expect((error as SabreSessionError).raw).toContain(code);
+    expect((error as SabreSessionError).raw).not.toContain(SESSION_TOKEN);
+  });
+
+  it.each<[string, string]>([
+    ['USG_RESOURCE_UNAVAILABLE', 'limit'],
+    ['USG_RESOURCE_BLOCKED', 'blocked'],
+  ])('al abrir, %s es kind %s', async (code, kind) => {
+    const error = await rejection(legacy(mockFetch(usgFault(code))).client.openSession());
+    expect(error).toBeInstanceOf(SabreSessionError);
+    expect(error).toMatchObject({ kind, code });
+  });
+
+  it.each(['USG_AUTHENTICATION_FAILED', 'USG_INVALID_SECURITY_TOKEN', 'USG_INVALID_SESSION'])(
+    'al abrir, %s sigue como SabreGatewayError: todavía no hay sesión',
+    async (code) => {
+      const error = await rejection(legacy(mockFetch(usgFault(code))).client.openSession());
+      expect(error).toBeInstanceOf(SabreGatewayError);
+      expect(error).not.toBeInstanceOf(SabreSessionError);
+      expect((error as SabreGatewayError).code).toBe(code);
+    },
+  );
+
+  it('los demás errores salen igual y no inutilizan la sesión', async () => {
+    const business = xml(200, soap(queueRS(entry('Error', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', 'QUEUE SELECTED NOT VALID OR CLOSED'))));
+    const fetch = mockFetch(opened(), usgFault('USG_INVALID_ACTION'), business, pinged());
+    const session = await legacy(fetch).client.openSession();
+    const gateway = await rejection(ping(session));
+    expect(gateway).toBeInstanceOf(SabreGatewayError);
+    expect(gateway).not.toBeInstanceOf(SabreSessionError);
+    expect(await rejection(ping(session))).toBeInstanceOf(SabreBusinessError);
+    await ping(session);
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('toSessionError deja pasar lo que no es un fault SOAP de sesión', () => {
+    const rest = new SabreGatewayError('x', { protocol: 'rest', retryable: false, code: 'USG_INVALID_SESSION' });
+    const plain = new Error('x');
+    expect(toSessionError(rest)).toBe(rest);
+    expect(toSessionError(plain)).toBe(plain);
+  });
+});
+
+describe('sesión inutilizable', () => {
+  it('después de un SabreSessionError, las llamadas lanzan TypeError sin red', async () => {
+    const fetch = mockFetch(opened(), usgFault('USG_INVALID_SECURITY_TOKEN'));
+    const session = await legacy(fetch).client.openSession();
+    const cause = await rejection(ping(session));
+
+    const error = await rejection(ping(session));
+    expect(error).toBeInstanceOf(TypeError);
+    expect((error as Error).message).toBe('sabre-client: session unusable (expired)');
+    expect((error as Error).cause).toBe(cause);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('close() de una sesión inutilizable no va a la red y queda cerrada', async () => {
+    const fetch = mockFetch(opened(), usgFault('USG_INVALID_SESSION'));
+    const session = await legacy(fetch).client.openSession();
+    await rejection(ping(session));
+    await session.close();
+    expect((await rejection(ping(session)) as Error).message).toBe('sabre-client: session closed');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('un close() que recibe un error de sesión lo lanza como SabreSessionError', async () => {
+    const fetch = mockFetch(opened(), usgFault('USG_INVALID_SECURITY_TOKEN'));
+    const session = await legacy(fetch).client.openSession();
+    const error = await rejection(session.close());
+    expect(error).toBeInstanceOf(SabreSessionError);
+    expect((error as SabreSessionError).kind).toBe('expired');
+  });
+
+  it('withSession propaga el SabreSessionError, no reabre y no intenta el cierre', async () => {
+    const fetch = mockFetch(opened(), usgFault('USG_INVALID_SECURITY_TOKEN'));
+    const { client, calls } = legacy(fetch);
+    const callback = vi.fn(async (session: SabreSession) => {
+      await ping(session);
+    });
+    const error = await rejection(client.withSession(callback));
+    expect(error).toBeInstanceOf(SabreSessionError);
+    expect(callback).toHaveBeenCalledOnce();
+    // Una sola apertura, ninguna reapertura, y el cierre no va a la red.
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(calls.some(([, event]) => event === 'sabre.session.closeFailed')).toBe(false);
   });
 });

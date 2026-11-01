@@ -2,7 +2,7 @@ export const VERSION = '0.3.0';
 
 export { Sabre } from './sabre.js';
 export { SabreLegacy } from './sabre-legacy.js';
-export type { SabreSession } from './session/session.js';
+export type { OpenSessionOptions, SabreSession } from './session/session.js';
 export type { Air } from './air/air.js';
 export type {
   BargainFinderMaxRequest,

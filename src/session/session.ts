@@ -2,7 +2,7 @@
 // con uso exclusivo. Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md (punto 1 y
 // decisiones de la revisión), wiki/entities/create-session.md y gestion-de-sesion-soap.md.
 import type { RequestOptions } from '../air/bargain-finder-max.js';
-import { SabreGatewayError, SabreSessionError, type SabreSessionErrorKind } from '../errors/index.js';
+import { SabreError, SabreGatewayError, SabreSessionError, type SabreSessionErrorKind } from '../errors/index.js';
 import { type SoapRequest, type SoapResponse, type SoapSecurity, type SoapTransport, xmlEscape } from '../http/soap-transport.js';
 import type { SessionCredentials } from './credentials.js';
 
@@ -56,6 +56,19 @@ export function toSessionError(error: unknown, allowed?: ReadonlySet<SabreSessio
   });
 }
 
+/** Opciones de `openSession`. */
+export interface OpenSessionOptions extends RequestOptions {
+  /**
+   * Manda `OTA_PingRQ` cuando la sesión lleva 13 minutos inactiva, antes del vencimiento de los
+   * 15. Apagado por defecto: en runtimes serverless o edge un timer no sobrevive entre
+   * invocaciones. Ahí conviene `withSession` por recorrido, o un `ping()` antes de reutilizar.
+   */
+  keepAlive?: boolean;
+}
+
+/** Inactividad a la que `keepAlive` manda el ping: 2 minutos antes de los 15 del vencimiento. */
+export const KEEP_ALIVE_IDLE_MS = 13 * 60_000;
+
 /**
  * Una sesión SOAP abierta con `SessionCreateRQ`. Es exclusiva: Sabre no admite llamadas
  * concurrentes en la misma sesión (`USG_INVALID_SESSION`), así que una segunda llamada mientras
@@ -71,6 +84,11 @@ export class SabreSession {
   #closing: Promise<void> | undefined;
   /** El `SabreSessionError` que dejó la sesión inutilizable. */
   #unusable: SabreSessionError | undefined;
+  /** Última vez que Sabre respondió en esta sesión (`Date.now()`). */
+  #lastActivity = Date.now();
+  #keepAliveTimer: ReturnType<typeof setTimeout> | undefined;
+  /** El ping de `keepAlive` en vuelo: las llamadas del consumidor lo esperan en vez de chocar. */
+  #keepAlivePing: Promise<void> | undefined;
 
   static {
     // `await using` es un extra: solo si el runtime tiene el símbolo (Node 22 no tiene la
@@ -79,11 +97,34 @@ export class SabreSession {
   }
 
   /** @internal Se crea con `SabreLegacy.openSession()`. */
-  constructor(internal: { transport: SoapTransport; pcc: string; conversationId: string; token: string }) {
+  constructor(internal: {
+    transport: SoapTransport;
+    pcc: string;
+    conversationId: string;
+    token: string;
+    keepAlive: boolean;
+  }) {
     this.#transport = internal.transport;
     this.#pcc = internal.pcc;
     this.#conversationId = internal.conversationId;
     this.#security = { binarySecurityToken: internal.token };
+    if (internal.keepAlive) this.#scheduleKeepAlive(KEEP_ALIVE_IDLE_MS);
+  }
+
+  /**
+   * Milisegundos desde la última respuesta de Sabre en esta sesión; `0` mientras hay una llamada
+   * en vuelo. Sabre cierra la sesión a los 15 minutos de inactividad.
+   */
+  get idleMs(): number {
+    return this.#busy ? 0 : Math.max(0, Date.now() - this.#lastActivity);
+  }
+
+  /**
+   * Manda `OTA_PingRQ`, que reinicia el contador de inactividad sin tocar el AAA. Durante un
+   * recorrido de cola no hace falta: cada operación ya lo reinicia.
+   */
+  async ping(options: RequestOptions = {}): Promise<void> {
+    await this[sessionSend]({ ...pingRequest(), ...options });
   }
 
   /**
@@ -95,14 +136,50 @@ export class SabreSession {
    */
   close(options: RequestOptions = {}): Promise<void> {
     if (this.#closing !== undefined) return this.#closing;
-    if (this.#busy) return Promise.reject(new TypeError('sabre-client: session busy'));
+    if (this.#busy && this.#keepAlivePing === undefined) {
+      return Promise.reject(new TypeError('sabre-client: session busy'));
+    }
+    this.#stopKeepAlive();
     if (this.#unusable !== undefined) {
       this.#closing = Promise.resolve();
       return this.#closing;
     }
+    // Si el ping de `keepAlive` está en vuelo, el cierre sale cuando termina.
+    const before = this.#keepAlivePing ?? Promise.resolve();
+    this.#closing = before.then(() => this.#sendClose(options));
+    return this.#closing;
+  }
+
+  /** @internal Una llamada a Sabre dentro de la sesión, con uso exclusivo. */
+  async [sessionSend](request: SessionRequest): Promise<SoapResponse> {
+    if (this.#keepAlivePing !== undefined && this.#closing === undefined) await this.#keepAlivePing;
+    return this.#send(request);
+  }
+
+  async #send(request: SessionRequest): Promise<SoapResponse> {
+    if (this.#closing !== undefined) fail('session closed');
+    if (this.#unusable !== undefined) {
+      throw new TypeError(`sabre-client: session unusable (${this.#unusable.kind})`, { cause: this.#unusable });
+    }
+    if (this.#busy) fail('session busy');
     this.#busy = true;
-    this.#closing = this.#transport
-      .request({
+    try {
+      const response = await this.#transport.request({ ...request, ...this.#envelopeFields() });
+      this.#touch();
+      return response;
+    } catch (error) {
+      if (reachedSabre(error)) this.#touch();
+      throw this.#markUnusable(error);
+    } finally {
+      this.#busy = false;
+    }
+  }
+
+  async #sendClose(options: RequestOptions): Promise<void> {
+    if (this.#unusable !== undefined) return;
+    this.#busy = true;
+    try {
+      await this.#transport.request({
         service: 'sessionClose',
         action: 'SessionCloseRQ',
         payload: `<SessionCloseRQ Version="1.0.1"><POS><Source PseudoCityCode="${xmlEscape(this.#pcc)}"/></POS></SessionCloseRQ>`,
@@ -111,46 +188,95 @@ export class SabreSession {
         idempotent: false,
         operation: 'close',
         ...options,
-      })
-      .then(
-        () => this.#transport.log.emit('info', 'sabre.session.close', { pseudoCityCode: this.#pcc }),
-        (error: unknown) => {
-          throw this.#markUnusable(error);
-        },
-      )
-      .finally(() => {
-        this.#busy = false;
       });
-    return this.#closing;
-  }
-
-  /** @internal Una llamada a Sabre dentro de la sesión, con uso exclusivo. */
-  async [sessionSend](request: SessionRequest): Promise<SoapResponse> {
-    if (this.#closing !== undefined) fail('session closed');
-    if (this.#unusable !== undefined) {
-      throw new TypeError(`sabre-client: session unusable (${this.#unusable.kind})`, { cause: this.#unusable });
-    }
-    if (this.#busy) fail('session busy');
-    this.#busy = true;
-    try {
-      return await this.#transport.request({ ...request, ...this.#envelopeFields() });
     } catch (error) {
       throw this.#markUnusable(error);
     } finally {
       this.#busy = false;
     }
+    this.#transport.log.emit('info', 'sabre.session.close', { pseudoCityCode: this.#pcc });
   }
 
   /** Un error de sesión deja la sesión inutilizable. No se reabre sola: el cursor ya se perdió. */
   #markUnusable(error: unknown): unknown {
     const mapped = toSessionError(error);
-    if (mapped instanceof SabreSessionError) this.#unusable = mapped;
+    if (mapped instanceof SabreSessionError) {
+      this.#unusable = mapped;
+      this.#stopKeepAlive();
+    }
     return mapped;
+  }
+
+  #touch(): void {
+    this.#lastActivity = Date.now();
   }
 
   #envelopeFields(): Pick<SoapRequest, 'cpaId' | 'conversationId' | 'security'> {
     return { cpaId: this.#pcc, conversationId: this.#conversationId, security: this.#security };
   }
+
+  /**
+   * Un solo timer, que se reprograma según `idleMs`: cada respuesta de Sabre corre el ping. Si el
+   * ping falla (ya con los reintentos del transporte), se avisa con un `warn` y `keepAlive` se
+   * apaga: reintentar sin fin no tiene sentido con una sesión que vence a los 15 minutos.
+   */
+  #scheduleKeepAlive(delayMs: number): void {
+    const timer = setTimeout(() => this.#onKeepAlive(), delayMs);
+    // Que el timer no mantenga vivo el proceso si el consumidor se olvida de cerrar (Node).
+    (timer as { unref?: () => void }).unref?.();
+    this.#keepAliveTimer = timer;
+  }
+
+  #onKeepAlive(): void {
+    this.#keepAliveTimer = undefined;
+    if (this.#closing !== undefined || this.#unusable !== undefined) return;
+    if (this.#busy) {
+      this.#scheduleKeepAlive(KEEP_ALIVE_IDLE_MS);
+      return;
+    }
+    const remaining = KEEP_ALIVE_IDLE_MS - this.idleMs;
+    if (remaining > 0) {
+      this.#scheduleKeepAlive(remaining);
+      return;
+    }
+    this.#keepAlivePing = this.#send(pingRequest()).then(
+      () => {
+        if (this.#closing === undefined && this.#unusable === undefined) this.#scheduleKeepAlive(KEEP_ALIVE_IDLE_MS);
+      },
+      (error: unknown) => {
+        this.#transport.log.emit('warn', 'sabre.session.keepAliveFailed', { error });
+      },
+    );
+    void this.#keepAlivePing.finally(() => {
+      this.#keepAlivePing = undefined;
+    });
+  }
+
+  #stopKeepAlive(): void {
+    if (this.#keepAliveTimer !== undefined) clearTimeout(this.#keepAliveTimer);
+    this.#keepAliveTimer = undefined;
+  }
+}
+
+/** `OTA_PingRQ` 1.0.0, como el sample oficial. Idempotente: no toca el estado de negocio. */
+function pingRequest(): SessionRequest {
+  const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  return {
+    service: 'ping',
+    action: 'OTA_PingRQ',
+    payload: `<OTA_PingRQ TimeStamp="${timestamp}" Version="1.0.0"><EchoData>sabre-client</EchoData></OTA_PingRQ>`,
+    idempotent: true,
+    operation: 'ping',
+  };
+}
+
+/**
+ * Si Sabre llegó a responder: cualquier error del SDK salvo un fallo de red (sin status). Solo
+ * eso reinicia el contador de inactividad.
+ */
+function reachedSabre(error: unknown): boolean {
+  if (!(error instanceof SabreError)) return false;
+  return !(error instanceof SabreGatewayError && error.status === undefined);
 }
 
 /** Define `[Symbol.asyncDispose]` como `close()`, si el runtime tiene el símbolo. */
@@ -194,8 +320,10 @@ function usernameToken(credentials: SessionCredentials): SoapSecurity {
 export async function openSession(
   transport: SoapTransport,
   credentials: SessionCredentials,
-  options: RequestOptions = {},
+  options: OpenSessionOptions = {},
 ): Promise<SabreSession> {
+  const { keepAlive = false, ...requestOptions } = options;
+  if (typeof keepAlive !== 'boolean') fail('keepAlive debe ser un boolean');
   const conversationId = globalThis.crypto.randomUUID();
   const request: SoapRequest = {
     service: 'sessionCreate',
@@ -207,7 +335,7 @@ export async function openSession(
     idempotent: false,
     readSecurityToken: true,
     operation: 'openSession',
-    ...options,
+    ...requestOptions,
   };
   const response = await transport.request(request).catch((error: unknown) => {
     throw toSessionError(error, OPEN_ERROR_KINDS);
@@ -234,5 +362,11 @@ export async function openSession(
     version: credentials.version,
     pseudoCityCode: credentials.organization,
   });
-  return new SabreSession({ transport, pcc: credentials.organization, conversationId, token: response.securityToken });
+  return new SabreSession({
+    transport,
+    pcc: credentials.organization,
+    conversationId,
+    token: response.securityToken,
+    keepAlive,
+  });
 }

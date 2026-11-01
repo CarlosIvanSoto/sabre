@@ -118,9 +118,10 @@ export async function airBookingFlow(
     const seatRequest = buildSeatAvailabilityRequest({ group, itinerary });
     seatAvailability = await sabre.air.getSeats(seatRequest);
     summary.seatMaps = seatMapSummary(seatRequest, seatAvailability);
-    summary.seats = seatRequest.segments.flatMap((segment, segmentIndex) => {
+    summary.seats = seatRequest.segments.flatMap((segment, i) => {
       const number = summary.seatMaps.find((map) => map.segment === segment.id)?.firstFreeSeat;
-      return number === undefined ? [] : [{ segmentIndex, travelerIndex: 1, number }];
+      // segmentIndex y travelerIndex empiezan en 1.
+      return number === undefined ? [] : [{ segmentIndex: i + 1, travelerIndex: 1, number }];
     });
     onStep('getSeats', {
       seatMaps: summary.seatMaps,

@@ -169,8 +169,8 @@ describe('examples/air-booking-flow', () => {
       ),
     );
     expect(summary.seats).toEqual([
-      { segmentIndex: 0, travelerIndex: 1, number: '1C' },
       { segmentIndex: 1, travelerIndex: 1, number: '1C' },
+      { segmentIndex: 2, travelerIndex: 1, number: '1C' },
     ]);
     expect(calls(fetch, '/auth/token')).toHaveLength(1);
     expect(calls(fetch, '/v1/trip/orders/')).toHaveLength(0);

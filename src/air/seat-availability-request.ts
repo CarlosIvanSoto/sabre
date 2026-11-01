@@ -16,7 +16,10 @@ export interface SeatAvailabilityRequestSource {
   group: ItineraryGroup;
   /** Itinerario elegido, idealmente el devuelto por Revalidate Itinerary. */
   itinerary: Itinerary;
-  /** Índices 0-based de los vuelos para los que se piden mapas. Por defecto, todos. */
+  /**
+   * Números de los vuelos para los que se piden mapas, empezando en 1, igual que `segmentIndex`
+   * de `buildBookingFlightDetails` (`1` es `S1`). Por defecto, todos.
+   */
   segments?: number[];
   /** ISO 4217 para los precios de los asientos. Si falta, Sabre la elige. */
   currencyCode?: string;
@@ -94,11 +97,11 @@ export function buildSeatAvailabilityRequest(source: SeatAvailabilityRequestSour
     }
   }
 
-  const refs = (only ?? segments.map((_s, i) => i)).map((i) => {
-    if (!Number.isInteger(i) || i < 0 || i >= segments.length) {
-      throw new TypeError(`sabre-client: segments pide el vuelo ${i}, y hay ${segments.length} (0-based)`);
+  const refs = (only ?? segments.map((_s, i) => i + 1)).map((n) => {
+    if (!Number.isInteger(n) || n < 1 || n > segments.length) {
+      throw new TypeError(`sabre-client: segments pide el vuelo ${n}, y hay ${segments.length} (empieza en 1)`);
     }
-    return segmentId(i);
+    return segmentId(n - 1);
   });
   if (refs.length === 0) {
     throw new TypeError('sabre-client: segments no puede ir vacío');

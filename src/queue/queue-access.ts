@@ -209,9 +209,8 @@ export function parseQueueStep(response: SoapResponse): QueueStep {
   const firstLine = paragraph.find((line) => line.trim() !== '');
   if (isEndOfDisplay(firstLine) || warnings.some(isEndOfDisplayResult)) return endStep(warnings);
 
-  const line = node(response.payload.Line);
-  const locator = attribute(line?.UniqueID, 'ID');
-  if (line === undefined || locator === undefined) {
+  const fields = lineFields(response.payload.Line);
+  if (fields === undefined) {
     throw new SabreGatewayError(`${QUEUE_ACCESS_SERVICE}: respuesta no reconocida (sin Line/UniqueID ni fin de cola)`, {
       protocol: 'soap',
       status: response.status,
@@ -219,14 +218,22 @@ export function parseQueueStep(response: SoapResponse): QueueStep {
       raw: response.raw,
     });
   }
+  const item: QueueItem = { ...fields, paragraph };
+  return { done: false, item, warnings };
+}
 
+/** Los campos de un `Line`, o `undefined` si no trae `UniqueID`. */
+export function lineFields(value: unknown): Omit<QueueItem, 'paragraph'> | undefined {
+  const line = node(value);
+  const locator = attribute(line?.UniqueID, 'ID');
+  if (line === undefined || locator === undefined) return undefined;
   const source = node(node(line.POS)?.Source);
   const agentSine = attribute(source, 'AgentSine');
   const pseudoCityCode = attribute(source, 'PseudoCityCode');
   const placedAt = element(line.DateTime);
   const primaryPassenger = element(line.PassengerName);
   const group = element(line.Group);
-  const item: QueueItem = {
+  return {
     locator,
     ...(placedAt === undefined ? {} : { placedAt }),
     ...(agentSine === undefined && pseudoCityCode === undefined
@@ -239,7 +246,5 @@ export function parseQueueStep(response: SoapResponse): QueueStep {
         }),
     ...(primaryPassenger === undefined ? {} : { primaryPassenger }),
     ...(group === undefined ? {} : { group }),
-    paragraph,
   };
-  return { done: false, item, warnings };
 }

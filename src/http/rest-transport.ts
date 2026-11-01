@@ -4,7 +4,7 @@ import { definedOnly, type ResolvedConfig } from '../config.js';
 import { SabreError, SabreGatewayError } from '../errors/index.js';
 import { EventLogger } from '../logging/logger.js';
 import type { SabreRawResponse, SabreRawResponseCallback } from './raw-response.js';
-import { type RetryOptions, retryDelay, shouldRetry, validateRetryOptions } from './retry.js';
+import { type RetryOptions, retryDelay, shouldRetry, sleep, validateRetryOptions } from './retry.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -297,19 +297,4 @@ function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) return reject(signal.reason);
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(signal?.reason);
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
 }

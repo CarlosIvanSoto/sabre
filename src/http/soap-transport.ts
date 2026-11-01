@@ -2,14 +2,48 @@
 // Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md (puntos 4 y 6),
 // cliente-http-y-libreria-xml.md y respuesta-cruda-soap.md.
 import { XMLParser } from 'fast-xml-parser';
-import type { ResolvedConfig } from '../config.js';
+import { definedOnly, type ResolvedConfig } from '../config.js';
 import { SabreBusinessError, SabreGatewayError, SabreWarning } from '../errors/index.js';
 import { EventLogger } from '../logging/logger.js';
 import { REDACTED, redactSoapEnvelope } from '../logging/redact.js';
 import type { SabreRawResponseCallback } from './raw-response.js';
+import { type RetryOptions, retryDelay, sleep, validateRetryOptions } from './retry.js';
 
-/** Status HTTP reintentables cuando la respuesta no trae un sobre SOAP (proxy, balanceador). */
-const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
+/**
+ * Status HTTP transitorios cuando la respuesta no trae un sobre SOAP (proxy, balanceador).
+ * Solo se reintentan en operaciones idempotentes.
+ */
+const TRANSIENT_STATUS = new Set([429, 500, 503, 504]);
+
+/**
+ * "Se excedió el máximo de requests concurrentes: esperar ≥ 500 ms y reintentar". Se asume que
+ * Sabre no procesó el request, así que se reintentan también en las operaciones que mueven el
+ * cursor. Sin confirmar: se valida en la Fase 4.
+ */
+export const BUSY_CODES: ReadonlySet<string> = new Set(['USG_CONNECTOR_IS_BUSY', 'USG_IS_BUSY', 'USG_SERVICE_IS_BUSY']);
+
+/**
+ * Los demás `USG_*` que el catálogo manda a "esperar ≥ 500 ms y reintentar". No dicen si el
+ * request se procesó, así que solo se reintentan en operaciones idempotentes.
+ * `USG_RESOURCE_UNAVAILABLE` (límite de sesiones) no está: no se reintenta.
+ */
+const TRANSIENT_CODES: ReadonlySet<string> = new Set([
+  'USG_SECURITY_ICE_ERROR',
+  'USG_SERVICE_PROVIDER_ERROR',
+  'USG_NO_RESPONSE_FROM_JMSRECEIVER_IN_TIME',
+  'SC_SERVICE_UNAVAILABLE',
+  'USG_COULD_NOT_COMPLETE_REQUEST',
+  'USG_IIOP_OBJECT_NOT_EXIST',
+  'USG_IIOP_TRANSIENT_EXCEPTION',
+  'USG_MOM_SERVICE_PROVIDER_INFRASTRUCTURE_ERROR',
+]);
+
+/** Esquema fijo que documenta Sabre: 3 reintentos con 1 s de intervalo, sin jitter. */
+export const PREVIOUS_ENTRY_ACTIVE_RETRIES = 3;
+export const PREVIOUS_ENTRY_ACTIVE_DELAY_MS = 1000;
+const PREVIOUS_ENTRY_ACTIVE = /PREVIOUS ENTRY ACTIVE/i;
+
+type RetryReason = 'busy' | 'previous-entry-active' | 'transient';
 
 /** Credencial del header `wsse:Security`. */
 export type SoapSecurity =
@@ -39,6 +73,12 @@ export interface SoapRequest {
   /** `eb:ConversationId` de la sesión. */
   conversationId: string;
   security: SoapSecurity;
+  /**
+   * Si la operación se puede repetir sin efectos (`count`, `list`, `ping`). Las que mueven el
+   * cursor de una cola van en `false`: nunca se reintentan ante un fallo de red.
+   */
+  idempotent: boolean;
+  retry?: Partial<RetryOptions>;
   /** `true` para devolver el `BinarySecurityToken` de la respuesta (solo `SessionCreateRQ`). */
   readSecurityToken?: boolean;
   signal?: AbortSignal;
@@ -66,6 +106,16 @@ export interface SoapTransportOptions {
   messageId?: () => string;
   /** Solo para tests: reloj del `eb:Timestamp`. */
   now?: () => Date;
+  /** Solo para tests: fuente de aleatoriedad del jitter. */
+  random?: () => number;
+  /** Solo para tests: espera entre reintentos. */
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+}
+
+/** Último intento con respuesta HTTP, para entregarlo una sola vez a `onRawResponse`. */
+interface RawCapture {
+  attempts: number;
+  last?: { status: number; headers: Headers; body: string };
 }
 
 type XmlNode = Record<string, unknown>;
@@ -88,12 +138,16 @@ export class SoapTransport {
   readonly #log: EventLogger;
   readonly #messageId: () => string;
   readonly #now: () => Date;
+  readonly #random: () => number;
+  readonly #sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 
   constructor(config: ResolvedConfig, options: SoapTransportOptions = {}) {
     this.#config = config;
     this.#log = new EventLogger(config.logger);
     this.#messageId = options.messageId ?? (() => globalThis.crypto.randomUUID());
     this.#now = options.now ?? (() => new Date());
+    this.#random = options.random ?? Math.random;
+    this.#sleep = options.sleep ?? sleep;
   }
 
   /** @internal Para los eventos de sesión que no son una request. */
@@ -101,13 +155,62 @@ export class SoapTransport {
     return this.#log;
   }
 
-  async request(request: SoapRequest, attempt = 0): Promise<SoapResponse> {
+  async request(request: SoapRequest): Promise<SoapResponse> {
+    if (request.retry !== undefined) validateRetryOptions(request.retry, 'retry');
+    const capture: RawCapture = { attempts: 0 };
+    try {
+      return await this.#attempts(request, capture);
+    } finally {
+      // Una sola vez por operación, con el último intento que tuvo respuesta HTTP.
+      if (capture.last !== undefined) this.#deliverRaw(request, { ...capture.last, attempts: capture.attempts });
+    }
+  }
+
+  /**
+   * Dos presupuestos separados: el backoff genérico (`retry.maxRetries`, para `USG_*_BUSY` y
+   * los transitorios) y el esquema fijo de `PREVIOUS ENTRY ACTIVE`, que no se ajusta a la config.
+   */
+  async #attempts(request: SoapRequest, capture: RawCapture): Promise<SoapResponse> {
+    const retry = { ...this.#config.retry, ...definedOnly(request.retry ?? {}) };
+    let generic = 0;
+    let previousEntryActive = 0;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.#send(request, attempt, capture);
+      } catch (error) {
+        const reason = retryReason(error, request.idempotent);
+        let delayMs: number;
+        if (reason === 'previous-entry-active' && previousEntryActive < PREVIOUS_ENTRY_ACTIVE_RETRIES) {
+          previousEntryActive++;
+          delayMs = PREVIOUS_ENTRY_ACTIVE_DELAY_MS;
+        } else if ((reason === 'busy' || reason === 'transient') && generic < retry.maxRetries) {
+          delayMs = retryDelay(generic, retry.baseDelayMs, this.#random);
+          generic++;
+        } else {
+          throw error;
+        }
+        this.#log.emit('warn', 'sabre.request.retry', {
+          protocol: 'soap',
+          service: request.service,
+          action: request.action,
+          attempt: attempt + 1,
+          reason,
+          delayMs,
+          error: error as SabreGatewayError,
+        });
+        await this.#sleep(delayMs, request.signal);
+      }
+    }
+  }
+
+  async #send(request: SoapRequest, attempt: number, capture: RawCapture): Promise<SoapResponse> {
     const envelope = this.#envelope(request);
     const logContext = { protocol: 'soap', service: request.service, action: request.action, attempt };
     this.#log.emit('debug', 'sabre.request.start', logContext);
     const startedAt = Date.now();
 
     let response: Response;
+    capture.attempts++;
     try {
       response = await this.#config.fetch(this.#config.soapBaseUrl, {
         method: 'POST',
@@ -129,7 +232,7 @@ export class SoapTransport {
     const original = await response.text();
     // Todo lo que sale del transporte (raw, errores, logs) se arma desde el texto redactado.
     const text = redactSoapEnvelope(scrubToken(original, request.security));
-    this.#deliverRaw(request, response, text);
+    capture.last = { status: response.status, headers: response.headers, body: text };
 
     const document = parseEnvelope(text);
     const messageId = stringAt(document?.Header, 'MessageHeader', 'MessageData', 'MessageId');
@@ -168,7 +271,7 @@ export class SoapTransport {
       throw new SabreGatewayError(`${service}: HTTP ${response.status}, la respuesta no es un sobre SOAP`, {
         protocol: 'soap',
         status: response.status,
-        retryable: !response.ok && RETRYABLE_STATUS.has(response.status),
+        retryable: false,
         raw: text,
       });
     }
@@ -183,7 +286,7 @@ export class SoapTransport {
       throw new SabreGatewayError(`${service}: HTTP ${response.status}, el sobre SOAP no trae payload`, {
         protocol: 'soap',
         status: response.status,
-        retryable: !response.ok && RETRYABLE_STATUS.has(response.status),
+        retryable: false,
         raw: text,
       });
     }
@@ -191,7 +294,7 @@ export class SoapTransport {
       throw new SabreGatewayError(`${service}: HTTP ${response.status}`, {
         protocol: 'soap',
         status: response.status,
-        retryable: RETRYABLE_STATUS.has(response.status),
+        retryable: false,
         raw: text,
       });
     }
@@ -204,11 +307,23 @@ export class SoapTransport {
     });
     const errors = asArray(results?.Error).map((node) => {
       const entry = resultEntry(node);
-      return new SabreBusinessError(`${service}: ${entry.description}`, { service, code: entry.code, raw: text });
+      return new SabreBusinessError(`${service}: ${entry.description}`, {
+        service,
+        code: entry.code,
+        raw: text,
+        retryable: PREVIOUS_ENTRY_ACTIVE.test(entry.description),
+      });
     });
     const [first, ...rest] = errors;
     if (first !== undefined) {
-      throw new SabreBusinessError(first.message, { service, code: first.code, raw: text, warnings, errors: rest });
+      throw new SabreBusinessError(first.message, {
+        service,
+        code: first.code,
+        raw: text,
+        retryable: first.retryable,
+        warnings,
+        errors: rest,
+      });
     }
 
     // Paso 4: data.
@@ -241,18 +356,11 @@ export class SoapTransport {
   }
 
   /** Un callback que lanza no rompe la operación (mismo criterio que REST). */
-  #deliverRaw(request: SoapRequest, response: Response, body: string): void {
+  #deliverRaw(request: SoapRequest, raw: Required<RawCapture>['last'] & { attempts: number }): void {
     if (request.onRawResponse === undefined) return;
     const operation = request.operation ?? request.service;
     try {
-      request.onRawResponse({
-        operation,
-        protocol: 'soap',
-        status: response.status,
-        headers: response.headers,
-        body,
-        attempts: 1,
-      });
+      request.onRawResponse({ operation, protocol: 'soap', ...raw });
     } catch (error) {
       this.#log.emit('warn', 'sabre.request.rawResponseHookFailed', {
         service: request.service,
@@ -338,10 +446,12 @@ function faultError(service: string, status: number, fault: XmlNode, text: strin
   const haystack = [faultcode, faultstring, JSON.stringify(fault.detail ?? '')].join(' ');
   const code = USG_CODE.exec(haystack)?.[0] ?? faultcode;
   const detail = [faultcode, faultstring].filter((part) => part !== undefined && part !== '').join(': ');
+  // `retryable: true` solo para `USG_*_BUSY` y `PREVIOUS ENTRY ACTIVE` (decisiones 4 y 5).
+  const retryable = (code !== undefined && BUSY_CODES.has(code)) || PREVIOUS_ENTRY_ACTIVE.test(haystack);
   return new SabreGatewayError(`${service}: SOAP fault${detail === '' ? '' : ` ${detail}`}`, {
     protocol: 'soap',
     status,
-    retryable: false,
+    retryable,
     raw: text,
     ...(code === undefined || code === '' ? {} : { code }),
   });
@@ -374,6 +484,24 @@ function resultEntry(node: unknown): { code: string; description: string } {
     ...shortTexts.filter((short) => !messages.includes(short)).map((short) => `(${short})`),
   ].join(' ');
   return { code: code ?? type ?? 'UNKNOWN', description };
+}
+
+/**
+ * Por qué se puede reintentar un error, según la idempotencia de la operación. Ver
+ * tier-3-sesion-y-colas-soap.md (punto 5) y politica-de-reintentos-y-backoff.md.
+ */
+function retryReason(error: unknown, idempotent: boolean): RetryReason | undefined {
+  if ((error instanceof SabreBusinessError || error instanceof SabreGatewayError) && PREVIOUS_ENTRY_ACTIVE.test(error.message)) {
+    return 'previous-entry-active';
+  }
+  if (!(error instanceof SabreGatewayError) || error.protocol !== 'soap') return undefined;
+  if (error.code !== undefined && BUSY_CODES.has(error.code)) return 'busy';
+  // Lo que sigue pudo haber llegado a Sabre: solo se repite si la operación es idempotente.
+  if (!idempotent) return undefined;
+  if (error.code !== undefined) return TRANSIENT_CODES.has(error.code) ? 'transient' : undefined;
+  // Sin código: un fallo de red (sin status) o una respuesta sin sobre SOAP.
+  if (error.status === undefined || TRANSIENT_STATUS.has(error.status)) return 'transient';
+  return undefined;
 }
 
 function firstElement(node: XmlNode): [string | undefined, unknown] {

@@ -2,92 +2,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { resolveConfig } from '../src/config.js';
 import { SabreBusinessError, SabreGatewayError, SabreWarning } from '../src/errors/index.js';
 import type { SabreRawResponse } from '../src/http/raw-response.js';
-import { type SoapRequest, SoapTransport } from '../src/http/soap-transport.js';
-import type { SabreLogger } from '../src/logging/index.js';
+import { SoapTransport } from '../src/http/soap-transport.js';
 import { REDACTED } from '../src/logging/redact.js';
 import { config, mockFetch } from './helpers.js';
-
-const SESSION_TOKEN = 'Shared/IDL:IceSess\\/SessMgr:1\\.0.IDL/Common/!ICESMS\\/RESG!ICESMSLB\\/RES.LB!-3142469889442586496!1404637!0';
-const NEW_TOKEN = 'Shared/IDL:IceSess\\/SessMgr:1\\.0.IDL/Common/!ICESMS\\/CERTG!ICESMSLB\\/CRT.LB!-3206400065398209398!380374!0';
-
-function soap(body: string, header = ''): string {
-  return [
-    '<soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/">',
-    '<soap-env:Header>',
-    '<eb:MessageHeader xmlns:eb="http://www.ebxml.org/namespaces/messageHeader" eb:version="1.0" soap-env:mustUnderstand="1">',
-    '<eb:CPAId>ABCD</eb:CPAId>',
-    '<eb:ConversationId>conv-1</eb:ConversationId>',
-    '<eb:MessageData><eb:MessageId>3412287548732070140</eb:MessageId><eb:Timestamp>2026-10-31T12:00:00</eb:Timestamp></eb:MessageData>',
-    '</eb:MessageHeader>',
-    header,
-    '</soap-env:Header>',
-    `<soap-env:Body>${body}</soap-env:Body>`,
-    '</soap-env:Envelope>',
-  ].join('\n');
-}
-
-const tokenHeader = (token: string) =>
-  `<wsse:Security xmlns:wsse="http://schemas.xmlsoap.org/ws/2002/12/secext"><wsse:BinarySecurityToken valueType="String" EncodingType="wsse:Base64Binary">${token}</wsse:BinarySecurityToken></wsse:Security>`;
-
-function queueRS(results: string, extra = ''): string {
-  return `<QueueAccessRS xmlns="http://webservices.sabre.com/sabreXML/2011/10" xmlns:stl="http://services.sabre.com/STL/v01" Version="2.1.1"><stl:ApplicationResults status="Complete">${results}</stl:ApplicationResults>${extra}</QueueAccessRS>`;
-}
-
-const success = '<stl:Success timeStamp="2026-10-31T12:00:00-06:00"/>';
-
-function entry(kind: 'Error' | 'Warning', code: string, text: string, shortText?: string, type = 'BusinessLogic'): string {
-  return `<stl:${kind} type="${type}" timeStamp="2026-10-31T12:00:00-06:00"><stl:SystemSpecificResults><stl:Message code="${code}">${text}</stl:Message>${shortText === undefined ? '' : `<stl:ShortText>${shortText}</stl:ShortText>`}</stl:SystemSpecificResults></stl:${kind}>`;
-}
-
-function fault(faultcode: string, faultstring: string, detail = ''): string {
-  return `<soap-env:Fault><faultcode>${faultcode}</faultcode><faultstring>${faultstring}</faultstring>${detail === '' ? '' : `<detail>${detail}</detail>`}</soap-env:Fault>`;
-}
-
-function xml(status: number, body: string, headers: Record<string, string> = {}): Response {
-  return new Response(body, { status, headers: { 'Content-Type': 'text/xml;charset=UTF-8', ...headers } });
-}
-
-function memoryLogger() {
-  const calls: Array<[string, string, Record<string, unknown> | undefined]> = [];
-  const make =
-    (level: string) =>
-    (message: string, context?: Record<string, unknown>): void => {
-      calls.push([level, message, context]);
-    };
-  const logger: SabreLogger = { debug: make('debug'), info: make('info'), warn: make('warn'), error: make('error') };
-  return { logger, calls };
-}
-
-function setup(...responses: Array<Response | Error>) {
-  const fetch = mockFetch(...responses);
-  const { logger, calls } = memoryLogger();
-  const transport = new SoapTransport(resolveConfig(config({ environment: 'production', fetch, logger })), {
-    messageId: () => 'test-uuid',
-    now: () => new Date('2026-10-31T18:00:00.123Z'),
-  });
-  return { fetch, transport, calls };
-}
-
-function request(overrides: Partial<SoapRequest> = {}): SoapRequest {
-  return {
-    service: 'queueAccess',
-    action: 'QueueAccessLLSRQ',
-    payload: '<QueueAccessRQ Version="2.1.1" xmlns="http://webservices.sabre.com/sabreXML/2011/10"/>',
-    cpaId: 'ABCD',
-    conversationId: 'conv-1',
-    security: { binarySecurityToken: SESSION_TOKEN },
-    ...overrides,
-  };
-}
-
-async function rejection(promise: Promise<unknown>): Promise<unknown> {
-  try {
-    await promise;
-  } catch (error) {
-    return error;
-  }
-  throw new Error('se esperaba que la promesa fallara');
-}
+import {
+  NEW_TOKEN,
+  SESSION_TOKEN,
+  entry,
+  fault,
+  queueRS,
+  rejection,
+  request,
+  setup,
+  soap,
+  success,
+  tokenHeader,
+  xml,
+} from './soap-helpers.js';
 
 describe('SoapTransport: request', () => {
   it('arma el sobre con MessageHeader y BinarySecurityToken y lo manda al endpoint SOAP', async () => {
@@ -251,13 +182,13 @@ describe('SoapTransport: SOAP fault y gateway', () => {
   });
 
   it('trata un fault como fault aunque llegue con HTTP 200', async () => {
-    const { transport } = setup(xml(200, soap(fault('soap-env:Server.SystemError', 'USG_IS_BUSY'))));
+    const { transport } = setup(xml(200, soap(fault('soap-env:Client.AuthorizationFailed', 'USG_AUTHORIZATION_FAILED'))));
     const error = (await rejection(transport.request(request()))) as SabreGatewayError;
     expect(error).toBeInstanceOf(SabreGatewayError);
-    expect(error.code).toBe('USG_IS_BUSY');
+    expect(error.code).toBe('USG_AUTHORIZATION_FAILED');
   });
 
-  it('una respuesta que no es un sobre SOAP es SabreGatewayError, reintentable solo si el status lo es', async () => {
+  it('una respuesta que no es un sobre SOAP es SabreGatewayError, no reintentable', async () => {
     const { transport } = setup(
       xml(503, '<html><body>Service Unavailable</body></html>', { 'Content-Type': 'text/html' }),
       xml(200, 'no es xml'),
@@ -266,7 +197,7 @@ describe('SoapTransport: SOAP fault y gateway', () => {
 
     const unavailable = (await rejection(transport.request(request()))) as SabreGatewayError;
     expect(unavailable).toBeInstanceOf(SabreGatewayError);
-    expect([unavailable.protocol, unavailable.status, unavailable.retryable]).toEqual(['soap', 503, true]);
+    expect([unavailable.protocol, unavailable.status, unavailable.retryable]).toEqual(['soap', 503, false]);
 
     const garbage = (await rejection(transport.request(request()))) as SabreGatewayError;
     expect([garbage.status, garbage.retryable]).toEqual([200, false]);

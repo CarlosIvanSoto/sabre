@@ -12,7 +12,7 @@
 //
 // Variables: las mismas que scripts/record-bfm.mjs, más SABRE_ENVIRONMENT (sandbox por defecto),
 // SABRE_AUTH_VERSION (v3 por defecto), SABRE_DEPARTURE_DAYS (75) y SABRE_GET_SEATS_ORIGIN /
-// SABRE_GET_SEATS_DESTINATION. `direct` busca solo ida DFW–LAX sin escalas; `connection`, solo
+// SABRE_GET_SEATS_DESTINATION y SABRE_REVALIDATE_ATTEMPTS (3). `direct` busca solo ida DFW–LAX sin escalas; `connection`, solo
 // ida MEX–MAD con una escala.
 //
 // Antes de guardar se redacta: PCC, TRANSACTIONID y cualquier string con el usuario EPR. El
@@ -103,14 +103,17 @@ const candidates = found.itineraryGroups.flatMap((group) => group.itineraries.ma
 const preferred = mode === 'connection' ? candidates.filter(({ itinerary }) => itinerary.legs[0].schedules.length > 1) : candidates;
 
 let revalidateRequest, revalidated;
-for (const candidate of (preferred.length > 0 ? preferred : candidates).slice(0, 3)) {
+const attempts = Number(process.env.SABRE_REVALIDATE_ATTEMPTS ?? 3);
+const flightsOf = ({ itinerary }) =>
+  itinerary.legs.flatMap((leg) => leg.schedules).map((s) => `${s.carrier.marketing}${s.carrier.marketingFlightNumber} ${s.departure.airport}→${s.arrival.airport}`).join(' / ');
+for (const candidate of (preferred.length > 0 ? preferred : candidates).slice(0, attempts)) {
   revalidateRequest = buildRevalidateItineraryRequest({ search, ...candidate });
   try {
     revalidated = await sabre.air.revalidateItinerary(revalidateRequest);
     break;
   } catch (error) {
     if (!(error instanceof SabreError)) throw error;
-    console.log(`Revalidate rechazó un itinerario: ${error.message}`);
+    console.log(`Revalidate rechazó ${flightsOf(candidate)}: ${error.message}`);
   }
 }
 if (revalidated === undefined) {

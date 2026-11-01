@@ -33,7 +33,13 @@ Tier 1 covers the core Air Booking flow over REST:
 | Booking | Create Booking (Booking Management API v1, ATPCO by `flightDetails`) | `sabre.booking.create` |
 | Booking management | Get Booking and Cancel Booking (Booking Management API v1) | `sabre.booking.get`, `sabre.booking.cancel` |
 
-Planned: Get Seats and Get Ancillaries (Tier 2), and a `SabreLegacy` client for SOAP services.
+Tier 2 adds seat selection:
+
+| Step | Service | Method |
+| - | - | - |
+| Seat map | Get Seats v3 (`byReservationPayload` and `byPnrLocator`) | `sabre.air.getSeats` |
+
+Planned after `0.3.0`: Get Ancillaries (NDC only), and a `SabreLegacy` client for SOAP services.
 
 ## Requirements
 
@@ -171,6 +177,75 @@ Every request accepts an `AbortSignal`. Shopping calls also accept a per-request
 await sabre.air.bargainFinderMax(search, { signal, retry: { maxRetries: 1 } });
 ```
 
+## Choosing a seat
+
+`sabre.air.getSeats` returns the seat map with availability and prices. It is one function
+for both Get Seats endpoints: without `pnrLocator` it goes to `byReservationPayload` (before
+booking), with `pnrLocator` it goes to `byPnrLocator` (an existing PNR).
+
+Before booking, build the request from the revalidated itinerary with
+`buildSeatAvailabilityRequest`, pick a seat, and pass it to `buildBookingFlightDetails`:
+
+```ts
+import { buildBookingFlightDetails, buildSeatAvailabilityRequest } from 'sabre-client';
+
+// After step 2 of "Booking a flight": `confirmedGroup` and `confirmed`.
+const seatMap = await sabre.air.getSeats(
+  buildSeatAvailabilityRequest({ group: confirmedGroup, itinerary: confirmed, currencyCode: 'USD' }),
+);
+
+// seatMaps[].segmentRef is S1, S2, … in itinerary order. `occupationStatusCode: 'F'` is a free
+// seat; one with `offerItemRefIds` may have a price (offerItems[].priceDefinitionRef →
+// priceDefinitions[]). Here: the first free seat of the first flight with no offer item.
+const rows = seatMap.response.seatMaps
+  .filter((map) => map.segmentRef === 'S1')
+  .flatMap((map) => map.cabinCompartments ?? [])
+  .flatMap((cabin) => cabin.seatRows ?? []);
+const seat = rows
+  .flatMap((row) => row.seats.map((s) => ({ number: `${row.row}${s.column}`, ...s })))
+  .find((s) => s.occupationStatusCode === 'F' && (s.offerItemRefIds ?? []).length === 0);
+
+const booking = await sabre.booking.create({
+  flightDetails: buildBookingFlightDetails({
+    group: confirmedGroup,
+    itinerary: confirmed,
+    // Both indexes start at 1: first flight of the itinerary, first traveler.
+    seats: seat === undefined ? [] : [{ segmentIndex: 1, travelerIndex: 1, number: seat.number }],
+    seatAvailability: seatMap,
+  }),
+  travelers: [{ givenName: 'JANE', surname: 'DOE', passengerCode: 'ADT' }],
+  contactInfo: { emails: ['jane@example.com'], phones: ['5550000000'] },
+});
+```
+
+For a booking that already exists, ask by locator:
+
+```ts
+const pnrSeats = await sabre.air.getSeats({ pnrLocator: booking.confirmationId! });
+```
+
+Things to know:
+
+- **Seats are booked by number, ATPCO only.** The seat goes to `flightDetails.flights[].seats[]`
+  (`BookSeat`). `seatOffers` and the Get Seats `offerId` are NDC only and are not supported.
+  `areaPreferences` and `changeOfGaugeSeats` are not supported by the helper either.
+- **Prefer free seats.** It is not known what Sabre does with a chargeable seat requested by
+  number through ATPCO. If you pass `seatAvailability` and the chosen seat has a price,
+  `sabre.booking.create` logs a `sabre.booking.seat.priced` warning (segment, flight, seat,
+  amount and currency, no passenger data) and books anyway.
+- **Local validation.** A seat number that does not match `^[0-9]+[A-Z]$`, a `segmentIndex` or
+  `travelerIndex` that does not exist, or a `pnrLocator` that is empty or mixed with payload
+  fields (`segments`, `passengers`, `returnSeatMapsOnlyForSegmentRefs`) throws a `TypeError`
+  before any request is sent.
+- **Errors.** Get Seats has no published error catalog. `errors[]` without a seat map throws a
+  non-retryable `SabreBusinessError`; with a seat map, errors and `warnings[]` come back in
+  `seatMap.errors` and `seatMap.warnings`. Both endpoints are reads, so gateway `429`/`5xx`
+  are retried.
+- **What has been checked.** `byReservationPayload` was checked read-only in production, for
+  a nonstop and a connection. `byPnrLocator` and booking with a seat have not been checked
+  against Sabre yet. Prices arrive as numbers even though the spec says strings, so the types
+  accept both.
+
 ## Error handling
 
 Every error thrown by the SDK extends `SabreError`:
@@ -207,10 +282,11 @@ try {
 
 ## Raw response
 
-Every REST operation (`air.bargainFinderMax`, `air.revalidateItinerary`, `booking.create`,
-`booking.get` and `booking.cancel`) accepts an `onRawResponse` callback in its options, next to
-`signal`. It receives Sabre's response as it arrived, for example to store it next to the typed
-result:
+Every REST operation (`air.bargainFinderMax`, `air.revalidateItinerary`, `air.getSeats`,
+`booking.create`, `booking.get` and `booking.cancel`) accepts an `onRawResponse` callback in its
+options, next to `signal`. It receives Sabre's response as it arrived, for example to store it
+next to the typed result. For `air.getSeats`, `operation` names the endpoint that was called
+(`air.getSeatsByPayload` or `air.getSeatsByPnrLocator`):
 
 ```ts
 import type { SabreRawResponse } from 'sabre-client';
@@ -285,7 +361,7 @@ const sabre = new Sabre({
 
 The SDK logs structured events (`sabre.request.start`, `sabre.request.end`,
 `sabre.request.retry`, `sabre.request.rawResponseHookFailed`, `sabre.auth.token.refresh`,
-`sabre.auth.token.store`), never raw
+`sabre.auth.token.store`, `sabre.booking.seat.priced`), never raw
 request or response bodies. Secrets, the `Authorization` header and passenger data are always
 redacted before they reach your logger.
 

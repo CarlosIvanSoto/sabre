@@ -132,14 +132,14 @@ const paragraphParser = new XMLParser({
   isArray: (name) => name === 'Text',
 });
 
-type XmlNode = Record<string, unknown>;
+export type XmlNode = Record<string, unknown>;
 
-function node(value: unknown): XmlNode | undefined {
+export function node(value: unknown): XmlNode | undefined {
   if (Array.isArray(value)) return node(value[0]);
   return typeof value === 'object' && value !== null ? (value as XmlNode) : undefined;
 }
 
-function attribute(value: unknown, name: string): string | undefined {
+export function attribute(value: unknown, name: string): string | undefined {
   const text = node(value)?.[`@${name}`];
   return typeof text === 'string' && text.trim() !== '' ? text.trim() : undefined;
 }
@@ -149,17 +149,25 @@ function element(value: unknown): string | undefined {
   return text === undefined || text === '' ? undefined : text;
 }
 
-/** Las líneas de `Paragraph/Text` de un `QueueAccessRS`, tal cual. */
-export function paragraphLines(raw: string): string[] {
+/**
+ * Las líneas `Text` de una respuesta, tal cual: las de `Paragraph` en `QueueAccessRS` y las del
+ * primer nivel en `QueuePlaceRS`.
+ */
+export function textLines(raw: string, payloadName: 'QueueAccessRS' | 'QueuePlaceRS'): string[] {
   let parsed: unknown;
   try {
     parsed = paragraphParser.parse(raw);
   } catch {
     return [];
   }
-  const payload = node(node(node(node(parsed)?.Envelope)?.Body)?.QueueAccessRS);
-  const paragraph = node(payload?.Paragraph);
-  return asArray(paragraph?.Text).map((line) => (typeof line === 'string' ? line : (textOf(line) ?? '')));
+  const payload = node(node(node(node(parsed)?.Envelope)?.Body)?.[payloadName]);
+  const container = payloadName === 'QueueAccessRS' ? node(payload?.Paragraph) : payload;
+  return asArray(container?.Text).map((line) => (typeof line === 'string' ? line : (textOf(line) ?? '')));
+}
+
+/** Las líneas de `Paragraph/Text` de un `QueueAccessRS`, tal cual. */
+export function paragraphLines(raw: string): string[] {
+  return textLines(raw, 'QueueAccessRS');
 }
 
 /** Si un texto de Sabre es el fin de cola, comparado por el texto exacto. */
@@ -180,9 +188,9 @@ export function isEndOfDisplayResult(error: { message: string; service: string }
     .some((part) => isEndOfDisplay(part));
 }
 
-/** El fin de cola, si llegó como `stl:Error`. Si no, `undefined`. */
-export function endOfDisplayError(error: unknown): SabreBusinessError | undefined {
-  if (!(error instanceof SabreBusinessError) || error.service !== QUEUE_ACCESS_SERVICE) return undefined;
+/** El fin de cola, si llegó como `stl:Error` de `service`. Si no, `undefined`. */
+export function endOfDisplayError(error: unknown, service: string): SabreBusinessError | undefined {
+  if (!(error instanceof SabreBusinessError) || error.service !== service) return undefined;
   return [error, ...error.errors].some(isEndOfDisplayResult) ? error : undefined;
 }
 

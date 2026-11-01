@@ -30,6 +30,21 @@ import {
   parseQueueCountResponse,
   queueCountRequest,
 } from './queue-count.js';
+import {
+  isInstructionCode,
+  MAX_PLACE_LOCATORS,
+  MAX_PLACE_TO,
+  parsePlaceResult,
+  parsePlaceStep,
+  parsePlaceUnknown,
+  type QueuePlaceOptions,
+  type QueuePlaceRequest,
+  type QueuePlaceResponse,
+  type QueuePlaceResult,
+  queuePlacePayload,
+  queuePlaceRequest,
+  type ResolvedPlaceTarget,
+} from './queue-place.js';
 import { type QueueRef, validateQueueRef } from './queue-ref.js';
 
 /**
@@ -156,22 +171,62 @@ export class QueueManagement {
     this.#state = 'outside';
   }
 
+  /**
+   * Place Queue Message (`QueuePlaceLLSRQ` 2.0.4): coloca un PNR en 1 a 10 colas.
+   *
+   * - **Dentro de una cola**, coloca el PNR actual y devuelve un `QueueStep` con el siguiente,
+   *   como `ignore` y `remove`. El localizador sale de la línea de firma del PNR; `placedAt` y
+   *   `placedBy` quedan en `undefined`. Con `locators` lanza `TypeError` sin red: para colocar
+   *   otros PNR, primero `exit()`.
+   * - **Fuera de una cola**, coloca los `locators` (hasta 6) o el PNR del AAA, no avanza nada y
+   *   devuelve `{ placements, text, warnings }`.
+   *
+   * `instructionCode` tiene que ser 0–191 o 200–254, y no tiene valor por defecto. Nunca se
+   * reintenta ante un fallo de red. Errores como `BAD PNR LOCATOR` o `NEED RECEIVED FROM FIELD`
+   * salen como `SabreBusinessError` (`service: 'queuePlace'`).
+   */
+  place(request: QueuePlaceRequest & { locators: readonly string[] }, options?: QueuePlaceOptions): Promise<QueuePlaceResult>;
+  place(request: QueuePlaceRequest, options?: QueuePlaceOptions): Promise<QueuePlaceResponse>;
+  async place(request: QueuePlaceRequest, options: QueuePlaceOptions = {}): Promise<QueuePlaceResponse> {
+    if (typeof request !== 'object' || request === null) fail('queue.place recibe { to, locators? }');
+    const to = this.#placeTo(request.to);
+    const locators = validateLocators(request.locators);
+    if (locators.length > 0 && this.#state === 'inside') {
+      fail('queue.place con locators no se puede dentro de una cola, donde coloca el PNR actual: sal con queue.exit() antes');
+    }
+    if (locators.length > 0 && this.#state === 'unknown') {
+      fail('no se sabe si la sesión sigue dentro de una cola: llama a queue.exit() antes de colocar por localizador');
+    }
+    const send = queuePlaceRequest(queuePlacePayload(to, locators), options);
+    // Fuera de una cola, colocar no toca el cursor: el estado no cambia, ni con un error.
+    if (this.#state === 'outside') return parsePlaceResult(await this.#context.send(send));
+    return this.#advance(send, this.#state === 'inside' ? parsePlaceStep : parsePlaceUnknown);
+  }
+
   /** Manda una operación que avanza y actualiza `state` con el resultado. */
-  async #step(request: SessionRequest): Promise<QueueStep> {
-    let step: QueueStep;
+  #step(request: SessionRequest): Promise<QueueStep> {
+    return this.#advance(request, parseQueueStep);
+  }
+
+  /**
+   * Manda una operación que puede mover el cursor. Un `QueueStep` fija el estado: `'outside'` con
+   * el fin de cola e `'inside'` con un PNR. Cualquier otro resultado lo deja como estaba.
+   */
+  async #advance<T extends QueuePlaceResponse>(request: SessionRequest, parse: (response: SoapResponse) => T): Promise<T> {
+    let result: T;
     try {
-      step = parseQueueStep(await this.#context.send(request));
+      result = parse(await this.#context.send(request));
     } catch (error) {
-      const end = endOfDisplayError(error);
+      const end = endOfDisplayError(error, request.service);
       if (end !== undefined) {
         this.#state = 'outside';
-        return endStep([...end.warnings]);
+        return endStep([...end.warnings]) as T;
       }
       this.#onError(error);
       throw error;
     }
-    this.#state = step.done ? 'outside' : 'inside';
-    return step;
+    if ('done' in result) this.#state = result.done ? 'outside' : 'inside';
+    return result;
   }
 
   /**
@@ -184,6 +239,25 @@ export class QueueManagement {
     if (error instanceof TypeError || error instanceof SabreSessionError) return;
     if (this.#state === 'outside' && rejectedBySabre(error)) return;
     this.#state = 'unknown';
+  }
+
+  #placeTo(to: unknown): ResolvedPlaceTarget[] {
+    if (!Array.isArray(to) || to.length === 0 || to.length > MAX_PLACE_TO) {
+      fail(`to debe ser una lista de 1 a ${MAX_PLACE_TO} colas`);
+    }
+    return to.map((target: unknown, index) => {
+      if (typeof target !== 'object' || target === null) fail(`to[${index}] debe ser { queue, pcc?, instructionCode? }`);
+      const { queue, pcc, instructionCode } = target as { queue?: unknown; pcc?: unknown; instructionCode?: unknown };
+      validateQueueRef(queue, `to[${index}].queue`);
+      if (instructionCode !== undefined && !isInstructionCode(instructionCode)) {
+        fail(`to[${index}].instructionCode debe ser un entero de 0 a 191 o de 200 a 254`);
+      }
+      return {
+        queue,
+        pcc: this.#pcc(pcc, `to[${index}].pcc`),
+        ...(instructionCode === undefined ? {} : { instructionCode }),
+      };
+    });
   }
 
   #requireQueue(operation: string): void {
@@ -208,6 +282,17 @@ export class QueueManagement {
       return { queue, pcc: this.#pcc(pcc, `from[${index}].pcc`) };
     });
   }
+}
+
+function validateLocators(locators: unknown): string[] {
+  if (locators === undefined) return [];
+  if (!Array.isArray(locators) || locators.length === 0 || locators.length > MAX_PLACE_LOCATORS) {
+    fail(`locators debe ser una lista de 1 a ${MAX_PLACE_LOCATORS} localizadores`);
+  }
+  return locators.map((locator: unknown, index) => {
+    if (typeof locator !== 'string' || locator.trim() === '') fail(`locators[${index}] debe ser un string no vacío`);
+    return locator;
+  });
 }
 
 function validateSelection(selection: unknown): QueueSelection[] {

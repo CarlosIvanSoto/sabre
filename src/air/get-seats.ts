@@ -161,17 +161,20 @@ export type SeatPassengerRs = SeatPassenger;
 
 /** `TaxType` del spec. */
 export interface SeatTax {
-  taxAmount?: string;
+  taxAmount?: number | string;
   taxCode?: string;
   description?: string;
 }
 
-/** `PriceBreakdown` del spec. Importes como string, en la moneda del `PriceDefinition`. */
+/**
+ * `PriceBreakdown` del spec, en la moneda del `PriceDefinition`. El spec dice string, pero en
+ * producción los importes llegaron como número (`1200`, 2026-10-31): se acepta cualquiera.
+ */
 export interface SeatPriceBreakdown {
   /** Con impuestos. */
-  amount: string;
-  amountWithoutTaxes?: string;
-  taxesTotal?: string;
+  amount: number | string;
+  amountWithoutTaxes?: number | string;
+  taxesTotal?: number | string;
   taxes?: SeatTax[];
   isTaxExempt?: boolean;
 }

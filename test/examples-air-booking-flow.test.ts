@@ -17,9 +17,41 @@ const noFareForClass = {
   },
 };
 
+/** Mapa de asientos que responde a los segmentos del request: 1A ocupado, 1B pago, 1C libre. */
+function seatMapFor(body: string) {
+  const request = JSON.parse(body) as { segments: Array<Record<string, unknown> & { id: string }> };
+  return {
+    response: {
+      segments: request.segments,
+      passengers: [{ id: 'P1', passengerType: 'ADT' }],
+      serviceDefinitions: [{ id: 'SD1' }],
+      priceDefinitions: [{ id: 'PD1', currencyCode: 'USD', totalPrice: { amount: '35.00' } }],
+      offerItems: [{ id: 'OI1', serviceDefinitionRef: 'SD1', priceDefinitionRef: 'PD1', segmentRefs: ['S1'], passengerRefs: ['P1'] }],
+      seatMaps: request.segments.map((segment) => ({
+        segmentRef: segment.id,
+        cabinCompartments: [
+          {
+            seatRows: [
+              {
+                row: 1,
+                seats: [
+                  { column: 'A', occupationStatusCode: 'O' },
+                  { column: 'B', occupationStatusCode: 'F', offerItemRefIds: ['OI1'] },
+                  { column: 'C', occupationStatusCode: 'F' },
+                ],
+              },
+            ],
+          },
+        ],
+      })),
+    },
+  };
+}
+
 function client({ shop = direct.search.response.body as unknown, revalidate = [] as unknown[] } = {}) {
-  const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
     const url = String(input);
+    if (url.includes('/v3/offers/getseats/byReservationPayload')) return json(200, seatMapFor(String(init?.body)));
     if (url.includes('/auth/token')) return json(200, { access_token: 'T1', expires_in: 604800, token_type: 'bearer' });
     if (url.includes('/v5/offers/shop')) return json(200, shop);
     if (url.includes('/v5/shop/flights/revalidate')) return json(200, revalidate.shift() ?? direct.response.body);
@@ -122,5 +154,33 @@ describe('examples/air-booking-flow', () => {
   it('falla con un mensaje claro si BFM no devuelve itinerarios', async () => {
     const { sabre } = client({ shop: { groupedItineraryResponse: { version: '5', messages: [], statistics: { itineraryCount: 0 } } } });
     await expect(airBookingFlow(sabre, { search })).rejects.toThrow('no devolvió itinerarios');
+  });
+
+  it('con seats: pide el mapa por payload y resume libres y pagos por segmento, sin reservar', async () => {
+    const { fetch, sabre } = client();
+    const steps: string[] = [];
+    const summary = await airBookingFlow(sabre, { search, seats: true, onStep: (step: string) => steps.push(step) });
+
+    expect(steps).toEqual(['bargainFinderMax', 'revalidateItinerary', 'getSeats']);
+    // La fixture directa es ida y vuelta: dos segmentos, un mapa cada uno.
+    expect(summary.seatMaps).toEqual(
+      ['S1', 'S2'].map((segment) =>
+        expect.objectContaining({ segment, flight: expect.stringMatching(/→/), seatMap: true, seats: 3, free: 2, paid: 1, firstFreeSeat: '1C' }),
+      ),
+    );
+    expect(summary.seats).toEqual([
+      { segmentIndex: 0, travelerIndex: 1, number: '1C' },
+      { segmentIndex: 1, travelerIndex: 1, number: '1C' },
+    ]);
+    expect(calls(fetch, '/auth/token')).toHaveLength(1);
+    expect(calls(fetch, '/v1/trip/orders/')).toHaveLength(0);
+  });
+
+  it('con seats y preview: el flightDetails lleva el asiento sin cargo y no se envía', async () => {
+    const { fetch, sabre } = client();
+    const summary = await airBookingFlow(sabre, { search, seats: true, preview: true });
+
+    expect(summary.bookingPreview!.flightDetails!.flights[0]!.seats).toEqual([{ number: '1C', travelerIndex: 1 }]);
+    expect(calls(fetch, '/v1/trip/orders/')).toHaveLength(0);
   });
 });

@@ -10,7 +10,11 @@ Hace una búsqueda de solo ida para un adulto (a 30 días y con hasta una escala
 `SABRE_DEPARTURE_DAYS` o `SABRE_MAX_STOPS`) y revalida el primer itinerario que Revalidate acepte:
 prueba hasta 3 y salta los que rechaza (por ejemplo, `NO FARE FOR CLASS USED`). Si lo activas, lo
 reserva con un pasajero sintético (`TEST/PASSENGER`). Con `SABRE_PREVIEW_BOOKING=1` arma el
-request de Create Booking e imprime su `flightDetails` **sin enviarlo**. Si el precio revalidado
+request de Create Booking e imprime su `flightDetails` **sin enviarlo**. Con `SABRE_GET_SEATS=1`
+pide el mapa de asientos del itinerario revalidado (Get Seats por payload, solo lectura), imprime
+por segmento cuántos asientos hay libres y pagos, y termina con código 1 si algún segmento vino
+sin mapa; con el preview, el `flightDetails` lleva el primer asiento libre y sin cargo de cada
+vuelo. Si el precio revalidado
 no coincide con el de BFM, avisa. Al final informa cuántas
 peticiones de token hizo: el flujo entero debe usar **un solo token** (cero si lo reutilizó de
 `tokenStore`). Si se pidió más de uno, termina con código 1.
@@ -37,12 +41,14 @@ Variables de entorno:
 | `SABRE_MAX_STOPS` | no | Escalas máximas, entre 0 y 3. `1` por defecto; `0` deja solo vuelos directos |
 | `SABRE_CREATE_BOOKING` | no | `1` para reservar. Crea un PNR en sandbox |
 | `SABRE_PREVIEW_BOOKING` | no | `1` para ver el `flightDetails` que se mandaría a Create Booking, sin enviarlo. Excluyente con `SABRE_CREATE_BOOKING` |
+| `SABRE_GET_SEATS` | no | `1` para pedir el mapa de asientos (Get Seats por payload). De solo lectura: se permite en producción |
 | `SABRE_TOKEN_STORE` | no | `file` para reutilizar el token entre corridas (`.sabre-token.json`, ignorado por git) |
 | `SABRE_DEBUG` | no | `1` para ver los eventos del SDK en consola, ya redactados |
 
 ### Producción
 
-Con este script, en producción **solo se corren BFM y Revalidate**, que son de solo lectura. Se
+Con este script, en producción **solo se corren BFM, Revalidate y Get Seats por payload**, que
+son de solo lectura. Se
 niega a correr con `SABRE_CREATE_BOOKING=1` y `SABRE_ENVIRONMENT=production`, porque crearía un
 PNR real. La única reserva permitida en producción es el piloto de `run-booking-lifecycle.mjs`
 (ver abajo).
@@ -55,6 +61,18 @@ npm run build
 SABRE_ENVIRONMENT=production SABRE_TOKEN_STORE=file SABRE_MAX_STOPS=0 SABRE_DEPARTURE_DAYS=75 \
   SABRE_PREVIEW_BOOKING=1 node --env-file=.env.production examples/run-air-booking-flow.mjs
 ```
+
+Para el mapa de asientos, el smoke de Get Seats (#67) se corre con un directo y con una conexión:
+
+```sh
+SABRE_ENVIRONMENT=production SABRE_TOKEN_STORE=file SABRE_MAX_STOPS=0 SABRE_DEPARTURE_DAYS=75 \
+  SABRE_GET_SEATS=1 SABRE_PREVIEW_BOOKING=1 node --env-file=.env.production examples/run-air-booking-flow.mjs
+SABRE_ENVIRONMENT=production SABRE_TOKEN_STORE=file SABRE_ORIGIN=MEX SABRE_DESTINATION=MAD SABRE_DEPARTURE_DAYS=75 \
+  SABRE_GET_SEATS=1 SABRE_PREVIEW_BOOKING=1 node --env-file=.env.production examples/run-air-booking-flow.mjs
+```
+
+Para grabar las fixtures de Get Seats, `scripts/record-get-seats.mjs` hace el mismo recorrido y
+guarda las respuestas crudas redactadas en `test/fixtures/get-seats.<entorno>-<modo>.json`.
 
 Cada llamada a producción puede generar un cargo (*scan charge*): corre el smoke cuando haga
 falta, no en bucle. Para confirmar que no se llamó a `/v1/trip/orders/*`, agrega `SABRE_DEBUG=1`

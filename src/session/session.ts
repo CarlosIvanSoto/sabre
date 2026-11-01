@@ -111,7 +111,11 @@ export class SabreSession {
     this.#pcc = internal.pcc;
     this.#conversationId = internal.conversationId;
     this.#security = { binarySecurityToken: internal.token };
-    this.queue = new QueueManagement({ send: (request) => this[sessionSend](request), pcc: internal.pcc });
+    this.queue = new QueueManagement({
+      send: (request) => this[sessionSend](request),
+      pcc: internal.pcc,
+      log: internal.transport.log,
+    });
     if (internal.keepAlive) this.#scheduleKeepAlive(KEEP_ALIVE_IDLE_MS);
   }
 

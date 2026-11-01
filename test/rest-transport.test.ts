@@ -83,6 +83,33 @@ describe('RestTransport', () => {
       expect(text.raw).toBe('<html>Gateway Timeout</html>');
     });
 
+    it('extrae errors[0].code y errors[0].descriptionText (401 real de Get Seats en CERT)', async () => {
+      // Body tal cual lo devolvió /v3/offers/getseats/byReservationPayload con el EPR de DEVCENTER (2026-10-31).
+      const body = { errors: [{ code: '305', descriptionText: '401 UNAUTHORIZED "Pcc is not present"', statusText: 'NotProcessed' }] };
+      const error = (await catchError(transport(mockFetch(json(401, body))).request(shop))) as SabreGatewayError;
+
+      expect(error).toBeInstanceOf(SabreGatewayError);
+      expect(error).toMatchObject({ status: 401, code: '305', retryable: false });
+      expect(error.message).toBe('bargainFinderMax: HTTP 401 305: 401 UNAUTHORIZED "Pcc is not present"');
+      expect(error.raw).toEqual(body);
+    });
+
+    it('errorCode y error tienen prioridad sobre errors[0].code', async () => {
+      const errors = [{ code: '305', descriptionText: 'detalle' }];
+      const withErrorCode = await catchError(transport(mockFetch(json(403, { errorCode: 'ERR.2SG.SEC.NOT_AUTHORIZED', errors }))).request(shop));
+      const withError = await catchError(transport(mockFetch(json(401, { error: 'invalid_client', errors }))).request(shop));
+      expect((withErrorCode as SabreGatewayError).code).toBe('ERR.2SG.SEC.NOT_AUTHORIZED');
+      expect((withError as SabreGatewayError).code).toBe('invalid_client');
+    });
+
+    it('ignora errors[] vacío o con elementos que no son objetos', async () => {
+      for (const body of [{ errors: [] }, { errors: ['x'] }, { errors: [{ code: '' }] }]) {
+        const error = (await catchError(transport(mockFetch(json(500, body))).request(shop))) as SabreGatewayError;
+        expect(error.code).toBeUndefined();
+        expect(error.message).toBe('bargainFinderMax: HTTP 500');
+      }
+    });
+
     it('no llama al clasificador del servicio si el status no es 2xx', async () => {
       const classify = vi.fn();
       await catchError(transport(mockFetch(json(500, {}))).request({ ...shop, classify }));

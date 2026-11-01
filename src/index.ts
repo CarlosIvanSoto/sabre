@@ -43,6 +43,8 @@ export type {
   SeatSpecialServiceRequest,
   SeatTax,
 } from './air/get-seats.js';
+export { buildSeatAvailabilityRequest } from './air/seat-availability-request.js';
+export type { SeatAvailabilityRequestSource } from './air/seat-availability-request.js';
 export { buildRevalidateItineraryRequest } from './air/revalidate-itinerary.js';
 export type {
   RevalidateItineraryRequest,

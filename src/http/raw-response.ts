@@ -9,11 +9,14 @@
 export interface SabreRawResponse {
   /** Método público sin `sabre.`, p. ej. `'booking.get'` o `'air.bargainFinderMax'`. */
   operation: string;
-  protocol: 'rest';
+  protocol: 'rest' | 'soap';
   /** HTTP status del intento que se entrega. */
   status: number;
   headers: Headers;
-  /** Texto tal cual llegó, sin parsear. `''` si vino vacío. */
+  /**
+   * Texto tal cual llegó, sin parsear. `''` si vino vacío. En SOAP es el sobre completo, con
+   * una sola modificación: el valor de cada `BinarySecurityToken` va como `[REDACTED]`.
+   */
   body: string;
   /** Intentos HTTP hechos, contando los reintentos (1 si no hubo). */
   attempts: number;

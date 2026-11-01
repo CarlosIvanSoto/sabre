@@ -64,11 +64,18 @@ export const BASE_URLS: Readonly<Record<SabreEnvironment, string>> = Object.free
   production: 'https://api.platform.sabre.com',
 });
 
+/** Endpoints SOAP de `SabreLegacy` (ver entornos-y-certificacion). */
+export const SOAP_BASE_URLS: Readonly<Record<SabreEnvironment, string>> = Object.freeze({
+  sandbox: 'https://webservices.cert.platform.sabre.com',
+  production: 'https://webservices.platform.sabre.com',
+});
+
 /** Config validada y con defaults aplicados. */
 export interface ResolvedConfig {
   credentials: Readonly<SabreCredentials | SabreCredentialsV2>;
   environment: SabreEnvironment;
   baseUrl: string;
+  soapBaseUrl: string;
   authVersion: SabreAuthVersion;
   pcc: string | undefined;
   logger: SabreLogger | undefined;
@@ -142,6 +149,7 @@ export function resolveConfig(config: SabreConfig): ResolvedConfig {
     credentials: Object.freeze({ ...credentials }),
     environment,
     baseUrl: BASE_URLS[environment],
+    soapBaseUrl: SOAP_BASE_URLS[environment],
     authVersion,
     pcc: config.pcc,
     logger,

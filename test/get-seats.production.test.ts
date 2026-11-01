@@ -93,7 +93,7 @@ describe.each([
     const flightDetails = buildBookingFlightDetails({
       group,
       itinerary,
-      seats: [{ segmentIndex: 0, travelerIndex: 1, number: seat.number }],
+      seats: [{ segmentIndex: 1, travelerIndex: 1, number: seat.number }],
       seatAvailability: seats,
     });
     const result = await sabre.booking.create({
@@ -104,7 +104,7 @@ describe.each([
     expect(result.confirmationId).toBe('GLEBNY');
     expect(log.warn).toHaveBeenCalledWith(
       'sabre.booking.seat.priced',
-      expect.objectContaining({ segmentIndex: 0, seat: seat.number, amount: seat.amount, currencyCode: seat.currencyCode }),
+      expect.objectContaining({ segmentIndex: 1, seat: seat.number, amount: seat.amount, currencyCode: seat.currencyCode }),
     );
   });
 });

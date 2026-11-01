@@ -126,10 +126,12 @@ describe('buildSeatAvailabilityRequest', () => {
     ]);
   });
 
-  it('segments elige los vuelos con mapa; un índice inexistente o una lista vacía lanzan TypeError', async () => {
+  it('segments elige los vuelos con mapa, empezando en 1; 0, uno inexistente o una lista vacía lanzan TypeError', async () => {
     const source = await revalidated(connection as unknown as Fixture);
-    expect(buildSeatAvailabilityRequest({ ...source, segments: [1] }).returnSeatMapsOnlyForSegmentRefs).toEqual(['S2']);
-    expect(() => buildSeatAvailabilityRequest({ ...source, segments: [2] })).toThrow(/^sabre-client: /);
+    expect(buildSeatAvailabilityRequest({ ...source, segments: [2] }).returnSeatMapsOnlyForSegmentRefs).toEqual(['S2']);
+    expect(buildSeatAvailabilityRequest({ ...source, segments: [1, 2] }).returnSeatMapsOnlyForSegmentRefs).toEqual(['S1', 'S2']);
+    expect(() => buildSeatAvailabilityRequest({ ...source, segments: [0] })).toThrow('(empieza en 1)');
+    expect(() => buildSeatAvailabilityRequest({ ...source, segments: [3] })).toThrow(/^sabre-client: /);
     expect(() => buildSeatAvailabilityRequest({ ...source, segments: [] })).toThrow(/^sabre-client: /);
   });
 

@@ -11,9 +11,12 @@ const SEAT_NUMBER = /^[0-9]+[A-Z]$/;
 
 /** Asiento elegido para un vuelo del itinerario. */
 export interface BookingSeatSelection {
-  /** Índice 0-based del vuelo en `flights[]`, en el orden del itinerario. */
+  /**
+   * Número del vuelo en el itinerario, empezando en 1 (`1` es `flights[0]`). Misma base que
+   * `travelerIndex`, para no confundirlos.
+   */
   segmentIndex: number;
-  /** Índice 1-based del viajero en `travelers[]` de Create Booking. */
+  /** Número del viajero en `travelers[]` de Create Booking, empezando en 1 (lo fija el spec). */
   travelerIndex: number;
   /** Fila y columna, p. ej. `13A`. */
   number: string;
@@ -21,6 +24,7 @@ export interface BookingSeatSelection {
 
 /** Asiento elegido que tiene precio en Get Seats. Sin datos del pasajero. */
 export interface PricedSeat {
+  /** Empieza en 1, como en `BookingSeatSelection`. */
   segmentIndex: number;
   /** Vuelo comercializador, p. ej. `AA1234`. */
   flight: string;
@@ -52,7 +56,7 @@ export interface BookingFlightDetailsSource {
    */
   priceComparison?: Omit<PriceComparison, 'desiredAmount'>;
   /**
-   * Asientos por número, para `flights[segmentIndex].seats[]` (camino ATPCO; `seatOffers` es
+   * Asientos por número, para `flights[segmentIndex - 1].seats[]` (camino ATPCO; `seatOffers` es
    * solo NDC). Conviene elegir asientos sin cargo: no se sabe qué hace Sabre con uno cobrable.
    */
   seats?: BookingSeatSelection[];
@@ -72,7 +76,8 @@ export interface BookingFlightDetailsSource {
  * - `flightPricing[0].qualifiers`: `passengersPricing` desde `passengerInfoList` y
  *   `validatingAirlineCode` desde `validatingCarrierCode` de la primera cotización.
  * - `seats`: se validan sin llamar a Sabre (`number` con el patrón del spec, vuelo y viajero
- *   existentes) y se agregan a `flights[segmentIndex].seats[]`. Sin `seats`, nada cambia.
+ *   existentes, los dos índices empiezan en 1) y se agregan a `flights[segmentIndex - 1].seats[]`.
+ *   Sin `seats`, nada cambia.
  */
 export function buildBookingFlightDetails(source: BookingFlightDetailsSource): FlightDetails {
   const { group, itinerary, priceComparison, seats = [], seatAvailability } = source;
@@ -141,21 +146,23 @@ export function buildBookingFlightDetails(source: BookingFlightDetailsSource): F
   return details;
 }
 
-/** Devuelve `segmentIndex` si la selección es válida; si no, `TypeError`. */
+/** Devuelve la posición en `flights[]` (`segmentIndex - 1`) si la selección es válida; si no, `TypeError`. */
 function validSeat(selection: BookingSeatSelection, flightCount: number, travelerCount: number): number {
   const { segmentIndex, travelerIndex, number } = selection;
   if (typeof number !== 'string' || !SEAT_NUMBER.test(number)) {
     throw new TypeError(`sabre-client: el asiento ${String(number)} no cumple ^[0-9]+[A-Z]$ (p. ej. 13A)`);
   }
-  if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= flightCount) {
-    throw new TypeError(`sabre-client: el asiento ${number} pide el vuelo ${segmentIndex}, y hay ${flightCount} (0-based)`);
+  if (!Number.isInteger(segmentIndex) || segmentIndex < 1 || segmentIndex > flightCount) {
+    throw new TypeError(
+      `sabre-client: el asiento ${number} pide el vuelo ${segmentIndex}, y hay ${flightCount} (empieza en 1)`,
+    );
   }
   if (!Number.isInteger(travelerIndex) || travelerIndex < 1 || travelerIndex > travelerCount) {
     throw new TypeError(
-      `sabre-client: el asiento ${number} pide el viajero ${travelerIndex}, y hay ${travelerCount} (1-based)`,
+      `sabre-client: el asiento ${number} pide el viajero ${travelerIndex}, y hay ${travelerCount} (empieza en 1)`,
     );
   }
-  return segmentIndex;
+  return segmentIndex - 1;
 }
 
 /**

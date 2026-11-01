@@ -117,13 +117,13 @@ describe('buildBookingFlightDetails con seats', () => {
     for (const flight of details.flights) expect(flight).not.toHaveProperty('seats');
   });
 
-  it('vuelca cada asiento en flights[segmentIndex].seats[] con number y travelerIndex', () => {
+  it('vuelca cada asiento en flights[segmentIndex - 1].seats[] con number y travelerIndex', () => {
     const { flights } = buildBookingFlightDetails({
       ...sample(),
       seats: [
-        { segmentIndex: 1, travelerIndex: 1, number: '30A' },
-        { segmentIndex: 1, travelerIndex: 2, number: '30B' },
-        { segmentIndex: 0, travelerIndex: 2, number: '12F' },
+        { segmentIndex: 2, travelerIndex: 1, number: '30A' },
+        { segmentIndex: 2, travelerIndex: 2, number: '30B' },
+        { segmentIndex: 1, travelerIndex: 2, number: '12F' },
       ],
     });
     expect(flights[0]!.seats).toEqual([{ number: '12F', travelerIndex: 2 }]);
@@ -135,15 +135,25 @@ describe('buildBookingFlightDetails con seats', () => {
   });
 
   it.each([
-    ['número sin columna', { segmentIndex: 0, travelerIndex: 1, number: '13' }],
-    ['columna en minúscula', { segmentIndex: 0, travelerIndex: 1, number: '13a' }],
-    ['columna antes de la fila', { segmentIndex: 0, travelerIndex: 1, number: 'A13' }],
-    ['vuelo inexistente', { segmentIndex: 2, travelerIndex: 1, number: '13A' }],
+    ['número sin columna', { segmentIndex: 1, travelerIndex: 1, number: '13' }],
+    ['columna en minúscula', { segmentIndex: 1, travelerIndex: 1, number: '13a' }],
+    ['columna antes de la fila', { segmentIndex: 1, travelerIndex: 1, number: 'A13' }],
+    ['vuelo 0 (empieza en 1)', { segmentIndex: 0, travelerIndex: 1, number: '13A' }],
+    ['vuelo inexistente', { segmentIndex: 3, travelerIndex: 1, number: '13A' }],
     ['vuelo negativo', { segmentIndex: -1, travelerIndex: 1, number: '13A' }],
-    ['viajero 0 (es 1-based)', { segmentIndex: 0, travelerIndex: 0, number: '13A' }],
-    ['viajero de más', { segmentIndex: 0, travelerIndex: 3, number: '13A' }],
+    ['viajero 0 (empieza en 1)', { segmentIndex: 1, travelerIndex: 0, number: '13A' }],
+    ['viajero de más', { segmentIndex: 1, travelerIndex: 3, number: '13A' }],
   ])('rechaza con TypeError: %s', (_name, seat) => {
     expect(() => buildBookingFlightDetails({ ...sample(), seats: [seat] })).toThrow(/^sabre-client: /);
+  });
+
+  it('el mensaje dice que los índices empiezan en 1', () => {
+    expect(() => buildBookingFlightDetails({ ...sample(), seats: [{ segmentIndex: 0, travelerIndex: 1, number: '13A' }] })).toThrow(
+      'pide el vuelo 0, y hay 2 (empieza en 1)',
+    );
+    expect(() => buildBookingFlightDetails({ ...sample(), seats: [{ segmentIndex: 1, travelerIndex: 0, number: '13A' }] })).toThrow(
+      'pide el viajero 0, y hay 2 (empieza en 1)',
+    );
   });
 });
 
@@ -172,8 +182,8 @@ describe('sabre.booking.create con asientos', () => {
     const details = buildBookingFlightDetails({
       ...sample(),
       seats: [
-        { segmentIndex: 1, travelerIndex: 1, number: '30A' },
-        { segmentIndex: 1, travelerIndex: 2, number: '30C' },
+        { segmentIndex: 2, travelerIndex: 1, number: '30A' },
+        { segmentIndex: 2, travelerIndex: 2, number: '30C' },
       ],
       seatAvailability: availability,
     });
@@ -185,7 +195,7 @@ describe('sabre.booking.create con asientos', () => {
     expect(seatWarns).toEqual([
       [
         'sabre.booking.seat.priced',
-        { service: 'createBooking', segmentIndex: 1, flight: 'IB6402', seat: '30A', amount: '45.00', currencyCode: 'EUR' },
+        { service: 'createBooking', segmentIndex: 2, flight: 'IB6402', seat: '30A', amount: '45.00', currencyCode: 'EUR' },
       ],
     ]);
     expect(JSON.stringify(log.warn.mock.calls)).not.toContain('REAL');
@@ -205,12 +215,12 @@ describe('sabre.booking.create con asientos', () => {
     const free = buildBookingFlightDetails({
       ...sample(),
       seats: [
-        { segmentIndex: 1, travelerIndex: 1, number: '30B' },
-        { segmentIndex: 1, travelerIndex: 2, number: '30C' },
+        { segmentIndex: 2, travelerIndex: 1, number: '30B' },
+        { segmentIndex: 2, travelerIndex: 2, number: '30C' },
       ],
       seatAvailability: availability,
     });
-    const unknown = buildBookingFlightDetails({ ...sample(), seats: [{ segmentIndex: 1, travelerIndex: 1, number: '30A' }] });
+    const unknown = buildBookingFlightDetails({ ...sample(), seats: [{ segmentIndex: 2, travelerIndex: 1, number: '30A' }] });
 
     await sabre.booking.create(bookingRequest(free));
     await sabre.booking.create(bookingRequest(unknown));
@@ -222,7 +232,7 @@ describe('sabre.booking.create con asientos', () => {
     const log = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const details = buildBookingFlightDetails({
       ...sample(),
-      seats: [{ segmentIndex: 0, travelerIndex: 1, number: '30A' }],
+      seats: [{ segmentIndex: 1, travelerIndex: 1, number: '30A' }],
       seatAvailability: availability,
     });
 
@@ -235,7 +245,7 @@ describe('sabre.booking.create con asientos', () => {
 
   it('travelerIndex fuera de travelers lanza TypeError sin llamar a la red', async () => {
     const fetch = router([]);
-    const details = buildBookingFlightDetails({ ...sample(), seats: [{ segmentIndex: 0, travelerIndex: 2, number: '12F' }] });
+    const details = buildBookingFlightDetails({ ...sample(), seats: [{ segmentIndex: 1, travelerIndex: 2, number: '12F' }] });
     const request = { ...bookingRequest(details), travelers: bookingRequest(details).travelers!.slice(0, 1) };
 
     await expect(new Sabre(config({ fetch })).booking.create(request)).rejects.toThrow(/^sabre-client: /);

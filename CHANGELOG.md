@@ -12,8 +12,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 against `0.2.4` will not work unchanged. Since the package is still `0.x`, the rewrite ships
 as a minor bump. Versions `0.2.4` and earlier stay published as they are.
 
-`0.3.0` will be released once Tier 1 (below) and Tier 2 (Get Seats, Get Ancillaries) of the
-Air Booking flow are done.
+`0.3.0` will be released once Tier 1 and Tier 2 (Get Seats) of the Air Booking flow are done.
+Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 ### Added
 
@@ -35,6 +35,23 @@ Air Booking flow are done.
   returned on the result instead of being thrown. A request with
   `agency.ticketingPolicy: 'FUTURE_TICKETING'` and no `agency.futureTicketingPolicy` throws a
   `TypeError` before calling the network, since Sabre always rejects it.
+- `sabre.air.getSeats`: Get Seats v3, seat map with availability and prices. One function for
+  both endpoints: without `pnrLocator` it calls `byReservationPayload`, with `pnrLocator` it
+  calls `byPnrLocator`. An empty `pnrLocator`, or one mixed with payload fields, throws a
+  `TypeError` before calling the network. Get Seats has no published error catalog: `errors[]`
+  without a seat map throws a non-retryable `SabreBusinessError`; otherwise errors and
+  `warnings[]` are returned on the result. `onRawResponse` gets `air.getSeatsByPayload` or
+  `air.getSeatsByPnrLocator` as `operation`. Prices are typed as `number | string`, because
+  production sends numbers although the spec says strings.
+- `buildSeatAvailabilityRequest` to build the Get Seats request from a revalidated itinerary
+  (segments `S1`, `S2`, …, fare components and passengers). `segments` picks flights by number,
+  starting at 1.
+- Seat selection in `buildBookingFlightDetails`: `seats: [{ segmentIndex, travelerIndex, number }]`
+  goes to `flightDetails.flights[].seats[]` (ATPCO, by seat number; `seatOffers` is NDC only and
+  not supported). Both indexes start at 1. Invalid seat numbers or indexes throw a `TypeError`,
+  and `sabre.booking.create` also checks `travelerIndex` against `travelers`. With
+  `seatAvailability` (the Get Seats result), a chosen seat that has a price makes
+  `sabre.booking.create` log a `sabre.booking.seat.priced` warning and book anyway.
 - `sabre.booking.get`: Get Booking from the Booking Management API v1. The booking fields come
   at the top level of the response, as Sabre defines them. It throws only when there is no
   booking (for example `BOOKING_NOT_FOUND`); otherwise warnings and partial errors are
@@ -59,6 +76,9 @@ Air Booking flow are done.
   never reaches the logger.
 - Injectable `logger` that emits structured events and always redacts secrets, the
   `Authorization` header and passenger data.
+- Gateway errors (`SabreGatewayError`) take their `code`, best effort, from `errorCode`,
+  `error` or `errors[0].code`, and add `errors[0].descriptionText` to the message when Sabre
+  sends it.
 - Web Standard APIs only: runs on Node.js `>=22.12` and on server-side edge runtimes.
   ESM-only build.
 

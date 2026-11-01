@@ -60,3 +60,25 @@ function redactEntries(entries: Iterable<[string, unknown]>, seen: WeakSet<objec
   }
   return out;
 }
+
+/**
+ * Elemento `BinarySecurityToken` con cualquier prefijo (o ninguno), sin contar el
+ * autocerrado. Los atributos admiten valores entre comillas con `>` adentro. El cierre
+ * acepta cualquier prefijo: ante un sobre mal formado, conviene tapar de más.
+ */
+const BINARY_SECURITY_TOKEN =
+  /(<(?:[A-Za-z_][\w.-]*:)?BinarySecurityToken(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*(?<!\/)>)([\s\S]*?)(<\/(?:[A-Za-z_][\w.-]*:)?BinarySecurityToken\s*>)/g;
+
+/**
+ * Reemplaza el valor de cada `BinarySecurityToken` del sobre SOAP por `[REDACTED]`.
+ *
+ * Trabaja sobre el texto, sin parsear ni volver a serializar: el resto del sobre queda byte
+ * a byte (indentación, orden de atributos, prefijos y `eb:MessageHeader`). Un sobre sin
+ * token, o con el token vacío, vuelve idéntico. Ver sabre-wiki/wiki/sdk/respuesta-cruda-soap.md
+ * (opción D).
+ */
+export function redactSoapEnvelope(envelope: string): string {
+  return envelope.replace(BINARY_SECURITY_TOKEN, (match, open: string, value: string, close: string) =>
+    value.trim() === '' ? match : `${open}${REDACTED}${close}`,
+  );
+}

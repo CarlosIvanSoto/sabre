@@ -1,6 +1,7 @@
 export const VERSION = '0.3.0';
 
 export { Sabre } from './sabre.js';
+export { SabreLegacy } from './sabre-legacy.js';
 export type { Air } from './air/air.js';
 export type {
   BargainFinderMaxRequest,

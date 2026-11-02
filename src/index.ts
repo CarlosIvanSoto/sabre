@@ -14,6 +14,14 @@ export type {
   QueueSelection,
   QueueStep,
 } from './queue/queue-access.js';
+export type {
+  QueuePlacement,
+  QueuePlaceOptions,
+  QueuePlaceRequest,
+  QueuePlaceResponse,
+  QueuePlaceResult,
+  QueuePlaceTarget,
+} from './queue/queue-place.js';
 export type { QueueRef } from './queue/queue-ref.js';
 export type { QueueCount, QueueCountOptions, QueueCountRequest, QueueCountResponse } from './queue/queue-count.js';
 export type { Air } from './air/air.js';

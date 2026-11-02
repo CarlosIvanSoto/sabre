@@ -301,7 +301,7 @@ export class QueueManagement {
    * Place Queue Message (`QueuePlaceLLSRQ` 2.0.4): coloca un PNR en 1 a 10 colas.
    *
    * - **Dentro de una cola**, coloca el PNR actual y devuelve un `QueueStep` con el siguiente,
-   *   como `ignore` y `remove`. El localizador sale de la línea de firma del PNR; `placedAt` y
+   *   como `ignore` y `remove`. El PNR se mueve: sale de la cola en curso (producción, #97). El localizador sale de la línea de firma del PNR; `placedAt` y
    *   `placedBy` quedan en `undefined`. Con `locators` lanza `TypeError` sin red: para colocar
    *   otros PNR, primero `exit()`.
    * - **Fuera de una cola**, coloca los `locators` (hasta 6) o el PNR del AAA, no avanza nada y

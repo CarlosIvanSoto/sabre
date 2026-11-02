@@ -6,6 +6,7 @@ import { parseQueueParagraph, SabreBusinessError } from '../src/index.js';
 import countAfterWalk from './fixtures/queue.production-count.json';
 import walk from './fixtures/queue.production-walk.json';
 import emptyQueueWalk from './fixtures/queue.production-walk-empty-queue.json';
+import place from './fixtures/queue.production-place.json';
 import placeWithoutPic from './fixtures/queue.production-place-sin-pic.json';
 import { mockFetch } from './helpers.js';
 import { legacyClient, queueRS, rejection, soap, success, xml } from './soap-helpers.js';
@@ -162,5 +163,66 @@ describe('place sin PIC en producción: INSTRUCTION NUMBER NOT IN RANGE', () => 
       code: 'ERR.SWS.HOST.ERROR_IN_RESPONSE',
       message: 'queuePlace: INSTRUCTION NUMBER NOT IN RANGE (ERR.SWS.HOST.ERROR_IN_RESPONSE)',
     });
+  });
+});
+
+describe('place y remove con colas de prueba en producción (51 y 52, 2 PNR)', () => {
+  /** La corrida de scripts/validate-place.mjs, en el orden de la API pública. */
+  async function replayPlace() {
+    const fetch = mockFetch(...place.responses.map((response) => xml(response.status, response.body)));
+    const session = await legacyClient(fetch).client.openSession();
+    const count = async () => {
+      const queues = (await session.queue.count()).queues;
+      return { 51: queues.find((q) => q.queue === 51)?.count ?? 0, 52: queues.find((q) => q.queue === 52)?.count ?? 0 };
+    };
+    const initial = await count();
+    const placed = await session.queue.place({ to: [{ queue: 51, instructionCode: 11 }], locators: ['AAAAAA', 'AAAAAB'] });
+    const afterPlace = await count();
+    const first = await session.queue.access({ queue: 51 });
+    const next = await session.queue.place({ to: [{ queue: 52, instructionCode: 11 }] });
+    const removed = await session.queue.remove();
+    const afterPlaceInside = await count();
+    const empty51 = await session.queue.access({ queue: 51 });
+    const in52 = await session.queue.access({ queue: 52 });
+    const cleared52 = await session.queue.remove();
+    const final = await count();
+    await session.close();
+    return { initial, placed, afterPlace, first, next, removed, afterPlaceInside, empty51, in52, cleared52, final, session };
+  }
+
+  it('place fuera de una cola coloca los dos PNR, y QueueInfo trae la cola con ceros (0051)', async () => {
+    const { initial, placed, afterPlace } = await replayPlace();
+    expect(initial).toEqual({ 51: 0, 52: 0 });
+    expect(placed.placements.map((p) => [p.queue, p.locator])).toEqual([
+      [51, 'AAAAAA'],
+      [51, 'AAAAAB'],
+    ]);
+    expect(afterPlace).toEqual({ 51: 2, 52: 0 });
+  });
+
+  it('place dentro de la cola devuelve el siguiente PNR y saca el actual de la cola de origen', async () => {
+    const { first, next, removed, afterPlaceInside } = await replayPlace();
+    expect(first).toMatchObject({ done: false, item: { locator: 'AAAAAA' } });
+    expect(next).toMatchObject({ done: false, item: { locator: 'AAAAAB' } });
+    expect(removed).toMatchObject({ done: true, reason: 'end-of-display' });
+    // El primero ya no está en la 51: quedó solo en la 52.
+    expect(afterPlaceInside).toEqual({ 51: 0, 52: 1 });
+  });
+
+  it('el PNR colocado con el PIC 11 muestra el aviso 011  SEE REMARKS', async () => {
+    const { next } = await replayPlace();
+    if (!('done' in next) || next.done) throw new Error('place dentro de la cola no devolvió un PNR');
+    expect(parseQueueParagraph(next.item.paragraph, { referenceDate: '2026-11-01' }).messages).toEqual([
+      { instructionCode: 11, text: 'SEE REMARKS' },
+    ]);
+  });
+
+  it('remove vacía las colas de prueba', async () => {
+    const { empty51, in52, cleared52, final, session } = await replayPlace();
+    expect(empty51).toMatchObject({ done: true, reason: 'empty' });
+    expect(in52).toMatchObject({ done: false, item: { locator: 'AAAAAA' } });
+    expect(cleared52).toMatchObject({ done: true, reason: 'end-of-display' });
+    expect(final).toEqual({ 51: 0, 52: 0 });
+    expect(session.queue.state).toBe('outside');
   });
 });

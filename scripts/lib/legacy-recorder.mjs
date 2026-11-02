@@ -95,7 +95,17 @@ export function createRecorder(secretValues) {
     if (header !== null) return `${header[1]}XXXX${header[2]}${header[3]}`;
     const received = /^(\s*RECEIVED FROM - )(.*)$/.exec(line);
     const masked = (text) => text.replace(/\p{L}/gu, 'X').replace(/\p{N}/gu, '9');
-    const result = received === null ? masked(line) : `${received[1]}${masked(received[2])}`;
+    // La línea de firma (`<PCC>.<PCC>*<agente> HHMM/DDMMMYY <localizador> H`) conserva su forma:
+    // de ella sale el localizador del PNR siguiente en `place` dentro de una cola. Se deja el
+    // localizador solo si ya es un alias; uno desconocido se enmascara como el resto.
+    const signature = /^(.*\s)(\d{4}\/\d{2}[A-Z]{3}\d{2})(\s+)([A-Z0-9]{6})(\s+H\s*)$/.exec(line);
+    const aliases = new Set(locatorAliases.values());
+    const result =
+      received !== null
+        ? `${received[1]}${masked(received[2])}`
+        : signature !== null
+          ? `${masked(signature[1])}${masked(signature[2])}${signature[3]}${aliases.has(signature[4]) ? signature[4] : masked(signature[4])}${signature[5]}`
+          : masked(line);
     if (line.trim().length >= 4 && result.trim() !== line.trim()) maskedLines.add(line.trim());
     return result;
   }

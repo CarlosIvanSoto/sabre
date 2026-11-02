@@ -1,0 +1,324 @@
+{
+  "recordedAt": "2026-11-02",
+  "environment": "sandbox",
+  "outcome": "AA2974 HK",
+  "request": {
+    "confirmationId": "TBIXCU",
+    "targetPcc": "XXXX"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "bookingId": "TBIXCU",
+      "startDate": "2026-12-02",
+      "endDate": "2026-12-02",
+      "isCancelable": false,
+      "isTicketed": false,
+      "agencyCustomerNumber": "XXXX",
+      "creationDetails": {
+        "creationUserSine": "AWS",
+        "creationDate": "2026-11-02",
+        "creationTime": "15:56",
+        "userWorkPcc": "XXXX",
+        "userHomePcc": "XXXX",
+        "primeHostId": "1S",
+        "lastUpdateDate": "2026-11-02",
+        "lastUpdateTime": "15:56",
+        "numberOfUpdates": 2
+      },
+      "contactInfo": {
+        "emails": [
+          "test@example.com"
+        ],
+        "phones": [
+          "5550000000",
+          "5550000000"
+        ]
+      },
+      "travelers": [
+        {
+          "givenName": "TEST",
+          "surname": "PASSENGER",
+          "type": "ADULT",
+          "passengerCode": "ADT",
+          "nameAssociationId": "1",
+          "emails": [
+            "test@example.com"
+          ],
+          "phones": [
+            {
+              "number": "5550000000",
+              "label": "M"
+            }
+          ]
+        }
+      ],
+      "flights": [
+        {
+          "itemId": "11",
+          "confirmationId": "TTCVRR",
+          "sourceType": "ATPCO",
+          "flightNumber": 2974,
+          "airlineCode": "AA",
+          "airlineName": "AMERICAN AIRLINES",
+          "operatingFlightNumber": 2974,
+          "operatingAirlineCode": "AA",
+          "operatingAirlineName": "AMERICAN AIRLINES",
+          "fromAirportCode": "DFW",
+          "toAirportCode": "LAX",
+          "departureDate": "2026-12-02",
+          "departureTime": "13:05:00",
+          "arrivalDate": "2026-12-02",
+          "arrivalTime": "14:27:00",
+          "numberOfSeats": 1,
+          "cabinTypeName": "ECONOMY",
+          "cabinTypeCode": "Y",
+          "aircraftTypeCode": "32Q",
+          "aircraftTypeName": "AIRBUS A321NEO",
+          "bookingClass": "O",
+          "meals": [
+            {
+              "code": "F",
+              "description": "Food for purchase"
+            }
+          ],
+          "flightStatusCode": "HK",
+          "flightStatusName": "Confirmed",
+          "durationInMinutes": 202,
+          "distanceInMiles": 1235,
+          "travelerIndices": [
+            1
+          ],
+          "creationDate": "2026-11-02",
+          "creationTime": "15:56"
+        }
+      ],
+      "journeys": [
+        {
+          "firstAirportCode": "DFW",
+          "departureDate": "2026-12-02",
+          "departureTime": "13:05",
+          "lastAirportCode": "LAX",
+          "numberOfFlights": 1
+        }
+      ],
+      "fareRules": [
+        {
+          "originAirportCode": "DFW",
+          "destinationAirportCode": "LAX",
+          "owningAirlineCode": "AA",
+          "passengerCode": "ADT",
+          "isRefundable": false,
+          "isChangeable": true,
+          "exchangePenalties": [
+            {
+              "applicability": "BEFORE_DEPARTURE",
+              "conditionsApply": true,
+              "penalty": {
+                "amount": "0.0",
+                "currencyCode": "MXN"
+              },
+              "hasNoShowCost": true,
+              "noShowPenalty": {
+                "amount": "0.00",
+                "currencyCode": "MXN"
+              }
+            }
+          ]
+        }
+      ],
+      "fareOffers": [
+        {
+          "travelerIndices": [
+            1
+          ],
+          "flights": [
+            {
+              "itemId": "11"
+            }
+          ],
+          "cabinBaggageAllowance": {
+            "maximumPieces": 2,
+            "baggagePieces": [
+              {
+                "maximumSizeInInches": 45,
+                "maximumSizeInCentimeters": 115,
+                "numberOfPieces": 1
+              },
+              {
+                "maximumSizeInInches": 40,
+                "maximumSizeInCentimeters": 101,
+                "numberOfPieces": 1
+              }
+            ]
+          },
+          "checkedBaggageAllowance": {
+            "maximumPieces": 0,
+            "baggagePieces": [
+              {
+                "maximumSizeInInches": 62,
+                "maximumSizeInCentimeters": 158,
+                "maximumWeightInPounds": 50,
+                "maximumWeightInKilograms": 23,
+                "numberOfPieces": 0
+              },
+              {
+                "numberOfPieces": 1,
+                "specialItemDescription": "ASSISTIVE DEVICES"
+              },
+              {
+                "numberOfPieces": 1,
+                "specialItemDescription": "INFANT CAR SEAT"
+              },
+              {
+                "numberOfPieces": 1,
+                "specialItemDescription": "STROLLER OR PUSHCHAIR"
+              }
+            ]
+          },
+          "checkedBaggageCharges": [
+            {
+              "maximumSizeInInches": 62,
+              "maximumSizeInCentimeters": 158,
+              "maximumWeightInPounds": 50,
+              "maximumWeightInKilograms": 23,
+              "numberOfPieces": 1,
+              "isCheckInOnly": true,
+              "fee": {
+                "amount": "50.00",
+                "currencyCode": "USD"
+              }
+            },
+            {
+              "maximumSizeInInches": 62,
+              "maximumSizeInCentimeters": 158,
+              "maximumWeightInPounds": 50,
+              "maximumWeightInKilograms": 23,
+              "numberOfPieces": 1,
+              "isCheckInOnly": true,
+              "fee": {
+                "amount": "60.00",
+                "currencyCode": "USD"
+              }
+            }
+          ]
+        }
+      ],
+      "fares": [
+        {
+          "creationDetails": {
+            "creationUserSine": "AWS",
+            "creationDate": "2026-11-02",
+            "creationTime": "15:56",
+            "purchaseDeadlineDate": "2026-11-02",
+            "purchaseDeadlineTime": "23:59",
+            "userWorkPcc": "XXXX",
+            "userHomePcc": "XXXX"
+          },
+          "airlineCode": "AA",
+          "fareCalculationLine": "DFW AA LAX146.98USD146.98END ZPDFW XFDFW4.5",
+          "isNegotiatedFare": false,
+          "fareConstruction": [
+            {
+              "fareBasisCode": "OWAHUTM3",
+              "baseRate": {
+                "amount": "146.98",
+                "currencyCode": "USD"
+              },
+              "brandFareCode": "MAIN",
+              "brandFareName": "MAIN CABIN",
+              "brandProgramCode": "AADOM",
+              "brandProgramName": "AABFDOM1S",
+              "isCurrentItinerary": true
+            }
+          ],
+          "taxBreakdown": [
+            {
+              "taxCode": "US",
+              "taxAmount": {
+                "amount": "207.45",
+                "currencyCode": "MXN"
+              }
+            },
+            {
+              "taxCode": "ZP",
+              "taxAmount": {
+                "amount": "99.72",
+                "currencyCode": "MXN"
+              }
+            },
+            {
+              "taxCode": "AY",
+              "taxAmount": {
+                "amount": "105.37",
+                "currencyCode": "MXN"
+              }
+            },
+            {
+              "taxCode": "XF",
+              "taxAmount": {
+                "amount": "84.67",
+                "currencyCode": "MXN"
+              }
+            }
+          ],
+          "totals": {
+            "subtotal": "2766.00",
+            "taxes": "497.21",
+            "total": "3263.21",
+            "currencyCode": "MXN"
+          },
+          "originalTotalValues": {
+            "total": "146.98",
+            "currencyCode": "USD"
+          },
+          "pricingTypeCode": "S",
+          "pricingTypeName": "System",
+          "pricingStatusCode": "A",
+          "pricingStatusName": "Active",
+          "requestedTravelerType": "ADT",
+          "pricedTravelerType": "ADT",
+          "recordTypeCode": "PQ",
+          "recordTypeName": "Price Quote",
+          "recordId": "1"
+        }
+      ],
+      "allSegments": [
+        {
+          "id": "11",
+          "type": "FLIGHT",
+          "text": "2974",
+          "vendorCode": "AA",
+          "startDate": "2026-12-02",
+          "startTime": "13:05:00",
+          "startLocationCode": "DFW",
+          "endDate": "2026-12-02",
+          "endTime": "14:27:00",
+          "endLocationCode": "LAX"
+        }
+      ],
+      "payments": {
+        "flightTotals": [
+          {
+            "subtotal": "2766.00",
+            "taxes": "497.21",
+            "total": "3263.21",
+            "currencyCode": "MXN"
+          }
+        ]
+      },
+      "futureTicketingPolicy": {
+        "ticketingPcc": "XXXX",
+        "queueNumber": "9",
+        "ticketingDate": "2026-11-03"
+      },
+      "timestamp": "2026-11-02T21:56:06",
+      "bookingSignature": "XXXX",
+      "request": {
+        "confirmationId": "TBIXCU",
+        "targetPcc": "XXXX"
+      },
+      "minimumConnectingTimeStatus": "Not Required"
+    }
+  }
+}

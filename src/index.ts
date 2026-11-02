@@ -3,7 +3,13 @@ export const VERSION = '0.3.0';
 export { Sabre } from './sabre.js';
 export { SabreLegacy } from './sabre-legacy.js';
 export type { OpenSessionOptions, SabreSession } from './session/session.js';
-export type { QueueManagement, QueueState } from './queue/queue-management.js';
+export type {
+  QueueManagement,
+  QueueProcessAction,
+  QueueProcessRequest,
+  QueueProcessResult,
+  QueueState,
+} from './queue/queue-management.js';
 export type {
   QueueAccessOptions,
   QueueAccessRequest,

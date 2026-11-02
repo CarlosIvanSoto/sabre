@@ -19,6 +19,7 @@ import {
   type QueueNavigationOptions,
   queueNavigationPayload,
   type QueueRemoveRequest,
+  type QueueItem,
   type QueueSelection,
   type QueueStep,
   parseQueueStep,
@@ -41,6 +42,7 @@ import {
 } from './queue-list.js';
 import {
   isInstructionCode,
+  type QueuePlaceTarget,
   MAX_PLACE_LOCATORS,
   MAX_PLACE_TO,
   parsePlaceResult,
@@ -62,6 +64,24 @@ import { type QueueRef, validateQueueRef } from './queue-ref.js';
  * de Sabre, y no se sabe si Sabre dejó la sesión adentro). De `'unknown'` se sale con `exit()`.
  */
 export type QueueState = 'outside' | 'inside' | 'unknown';
+
+/** Qué hacer con un PNR en `queue.process`. */
+export type QueueProcessAction =
+  | { action: 'remove' }
+  | { action: 'ignore' }
+  | { action: 'place'; to: readonly QueuePlaceTarget[] };
+
+export interface QueueProcessRequest extends QueueAccessRequest {
+  /** Cuántos PNR visitar como máximo. Al llegar, sale con `QXI`. Sin tope por defecto. */
+  limit?: number;
+}
+
+export interface QueueProcessResult {
+  /** Cuántos PNR se pasaron al callback. */
+  visited: number;
+  /** Por qué terminó: el fin de cola o `limit`. */
+  ended: 'end-of-display' | 'limit';
+}
 
 /** @internal Lo que la sesión le presta al módulo de colas. */
 export interface QueueContext {
@@ -202,6 +222,76 @@ export class QueueManagement {
       throw error;
     }
     this.#state = 'outside';
+  }
+
+  /**
+   * Recorre una cola: entra con `access`, llama a `callback` con cada PNR, ejecuta la acción que
+   * devuelve (`remove`, `ignore` o `place`) y termina en el fin de cola. No hace nada que no se
+   * pueda hacer con las primitivas.
+   *
+   * - Con `limit`, después de visitar esa cantidad de PNR sale con `QXI`. No tiene tope por
+   *   defecto: con una cola anómala que nunca llega al fin, el recorrido no termina. Conviene
+   *   pasarlo.
+   * - Si el callback lanza, o devuelve una acción inválida, sale con `QXI` y propaga el error. No
+   *   lo convierte en `ignore`: para seguir de largo, el callback atrapa su error y devuelve
+   *   `{ action: 'ignore' }`.
+   * - Si una operación falla, sale con `QXI` (tolerando que la sesión ya no esté en la cola) y
+   *   propaga el error. Con un `SabreSessionError` no intenta salir: la sesión ya no sirve.
+   *
+   * `options` se aplica a cada llamada a Sabre del recorrido.
+   */
+  async process(
+    request: QueueProcessRequest,
+    callback: (item: QueueItem) => QueueProcessAction | Promise<QueueProcessAction>,
+    options: QueueNavigationOptions = {},
+  ): Promise<QueueProcessResult> {
+    if (typeof request !== 'object' || request === null) fail('queue.process recibe { queue, pcc?, selection?, limit? }');
+    if (typeof callback !== 'function') fail('queue.process necesita un callback');
+    const { limit, ...access } = request;
+    if (limit !== undefined && !(Number.isInteger(limit) && limit >= 1)) fail('limit debe ser un entero mayor o igual a 1');
+
+    // Si la sesión ya estaba en una cola, `access` lanza sin red: esa cola es del consumidor.
+    const startedOutside = this.#state === 'outside';
+    let visited = 0;
+    try {
+      let step = await this.access(access, options);
+      while (!step.done) {
+        if (limit !== undefined && visited >= limit) {
+          await this.exit(options);
+          return { visited, ended: 'limit' };
+        }
+        const action = await callback(step.item);
+        visited++;
+        step = await this.#processAction(action, options);
+      }
+      return { visited, ended: 'end-of-display' };
+    } catch (error) {
+      if (startedOutside) await this.#exitQuietly(error, options);
+      throw error;
+    }
+  }
+
+  async #processAction(action: unknown, options: QueueNavigationOptions): Promise<QueueStep> {
+    const kind = typeof action === 'object' && action !== null ? (action as { action?: unknown }).action : undefined;
+    if (kind === 'ignore') return this.ignore(options);
+    if (kind === 'remove') return this.remove({}, options);
+    if (kind === 'place') {
+      const step = await this.place({ to: (action as { to?: QueuePlaceTarget[] }).to as QueuePlaceTarget[] }, options);
+      // Dentro de una cola, `place` siempre devuelve un `QueueStep`.
+      if (!('done' in step)) throw new TypeError('sabre-client: queue.place no devolvió un paso de la cola');
+      return step;
+    }
+    throw new TypeError("sabre-client: el callback de queue.process debe devolver { action: 'remove' }, { action: 'ignore' } o { action: 'place', to }");
+  }
+
+  /** Sale de la cola después de un error del recorrido, sin pisar ese error. */
+  async #exitQuietly(cause: unknown, options: QueueNavigationOptions): Promise<void> {
+    if (this.#state === 'outside' || cause instanceof SabreSessionError) return;
+    try {
+      await this.exit(options);
+    } catch (error) {
+      this.#context.log.emit('warn', 'sabre.queue.exitFailed', { error });
+    }
   }
 
   /**

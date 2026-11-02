@@ -5,6 +5,7 @@ import { mockFetch } from './helpers.js';
 import {
   entry,
   fault,
+  hostError,
   legacyClient,
   queueRS,
   rejection,
@@ -404,14 +405,23 @@ describe('estado unknown', () => {
     expect(session.queue.state).toBe('outside');
   });
 
-  it('con unknown, exit tolera el error de negocio de "no estás en una cola" y lo registra', async () => {
-    const notOnQueue = queueRS(entry('Error', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', 'NOT ON QUEUE'));
+  it('con unknown, exit tolera CANNOT DO THIS IF OFF QUEUE y lo registra', async () => {
+    const notOnQueue = queueRS(hostError('CANNOT DO THIS IF OFF QUEUE'));
     const { session, calls } = await unknown(ok(notOnQueue));
     await expect(session.queue.exit()).resolves.toBeUndefined();
     expect(session.queue.state).toBe('outside');
     const event = calls.find(([, message]) => message === 'sabre.queue.exitTolerated');
     expect(event?.[0]).toBe('info');
     expect(event?.[2]).toMatchObject({ code: 'ERR.SWS.HOST.ERROR_IN_RESPONSE' });
+  });
+
+  it('con unknown, otro error de negocio en exit lanza y sigue en unknown', async () => {
+    const { session, calls } = await unknown(ok(queueRS(hostError('RESTRICTED PNR'))));
+    const error = await rejection(session.queue.exit());
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect((error as Error).message).toBe('queueAccess: RESTRICTED PNR (ERR.SWS.HOST.ERROR_IN_RESPONSE)');
+    expect(session.queue.state).toBe('unknown');
+    expect(calls.some(([, message]) => message === 'sabre.queue.exitTolerated')).toBe(false);
   });
 
   it('con unknown, un fallo de red en exit lanza y sigue en unknown', async () => {

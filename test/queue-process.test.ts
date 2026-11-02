@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SabreBusinessError, SabreGatewayError, type SabreSession, SabreSessionError } from '../src/index.js';
 import type { QueueProcessAction } from '../src/queue/queue-management.js';
 import { mockFetch } from './helpers.js';
-import { entry, fault, legacyClient, queueRS, rejection, sentBody, sentTag, sessionOpened, soap, success, xml } from './soap-helpers.js';
+import { entry, fault, hostError, legacyClient, queueRS, rejection, sentBody, sentTag, sessionOpened, soap, success, xml } from './soap-helpers.js';
 
 const END = 'END OF DISPLAY FOR REQUESTED DATA';
 
@@ -119,9 +119,9 @@ describe('queue.process', () => {
     expect(session.queue.state).toBe('unknown');
   });
 
-  it('un error de Sabre deja unknown; sale con QXI tolerando "no estás en una cola" y propaga el error', async () => {
+  it('un error de Sabre deja unknown; sale con QXI tolerando CANNOT DO THIS IF OFF QUEUE y propaga el error', async () => {
     const restricted = queueRS(entry('Error', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', 'RESTRICTED PNR'));
-    const notOnQueue = queueRS(entry('Error', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', 'NOT ON QUEUE'));
+    const notOnQueue = queueRS(hostError('CANNOT DO THIS IF OFF QUEUE'));
     const { fetch, session } = await openWith(ok(item('AAA111')), ok(restricted), ok(notOnQueue));
     const error = await rejection(session.queue.process({ queue: 12 }, () => ({ action: 'remove' })));
     expect(error).toBeInstanceOf(SabreBusinessError);

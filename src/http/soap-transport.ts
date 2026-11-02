@@ -461,8 +461,9 @@ function faultError(service: string, status: number, fault: XmlNode, text: strin
 }
 
 /**
- * Un `stl:Error` o `stl:Warning`: `code` es el primer `Message@code` (o el `type` si no
- * viene), y la descripción junta los textos de `Message` con el `ShortText`.
+ * Un `stl:Error` o `stl:Warning`: `code` es el primer `Message@code`, o el primer `ShortText` si
+ * no viene (las respuestas reales traen el `ERR.SWS.*` ahí, #96), o el `type`. La descripción junta
+ * los textos de `Message` con el `ShortText`.
  */
 function resultEntry(node: unknown): { code: string; description: string } {
   const entry = asNode(node) ?? {};
@@ -486,7 +487,7 @@ function resultEntry(node: unknown): { code: string; description: string } {
     messages.join(' / ') || type || 'sin detalle',
     ...shortTexts.filter((short) => !messages.includes(short)).map((short) => `(${short})`),
   ].join(' ');
-  return { code: code ?? type ?? 'UNKNOWN', description };
+  return { code: code ?? shortTexts[0] ?? type ?? 'UNKNOWN', description };
 }
 
 /**

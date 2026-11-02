@@ -13,6 +13,7 @@ export type {
 export type {
   QueueAccessOptions,
   QueueAccessRequest,
+  QueueEndReason,
   QueueItem,
   QueueNavigationOptions,
   QueueRemoveRequest,

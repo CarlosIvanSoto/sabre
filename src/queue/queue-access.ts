@@ -66,7 +66,9 @@ export interface QueueItem {
   locator: string;
   /**
    * `Line/DateTime`, tal cual llegó: con año en las respuestas reales (`"2024-05-15T13:24"`), sin
-   * año en el design (`"12-21T07:00"`). Es la colocación en la cola.
+   * año en el design (`"12-21T07:00"`). Se toma como la colocación en la cola, pero en producción
+   * el de `list` y el de `access` no coinciden para un mismo PNR (#96): el de `list` es siempre
+   * posterior, y ninguna fuente dice qué fecha es cada uno. Se devuelve tal cual.
    */
   placedAt?: string;
   /** `Line/POS/Source`: quién colocó el PNR. `agentSine` puede ser `SABRE`. */

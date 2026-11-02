@@ -152,7 +152,7 @@ describe('recorrido de solo lectura en producción (cola 2, 4 PNR)', () => {
 describe('place sin PIC en producción: INSTRUCTION NUMBER NOT IN RANGE', () => {
   it('Sabre lo rechaza como SabreBusinessError, y el SDK ya no lo deja salir sin instructionCode', async () => {
     const { fetch, session } = await open(one(placeWithoutPic as Fixture, 'queue.place'));
-    expect(await rejection(session.queue.place({ to: [{ queue: 51 }], locators: ['AAAAAA'] }))).toBeInstanceOf(TypeError);
+    expect(await rejection(session.queue.place({ to: [{ queue: 51 }], locators: ['AAAAAA'] } as never))).toBeInstanceOf(TypeError);
     expect(fetch).toHaveBeenCalledTimes(1);
 
     // La respuesta grabada, servida a un place con PIC, es el rechazo tal cual.

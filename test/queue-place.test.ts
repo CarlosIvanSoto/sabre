@@ -79,10 +79,13 @@ describe('queue.place: request', () => {
     );
   });
 
-  it('sin instructionCode no manda PrefatoryInstructionCode', async () => {
-    const { fetch, session } = await inside(ok(REAL_INSIDE()));
-    await session.queue.place({ to: [{ queue: 100 }] });
-    expect(body(fetch, 2)).toContain('<QueueIdentifier Number="100" PseudoCityCode="H8GI"/>');
+  it('dentro de una cola, sin instructionCode lanza TypeError sin red', async () => {
+    const { fetch, session } = await inside();
+    expect(await rejection(session.queue.place({ to: [{ queue: 100 }] } as never))).toEqual(
+      new TypeError('sabre-client: queue.place necesita instructionCode en cada destino: Sabre lo exige, dentro y fuera de una cola'),
+    );
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(session.queue.state).toBe('inside');
   });
 
   it('con locators, fuera de una cola, manda los UniqueID después de las colas', async () => {
@@ -102,10 +105,8 @@ describe('queue.place: request', () => {
     ['si falta en uno de los destinos', { to: [{ queue: 400, instructionCode: 11 }, { queue: 401 }], locators: ['ABC123'] }],
   ])('fuera de una cola, sin instructionCode lanza TypeError sin red (%s)', async (_name, request) => {
     const { fetch, session } = await openWith();
-    expect(await rejection(session.queue.place(request))).toEqual(
-      new TypeError(
-        'sabre-client: queue.place fuera de una cola necesita instructionCode en cada destino: Sabre lo exige en un place manual (INSTRUCTION NUMBER NOT IN RANGE)',
-      ),
+    expect(await rejection(session.queue.place(request as never))).toEqual(
+      new TypeError('sabre-client: queue.place necesita instructionCode en cada destino: Sabre lo exige, dentro y fuera de una cola'),
     );
     expect(fetch).toHaveBeenCalledTimes(1);
   });
@@ -118,7 +119,7 @@ describe('queue.place: request', () => {
     ['sin to', {}, 'sabre-client: to debe ser una lista de 1 a 10 colas'],
     ['to vacío', { to: [] }, 'sabre-client: to debe ser una lista de 1 a 10 colas'],
     ['11 destinos', { to: Array.from({ length: 11 }, () => ({ queue: 1 })) }, 'sabre-client: to debe ser una lista de 1 a 10 colas'],
-    ['un destino que no es objeto', { to: [5] }, 'sabre-client: to[0] debe ser { queue, pcc?, instructionCode? }'],
+    ['un destino que no es objeto', { to: [5] }, 'sabre-client: to[0] debe ser { queue, pcc?, instructionCode }'],
     ['una cola inválida', { to: [{ queue: 600 }] }, 'sabre-client: to[0].queue debe ser un número de cola entero de 0 a 511, o { name }'],
     ['un pcc inválido', { to: [{ queue: 1, pcc: 'A' }] }, 'sabre-client: to[0].pcc debe tener 3 o 4 caracteres alfanuméricos'],
     ['un PIC de 192', { to: [{ queue: 1, instructionCode: 192 }] }, 'sabre-client: to[0].instructionCode debe ser un entero de 0 a 191 o de 200 a 254'],
@@ -147,7 +148,7 @@ describe('queue.place: request', () => {
 
   it('con locators dentro de una cola lanza TypeError sin red', async () => {
     const { fetch, session } = await inside();
-    expect(await rejection(session.queue.place({ to: [{ queue: 1 }], locators: ['ABC123'] }))).toEqual(
+    expect(await rejection(session.queue.place({ to: [{ queue: 1, instructionCode: 11 }], locators: ['ABC123'] }))).toEqual(
       new TypeError('sabre-client: queue.place con locators no se puede dentro de una cola, donde coloca el PNR actual: sal con queue.exit() antes'),
     );
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -211,18 +212,18 @@ describe('queue.place dentro de una cola', () => {
 
   it('el fin de cola como stl:Error también es { done: true }', async () => {
     const { session } = await inside(ok(placeRS(entry('Error', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', END))));
-    expect(await session.queue.place({ to: [{ queue: 100 }] })).toMatchObject({ done: true });
+    expect(await session.queue.place({ to: [{ queue: 100, instructionCode: 11 }] })).toMatchObject({ done: true });
     expect(session.queue.state).toBe('outside');
   });
 
   it('el fin de cola como primera línea de Text también es { done: true }', async () => {
     const { session } = await inside(ok(placeRS(success, `<Text>${END}</Text>`)));
-    expect(await session.queue.place({ to: [{ queue: 100 }] })).toMatchObject({ done: true });
+    expect(await session.queue.place({ to: [{ queue: 100, instructionCode: 11 }] })).toMatchObject({ done: true });
   });
 
   it('un Text sin línea de firma es un SabreGatewayError y deja unknown', async () => {
     const { session } = await inside(ok(DOC_SAMPLE));
-    const error = await rejection(session.queue.place({ to: [{ queue: 100 }] }));
+    const error = await rejection(session.queue.place({ to: [{ queue: 100, instructionCode: 11 }] }));
     expect(error).toBeInstanceOf(SabreGatewayError);
     expect((error as Error).message).toMatch(/^queuePlace: respuesta no reconocida/);
     expect(session.queue.state).toBe('unknown');
@@ -231,7 +232,7 @@ describe('queue.place dentro de una cola', () => {
   it('NEED RECEIVED FROM FIELD es un SabreBusinessError de queuePlace y deja unknown', async () => {
     const payload = placeRS(entry('Error', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', 'NEED RECEIVED FROM FIELD - USE 6'));
     const { session } = await inside(ok(payload));
-    const error = await rejection(session.queue.place({ to: [{ queue: 100 }] }));
+    const error = await rejection(session.queue.place({ to: [{ queue: 100, instructionCode: 11 }] }));
     expect(error).toBeInstanceOf(SabreBusinessError);
     expect(error).toMatchObject({ service: 'queuePlace', message: 'queuePlace: NEED RECEIVED FROM FIELD - USE 6' });
     expect(session.queue.state).toBe('unknown');
@@ -295,24 +296,24 @@ describe('queue.place con unknown', () => {
 
   it('con locators lanza TypeError sin red', async () => {
     const { session } = await unknown();
-    expect(await rejection(session.queue.place({ to: [{ queue: 1 }], locators: ['ABC123'] }))).toBeInstanceOf(TypeError);
+    expect(await rejection(session.queue.place({ to: [{ queue: 1, instructionCode: 11 }], locators: ['ABC123'] }))).toBeInstanceOf(TypeError);
   });
 
   it('si llega un PNR con firma, devuelve el paso y deja inside', async () => {
     const { session } = await unknown(ok(REAL_INSIDE('NEXT01')));
-    expect(await session.queue.place({ to: [{ queue: 1 }] })).toMatchObject({ done: false, item: { locator: 'NEXT01' } });
+    expect(await session.queue.place({ to: [{ queue: 1, instructionCode: 11 }] })).toMatchObject({ done: false, item: { locator: 'NEXT01' } });
     expect(session.queue.state).toBe('inside');
   });
 
   it('si llega el fin de cola, deja outside', async () => {
     const { session } = await unknown(ok(END_IN_WARNING));
-    expect(await session.queue.place({ to: [{ queue: 1 }] })).toMatchObject({ done: true });
+    expect(await session.queue.place({ to: [{ queue: 1, instructionCode: 11 }] })).toMatchObject({ done: true });
     expect(session.queue.state).toBe('outside');
   });
 
   it('si llega otra cosa, devuelve un QueuePlaceResult y sigue en unknown', async () => {
     const { session } = await unknown(ok(DOC_SAMPLE));
-    expect(await session.queue.place({ to: [{ queue: 1 }] })).toMatchObject({ text: ['OK 1030 NMIUTF'] });
+    expect(await session.queue.place({ to: [{ queue: 1, instructionCode: 11 }] })).toMatchObject({ text: ['OK 1030 NMIUTF'] });
     expect(session.queue.state).toBe('unknown');
   });
 });

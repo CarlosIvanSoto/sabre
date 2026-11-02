@@ -307,7 +307,8 @@ export class QueueManagement {
    * - **Fuera de una cola**, coloca los `locators` (hasta 6) o el PNR del AAA, no avanza nada y
    *   devuelve `{ placements, text, warnings }`.
    *
-   * `instructionCode` tiene que ser 0–191 o 200–254, y no tiene valor por defecto. Nunca se
+   * Cada destino necesita `instructionCode` (0–191 o 200–254), sin valor por defecto: sin él
+   * lanza `TypeError` sin red, porque Sabre lo exige dentro y fuera de una cola. Nunca se
    * reintenta ante un fallo de red. Errores como `BAD PNR LOCATOR` o `NEED RECEIVED FROM FIELD`
    * salen como `SabreBusinessError` (`service: 'queuePlace'`).
    */
@@ -323,10 +324,8 @@ export class QueueManagement {
     if (locators.length > 0 && this.#state === 'unknown') {
       fail('no se sabe si la sesión sigue dentro de una cola: llama a queue.exit() antes de colocar por localizador');
     }
-    if (this.#state === 'outside' && to.some((target) => target.instructionCode === undefined)) {
-      fail(
-        'queue.place fuera de una cola necesita instructionCode en cada destino: Sabre lo exige en un place manual (INSTRUCTION NUMBER NOT IN RANGE)',
-      );
+    if (to.some((target) => target.instructionCode === undefined)) {
+      fail('queue.place necesita instructionCode en cada destino: Sabre lo exige, dentro y fuera de una cola');
     }
     const send = queuePlaceRequest(queuePlacePayload(to, locators), options);
     // Fuera de una cola, colocar no toca el cursor: el estado no cambia, ni con un error.
@@ -377,7 +376,7 @@ export class QueueManagement {
       fail(`to debe ser una lista de 1 a ${MAX_PLACE_TO} colas`);
     }
     return to.map((target: unknown, index) => {
-      if (typeof target !== 'object' || target === null) fail(`to[${index}] debe ser { queue, pcc?, instructionCode? }`);
+      if (typeof target !== 'object' || target === null) fail(`to[${index}] debe ser { queue, pcc?, instructionCode }`);
       const { queue, pcc, instructionCode } = target as { queue?: unknown; pcc?: unknown; instructionCode?: unknown };
       validateQueueRef(queue, `to[${index}].queue`);
       if (instructionCode !== undefined && !isInstructionCode(instructionCode)) {

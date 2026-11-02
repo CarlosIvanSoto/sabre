@@ -157,3 +157,26 @@ SABRE_ENVIRONMENT=production SABRE_TOKEN_STORE=file SABRE_CREATE_BOOKING=1 \
 En sandbox basta `SABRE_CREATE_BOOKING=1`, no hay lock y, sin las variables `SABRE_TRAVELER_*`,
 usa el pasajero sintético. Acepta las mismas variables de búsqueda, auth y depuración que
 `run-air-booking-flow.mjs`.
+
+## Revisión de una cola (Tier 3)
+
+`queue-review.mjs` recorre una cola con `session.queue.process` y decide qué hacer con cada PNR
+según su párrafo (`parseQueueParagraph`): los emitidos salen de la cola, los que tienen un
+segmento cancelado por la aerolínea van a una cola de revisión y el resto se queda. Las reglas son
+de ejemplo.
+
+No tiene un script para correrlo contra Sabre: muestra cómo un consumidor prueba su lógica de
+colas sin red. `test/examples-queue-review.test.ts` lo corre contra el fake de
+`sabre-client/testing`:
+
+```js
+import { SabreLegacy } from 'sabre-client';
+import { createQueueFake } from 'sabre-client/testing';
+
+const fake = createQueueFake({ queues: { '12': [paragraph1, paragraph2] } });
+const legacy = new SabreLegacy({ ...config, fetch: fake.fetch });
+
+await reviewQueue(legacy, { queue: 12, reviewQueue: 50, instructionCode: 11 });
+fake.locators(12); // lo que quedó en la cola
+fake.openSessions; // 0 si se cerró la sesión
+```

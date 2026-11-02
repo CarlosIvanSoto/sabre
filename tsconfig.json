@@ -16,7 +16,7 @@
     "resolveJsonModule": true,
     // Los ejemplos importan el paquete por su nombre; en tests y typecheck apunta a src/.
     "allowJs": true,
-    "paths": { "sabre-client": ["./src/index.ts"] },
+    "paths": { "sabre-client": ["./src/index.ts"], "sabre-client/testing": ["./src/testing/index.ts"] },
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "noEmit": true

@@ -2,9 +2,10 @@
 // mockeado. Ver scripts/validate-session.mjs. Las fixtures vienen redactadas: el PCC y el usuario
 // como `XXXX`, y el `BinarySecurityToken` como `[REDACTED]`.
 import { describe, expect, it, vi } from 'vitest';
-import { SabreLegacy, type SabreRawResponse } from '../src/index.js';
+import { SabreLegacy, type SabreRawResponse, SabreSessionError } from '../src/index.js';
 import expire16 from './fixtures/session.production-expire-16min.json';
 import expire16b from './fixtures/session.production-expire-16min-2.json';
+import expire31 from './fixtures/session.production-expire-31min.json';
 import v2 from './fixtures/session.production-v2.json';
 import v3 from './fixtures/session.production-v3.json';
 import { mockFetch } from './helpers.js';
@@ -77,5 +78,31 @@ describe('sesión inactiva más de 15 minutos', () => {
 
     const { raws } = await openPingClose(fixture as Fixture, 'v3');
     expect(raws.find((raw) => raw.operation === 'ping')!.body).toContain('<Success/>');
+  });
+});
+
+describe('sesión vencida (31 minutos sin actividad)', () => {
+  it('el ping lanza SabreSessionError expired con el USG_* del detail', async () => {
+    const { client, fetch } = replay(expire31 as Fixture, 'v3');
+    const session = await client.openSession();
+    const error = await session.ping().then(
+      () => undefined,
+      (reason: unknown) => reason,
+    );
+
+    expect(error).toBeInstanceOf(SabreSessionError);
+    expect(error).toMatchObject({
+      kind: 'expired',
+      code: 'USG_INVALID_SECURITY_TOKEN',
+      status: 500,
+      retryable: false,
+      message: 'ping: SOAP fault soap-env:Client.InvalidSecurityToken: Invalid or Expired binary security token: [REDACTED]',
+    });
+    // El USG_* llega solo en el detail, dentro de un StackTrace.
+    expect((error as SabreSessionError).raw).toContain('errors.session.USG_INVALID_SECURITY_TOKEN</StackTrace>');
+
+    // La sesión queda inutilizable: close() resuelve sin volver a la red.
+    await session.close();
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

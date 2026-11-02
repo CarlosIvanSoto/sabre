@@ -32,8 +32,10 @@ function fail(message: string): never {
 }
 
 /**
- * `USG_*` que dejan la sesión inutilizable (punto 4). Ninguna fuente documenta el código de una
- * sesión vencida: `'expired'` se mapea tentativamente y se confirma en #95.
+ * `USG_*` que dejan la sesión inutilizable (punto 4). Una sesión vencida en producción devuelve
+ * `USG_INVALID_SECURITY_TOKEN` (#95, 2026-11-02): HTTP 500, `faultcode`
+ * `soap-env:Client.InvalidSecurityToken`, y el código solo en el `detail`. `USG_AUTHENTICATION_FAILED`
+ * sigue como `'expired'` de forma tentativa: no se observó con una sesión abierta.
  */
 const SESSION_ERROR_KINDS: ReadonlyMap<string, SabreSessionErrorKind> = new Map([
   ['USG_RESOURCE_UNAVAILABLE', 'limit'],

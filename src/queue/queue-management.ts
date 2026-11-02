@@ -31,6 +31,15 @@ import {
   queueCountRequest,
 } from './queue-count.js';
 import {
+  emptyList,
+  parseQueueList,
+  type QueueListOptions,
+  type QueueListRequest,
+  type QueueListResponse,
+  queueListPayload,
+  queueListRequest,
+} from './queue-list.js';
+import {
   isInstructionCode,
   MAX_PLACE_LOCATORS,
   MAX_PLACE_TO,
@@ -106,6 +115,30 @@ export class QueueManagement {
     const pcc = this.#pcc(request.pcc, 'pcc');
     const response = await this.#context.send(queueCountRequest(pcc, options));
     return parseQueueCountResponse(response);
+  }
+
+  /**
+   * La lista de localizadores de una cola (`QueueAccessLLSRQ` con `List`), sin recorrerla. Con
+   * `primaryPassenger: true`, cada entrada trae también el pasajero principal. Una cola vacía da
+   * una lista vacía.
+   *
+   * No cambia `state`. Es una lectura: se reintenta ante fallos transitorios. Lanza `TypeError`
+   * sin red si `queue` o `pcc` no son válidos, o si `primaryPassenger` no es un boolean.
+   */
+  async list(request: QueueListRequest, options: QueueListOptions = {}): Promise<QueueListResponse> {
+    if (typeof request !== 'object' || request === null) fail('queue.list recibe { queue, pcc?, primaryPassenger? }');
+    validateQueueRef(request.queue, 'queue');
+    const pcc = this.#pcc(request.pcc, 'pcc');
+    const { primaryPassenger = false } = request;
+    if (typeof primaryPassenger !== 'boolean') fail('primaryPassenger debe ser un boolean');
+    const send = queueListRequest(queueListPayload(request.queue, pcc, primaryPassenger), options);
+    try {
+      return parseQueueList(await this.#context.send(send));
+    } catch (error) {
+      const end = endOfDisplayError(error, send.service);
+      if (end !== undefined) return emptyList([...end.warnings]);
+      throw error;
+    }
   }
 
   /**

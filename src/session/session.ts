@@ -3,7 +3,15 @@
 // decisiones de la revisión), wiki/entities/create-session.md y gestion-de-sesion-soap.md.
 import type { RequestOptions } from '../air/bargain-finder-max.js';
 import { SabreError, SabreGatewayError, SabreSessionError, type SabreSessionErrorKind } from '../errors/index.js';
-import { type SoapRequest, type SoapResponse, type SoapSecurity, type SoapTransport, xmlEscape } from '../http/soap-transport.js';
+import {
+  asArray,
+  type SoapRequest,
+  type SoapResponse,
+  type SoapSecurity,
+  type SoapTransport,
+  textOf,
+  xmlEscape,
+} from '../http/soap-transport.js';
 import { QueueManagement } from '../queue/queue-management.js';
 import type { SessionCredentials } from './credentials.js';
 
@@ -132,7 +140,7 @@ export class SabreSession {
    * recorrido de cola no hace falta: cada operación ya lo reinicia.
    */
   async ping(options: RequestOptions = {}): Promise<void> {
-    await this[sessionSend]({ ...pingRequest(), ...options });
+    checkPingResponse(await this[sessionSend]({ ...pingRequest(), ...options }));
   }
 
   /**
@@ -266,16 +274,50 @@ export class SabreSession {
   }
 }
 
-/** `OTA_PingRQ` 1.0.0, como el sample oficial. Idempotente: no toca el estado de negocio. */
+/**
+ * `OTA_PingRQ` 1.0.0, como el sample oficial pero con el namespace OTA de la respuesta: sin él,
+ * producción contesta `Invalid version` (#95). Idempotente: no toca el estado de negocio.
+ */
 function pingRequest(): SessionRequest {
   const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   return {
     service: 'ping',
     action: 'OTA_PingRQ',
-    payload: `<OTA_PingRQ TimeStamp="${timestamp}" Version="1.0.0"><EchoData>sabre-client</EchoData></OTA_PingRQ>`,
+    payload: `<OTA_PingRQ xmlns="${OTA_PING_NAMESPACE}" TimeStamp="${timestamp}" Version="1.0.0"><EchoData>sabre-client</EchoData></OTA_PingRQ>`,
     idempotent: true,
     operation: 'ping',
   };
+}
+
+const OTA_PING_NAMESPACE = 'http://www.opentravel.org/OTA/2003/05';
+
+/**
+ * `OTA_PingRS` puede traer un error con HTTP 200 y sin fault, como `<Errors><Error Type="VER">
+ * Invalid version</Error></Errors>` (producción, #95). Es un rechazo del request, así que sale
+ * como `SabreGatewayError`, igual que un error de validación. Sin `Success` tampoco se da por bueno.
+ */
+function checkPingResponse(response: SoapResponse): void {
+  const errors = asArray(response.payload.Errors)[0] as Record<string, unknown> | undefined;
+  const error = asArray(errors?.Error)[0];
+  if (error !== undefined) {
+    const type = (error as Record<string, unknown>)['@Type'];
+    const text = textOf(error)?.trim();
+    throw new SabreGatewayError(`ping: OTA_PingRS con error${text ? `: ${text}` : ''}`, {
+      protocol: 'soap',
+      status: response.status,
+      ...(typeof type === 'string' && type !== '' && { code: type }),
+      retryable: false,
+      raw: response.raw,
+    });
+  }
+  if (response.payloadName !== 'OTA_PingRS' || !('Success' in response.payload)) {
+    throw new SabreGatewayError('ping: respuesta no reconocida (sin OTA_PingRS/Success)', {
+      protocol: 'soap',
+      status: response.status,
+      retryable: false,
+      raw: response.raw,
+    });
+  }
 }
 
 /**

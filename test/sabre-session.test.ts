@@ -458,9 +458,29 @@ describe('ping', () => {
     const envelope = body(fetch, 1);
     expect(tag(envelope, 'eb:Action')).toBe('OTA_PingRQ');
     expect(envelope).toMatch(
-      /<soap-env:Body><OTA_PingRQ TimeStamp="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z" Version="1.0.0"><EchoData>sabre-client<\/EchoData><\/OTA_PingRQ><\/soap-env:Body>/,
+      /<soap-env:Body><OTA_PingRQ xmlns="http:\/\/www.opentravel.org\/OTA\/2003\/05" TimeStamp="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z" Version="1.0.0"><EchoData>sabre-client<\/EchoData><\/OTA_PingRQ><\/soap-env:Body>/,
     );
     expect(envelope).toContain(`>${SESSION_TOKEN}</wsse:BinarySecurityToken>`);
+  });
+
+  it('lanza SabreGatewayError si OTA_PingRS trae Errors con HTTP 200', async () => {
+    // Tal cual respondió producción el 2026-11-02 a un OTA_PingRQ sin namespace (#95).
+    const invalidVersion =
+      '<OTA_PingRS xmlns="http://www.opentravel.org/OTA/2003/05" Version="1.0.0"><Errors><Error Type="VER">Invalid version</Error></Errors></OTA_PingRS>';
+    const session = await legacy(mockFetch(opened(), xml(200, soap(invalidVersion, tokenHeader(SESSION_TOKEN))))).client.openSession();
+    const error = await rejection(session.ping());
+    expect(error).toBeInstanceOf(SabreGatewayError);
+    expect(error).not.toBeInstanceOf(SabreSessionError);
+    expect(error).toMatchObject({ message: 'ping: OTA_PingRS con error: Invalid version', code: 'VER', status: 200, retryable: false });
+    expect((error as SabreGatewayError).raw).toContain('>[REDACTED]</wsse:BinarySecurityToken>');
+  });
+
+  it('lanza SabreGatewayError si OTA_PingRS no trae Success', async () => {
+    const empty = '<OTA_PingRS xmlns="http://www.opentravel.org/OTA/2003/05" Version="1.0.0"/>';
+    const session = await legacy(mockFetch(opened(), xml(200, soap(empty)))).client.openSession();
+    const error = await rejection(session.ping());
+    expect(error).toBeInstanceOf(SabreGatewayError);
+    expect((error as Error).message).toBe('ping: respuesta no reconocida (sin OTA_PingRS/Success)');
   });
 
   it('es idempotente: se reintenta ante un fallo de red', async () => {

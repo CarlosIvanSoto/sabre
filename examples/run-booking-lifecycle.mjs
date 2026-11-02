@@ -229,7 +229,7 @@ try {
     if (after?.status === 'uncertain') {
       console.error('⚠ resultado incierto: revisa en Sabre Red si se creó un PNR. El lock bloquea nuevas corridas.');
     } else {
-      console.error('No se creó ningún PNR: la corrida del piloto no se consumió.');
+      console.error(production ? 'No se creó ningún PNR: la corrida del piloto no se consumió.' : 'No se creó ningún PNR.');
     }
     process.exitCode = 1;
   } else {

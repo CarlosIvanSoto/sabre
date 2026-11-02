@@ -7,6 +7,7 @@ import {
   Sabre,
   SabreBusinessError,
 } from '../src/index.js';
+import tjrInactive from './fixtures/create-booking.sandbox-error.json';
 import unauthorized from './fixtures/create-booking.sandbox-unauthorized-v3.json';
 import { config, json } from './helpers.js';
 
@@ -73,5 +74,32 @@ describe('Create Booking contra la fixture de sandbox (token v3 rechazado)', () 
       },
     ]);
     expect(text.match(/"(givenName|surname)":"(?!TEST"|PASSENGER")/g)).toBeNull();
+  });
+});
+
+describe('Create Booking contra la fixture de sandbox (TJR sin "Store Passenger Type In PNR")', () => {
+  const tjr = tjrInactive as unknown as Fixture;
+
+  it('el rechazo del TJR llega en un 200 y sale como SabreBusinessError no reintentable', async () => {
+    expect(tjr.response.status).toBe(200);
+    const fetch = vi.fn<typeof globalThis.fetch>(async (input) =>
+      String(input).includes('/auth/token')
+        ? json(200, { access_token: 'T1', expires_in: 604800, token_type: 'bearer' })
+        : json(tjr.response.status, tjr.response.body),
+    );
+    const sabre = new Sabre(config({ fetch }));
+    const error = await sabre.booking.create(tjr.request).then(
+      () => expect.fail('se esperaba un error'),
+      (e: unknown) => e,
+    );
+
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect(error).toMatchObject({
+      service: 'createBooking',
+      code: 'UNABLE_TO_ADD_TRAVELER_PASSENGER_TYPE_NOT_ENABLED',
+      retryable: false,
+    });
+    expect((error as Error).message).toContain('CreateBookingRequest.travelers');
+    expect(fetch.mock.calls.filter(([u]) => String(u).includes('/createBooking'))).toHaveLength(1);
   });
 });

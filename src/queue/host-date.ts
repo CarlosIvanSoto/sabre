@@ -122,8 +122,11 @@ function resolveYear(month: number, day: number, reference: number, direction: H
   return best !== undefined && best.distance <= HALF_YEAR_DAYS * DAY_MS ? best.year : undefined;
 }
 
-/** El día de `referenceDate`, como milisegundos UTC de su medianoche. */
-function referenceDay(referenceDate: Date | string): number {
+/**
+ * El día de `referenceDate`, como milisegundos UTC de su medianoche. Lanza `TypeError` si no es
+ * válida. Lo usa también el parser del párrafo, para validarla aunque el párrafo no traiga fechas.
+ */
+export function referenceDay(referenceDate: Date | string): number {
   if (referenceDate instanceof Date) {
     const time = referenceDate.getTime();
     if (Number.isNaN(time)) throw new TypeError('sabre-client: referenceDate es un Date inválido');

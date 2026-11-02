@@ -198,7 +198,8 @@ if (leaks.length > 0 || /IceSess|Shared\/IDL/.test(text)) {
   console.error('⚠️ la fixture todavía trae un secreto o un token de sesión: no se escribe.');
   process.exit(1);
 }
-const file = new URL(`../test/fixtures/session.${environment}-${scenario}.json`, import.meta.url);
+const name = scenario === 'expire' ? `expire-${expireMinutes}min` : scenario;
+const file = new URL(`../test/fixtures/session.${environment}-${name}.json`, import.meta.url);
 writeFileSync(file, text);
 
 console.log('\nhallazgos:', JSON.stringify(findings, null, 2));

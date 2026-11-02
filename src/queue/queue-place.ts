@@ -35,10 +35,11 @@ export interface QueuePlaceTarget {
   /** Por defecto, el PCC de la sesión. */
   pcc?: string;
   /**
-   * Código PIC (`PrefatoryInstructionCode`): 0–191 o 200–254. Sin valor por defecto: si no se
-   * pasa, no se manda.
+   * Código PIC (`PrefatoryInstructionCode`): 0–191 o 200–254. **Obligatorio**, aunque el design
+   * 2.0.4 lo da como opcional: sin PIC, producción rechaza el place con `INSTRUCTION NUMBER NOT IN
+   * RANGE` fuera de una cola y con `NEED INSTRUCTION NUMBER` dentro (#97). Sin valor por defecto.
    */
-  instructionCode?: number;
+  instructionCode: number;
 }
 
 export interface QueuePlaceRequest {

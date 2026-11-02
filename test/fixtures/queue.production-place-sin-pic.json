@@ -1,0 +1,435 @@
+{
+  "recordedAt": "2026-11-02",
+  "environment": "production",
+  "designated": 2,
+  "results": [
+    {
+      "51": 0,
+      "52": 0,
+      "step": "count inicial",
+      "ok": true
+    },
+    {
+      "step": "place fuera de una cola",
+      "ok": false,
+      "error": {
+        "name": "SabreBusinessError",
+        "message": "queuePlace: INSTRUCTION NUMBER NOT IN RANGE (ERR.SWS.HOST.ERROR_IN_RESPONSE)",
+        "code": "ERR.SWS.HOST.ERROR_IN_RESPONSE",
+        "retryable": false
+      }
+    },
+    {
+      "51": 0,
+      "52": 0,
+      "step": "count después de place",
+      "ok": true
+    },
+    {
+      "step": "access 51",
+      "ok": true,
+      "done": true,
+      "reason": "empty",
+      "message": "QUEUE SELECTED WAS EMPTY",
+      "warnings": 0
+    },
+    {
+      "51": 0,
+      "52": 0,
+      "step": "count después de place dentro de la cola",
+      "ok": true
+    },
+    {
+      "step": "limpieza: access 51",
+      "ok": true,
+      "done": true,
+      "reason": "empty",
+      "message": "QUEUE SELECTED WAS EMPTY",
+      "warnings": 0
+    },
+    {
+      "step": "limpieza: access 52",
+      "ok": true,
+      "done": true,
+      "reason": "empty",
+      "message": "QUEUE SELECTED WAS EMPTY",
+      "warnings": 0
+    },
+    {
+      "51": 0,
+      "52": 0,
+      "step": "count final",
+      "ok": true
+    },
+    {
+      "step": "close",
+      "ok": true
+    }
+  ],
+  "findings": {
+    "started": true,
+    "placedCount": 0,
+    "afterPlaceInside": {
+      "51": 0,
+      "52": 0
+    },
+    "finalCounts": {
+      "51": 0,
+      "52": 0
+    },
+    "emptyAtEnd": true,
+    "foreignPnrSeen": false,
+    "finalState": "outside"
+  },
+  "events": [
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 291,
+        "messageId": "696038116489921040",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.open",
+      "context": {
+        "version": "2.0.0",
+        "pseudoCityCode": "XXXX"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueCount",
+        "action": "QueueCountLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueCount",
+        "action": "QueueCountLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 306,
+        "messageId": "1368643116492372030",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queuePlace",
+        "action": "QueuePlaceLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "warn",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queuePlace",
+        "action": "QueuePlaceLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 1161,
+        "messageId": "1368817116494140910",
+        "error": {
+          "name": "SabreBusinessError",
+          "retryable": false,
+          "service": "queuePlace",
+          "code": "ERR.SWS.HOST.ERROR_IN_RESPONSE",
+          "warnings": [],
+          "errors": [],
+          "message": "queuePlace: INSTRUCTION NUMBER NOT IN RANGE (ERR.SWS.HOST.ERROR_IN_RESPONSE)"
+        }
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueCount",
+        "action": "QueueCountLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueCount",
+        "action": "QueueCountLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 164,
+        "messageId": "1368897116505762260",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "warn",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 107,
+        "messageId": "1368800116507391600",
+        "error": {
+          "name": "SabreBusinessError",
+          "retryable": false,
+          "service": "queueAccess",
+          "code": "ERR.SWS.HOST.ERROR_IN_RESPONSE",
+          "warnings": [],
+          "errors": [],
+          "message": "queueAccess: QUEUE SELECTED WAS EMPTY (ERR.SWS.HOST.ERROR_IN_RESPONSE)"
+        }
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueCount",
+        "action": "QueueCountLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueCount",
+        "action": "QueueCountLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 144,
+        "messageId": "696261116508481040",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "warn",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 181,
+        "messageId": "1369004116509910910",
+        "error": {
+          "name": "SabreBusinessError",
+          "retryable": false,
+          "service": "queueAccess",
+          "code": "ERR.SWS.HOST.ERROR_IN_RESPONSE",
+          "warnings": [],
+          "errors": [],
+          "message": "queueAccess: QUEUE SELECTED WAS EMPTY (ERR.SWS.HOST.ERROR_IN_RESPONSE)"
+        }
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "warn",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 113,
+        "messageId": "1368905116511721330",
+        "error": {
+          "name": "SabreBusinessError",
+          "retryable": false,
+          "service": "queueAccess",
+          "code": "ERR.SWS.HOST.ERROR_IN_RESPONSE",
+          "warnings": [],
+          "errors": [],
+          "message": "queueAccess: QUEUE SELECTED WAS EMPTY (ERR.SWS.HOST.ERROR_IN_RESPONSE)"
+        }
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueCount",
+        "action": "QueueCountLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueCount",
+        "action": "QueueCountLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 216,
+        "messageId": "1368862116512881600",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionClose",
+        "action": "SessionCloseRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionClose",
+        "action": "SessionCloseRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 91,
+        "messageId": "1369002116515020820",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.close",
+      "context": {
+        "pseudoCityCode": "XXXX"
+      }
+    }
+  ],
+  "responses": [
+    {
+      "operation": "openSession",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCreateRS</eb:Action><eb:MessageData><eb:MessageId>696038116489921040</eb:MessageId><eb:Timestamp>2026-11-02T03:14:09</eb:Timestamp><eb:RefToMessageId>mid:77d06f35-e9b1-4097-a87e-a4c2f94b7d11</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCreateRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"2.0.0\" status=\"Approved\">\t<ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</ConversationId></SessionCreateRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.count",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</eb:ConversationId><eb:Service>QueueCountLLSRQ</eb:Service><eb:Action>QueueCountLLSRS</eb:Action><eb:MessageData><eb:MessageId>1368643116492372030</eb:MessageId><eb:Timestamp>2026-11-02T03:14:09</eb:Timestamp><eb:RefToMessageId>mid:a1d5f941-bde3-4c97-bb10-518525106dae</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueCountRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.2.1\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-02T03:14:09Z\"/>\n </stl:ApplicationResults>\n <QueueInfo DateTime=\"11-01T21:14\" PseudoCityCode=\"XXXX\">\n  <QueueIdentifier Count=\"385\" Number=\"S\"/>\n  <QueueIdentifier Count=\"1\" Number=\"28\"/>\n  <QueueIdentifier Count=\"707\" Number=\"0\"/>\n  <QueueIdentifier Count=\"9\" Number=\"42\"/>\n  <QueueIdentifier Count=\"1203\" Number=\"1\"/>\n  <QueueIdentifier Count=\"1\" Number=\"45\"/>\n  <QueueIdentifier Count=\"4\" Number=\"2\"/>\n  <QueueIdentifier Count=\"1\" Number=\"50\"/>\n  <QueueIdentifier Count=\"11\" Number=\"5\"/>\n  <QueueIdentifier Count=\"303\" Number=\"100\"/>\n  <QueueIdentifier Count=\"95\" Number=\"6\"/>\n  <QueueIdentifier Count=\"373\" Number=\"101\"/>\n  <QueueIdentifier Count=\"230\" Number=\"7\"/>\n  <QueueIdentifier Count=\"9\" Number=\"102\"/>\n  <QueueIdentifier Count=\"772\" Number=\"9\"/>\n  <QueueIdentifier Count=\"2\" Number=\"103\"/>\n  <QueueIdentifier Count=\"9\" Number=\"11\"/>\n  <QueueIdentifier Count=\"114\" Number=\"108\"/>\n  <QueueIdentifier Count=\"5\" Number=\"12\"/>\n  <QueueIdentifier Count=\"3\" Number=\"110\"/>\n  <QueueIdentifier Count=\"1\" Number=\"16\"/>\n  <QueueIdentifier Count=\"807\" Number=\"115\"/>\n  <QueueIdentifier Count=\"1\" Number=\"18\"/>\n  <QueueIdentifier Count=\"109\" Number=\"116\"/>\n  <QueueIdentifier Count=\"76\" Number=\"20\"/>\n  <QueueIdentifier Count=\"206\" Number=\"118\"/>\n  <QueueIdentifier Count=\"2\" Number=\"21\"/>\n  <QueueIdentifier Count=\"795\" Number=\"120\"/>\n  <QueueIdentifier Count=\"9\" Number=\"22\"/>\n  <QueueIdentifier Count=\"72\" Number=\"195\"/>\n  <QueueIdentifier Count=\"12\" Number=\"24\"/>\n  <QueueIdentifier Count=\"105\" Number=\"25\"/>\n </QueueInfo>\n <Totals Count=\"385\" Type=\"MESSAGES\"/>\n <Totals Count=\"0\" Type=\"SPECIALS\"/>\n <Totals Count=\"6047\" Type=\"PNRS\"/>\n</QueueCountRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.place",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</eb:ConversationId><eb:Service>QueuePlaceLLSRQ</eb:Service><eb:Action>QueuePlaceLLSRS</eb:Action><eb:MessageData><eb:MessageId>1368817116494140910</eb:MessageId><eb:Timestamp>2026-11-02T03:14:10</eb:Timestamp><eb:RefToMessageId>mid:2bd54110-d5cd-48a9-8f56-4fb3efbe50ed</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueuePlaceRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.4\">\n <stl:ApplicationResults status=\"NotProcessed\">\n  <stl:Error type=\"BusinessLogic\" timeStamp=\"2026-11-02T03:14:10Z\">\n   <stl:SystemSpecificResults>\n    <stl:Message>INSTRUCTION NUMBER NOT IN RANGE</stl:Message>\n    <stl:ShortText>ERR.SWS.HOST.ERROR_IN_RESPONSE</stl:ShortText>\n   </stl:SystemSpecificResults>\n  </stl:Error>\n </stl:ApplicationResults>\n</QueuePlaceRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.count",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</eb:ConversationId><eb:Service>QueueCountLLSRQ</eb:Service><eb:Action>QueueCountLLSRS</eb:Action><eb:MessageData><eb:MessageId>1368897116505762260</eb:MessageId><eb:Timestamp>2026-11-02T03:14:10</eb:Timestamp><eb:RefToMessageId>mid:21bbcfc1-4915-49dc-a35f-19cf5c06645a</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueCountRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.2.1\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-02T03:14:10Z\"/>\n </stl:ApplicationResults>\n <QueueInfo DateTime=\"11-01T21:14\" PseudoCityCode=\"XXXX\">\n  <QueueIdentifier Count=\"385\" Number=\"S\"/>\n  <QueueIdentifier Count=\"1\" Number=\"28\"/>\n  <QueueIdentifier Count=\"707\" Number=\"0\"/>\n  <QueueIdentifier Count=\"9\" Number=\"42\"/>\n  <QueueIdentifier Count=\"1203\" Number=\"1\"/>\n  <QueueIdentifier Count=\"1\" Number=\"45\"/>\n  <QueueIdentifier Count=\"4\" Number=\"2\"/>\n  <QueueIdentifier Count=\"1\" Number=\"50\"/>\n  <QueueIdentifier Count=\"11\" Number=\"5\"/>\n  <QueueIdentifier Count=\"303\" Number=\"100\"/>\n  <QueueIdentifier Count=\"95\" Number=\"6\"/>\n  <QueueIdentifier Count=\"373\" Number=\"101\"/>\n  <QueueIdentifier Count=\"230\" Number=\"7\"/>\n  <QueueIdentifier Count=\"9\" Number=\"102\"/>\n  <QueueIdentifier Count=\"772\" Number=\"9\"/>\n  <QueueIdentifier Count=\"2\" Number=\"103\"/>\n  <QueueIdentifier Count=\"9\" Number=\"11\"/>\n  <QueueIdentifier Count=\"114\" Number=\"108\"/>\n  <QueueIdentifier Count=\"5\" Number=\"12\"/>\n  <QueueIdentifier Count=\"3\" Number=\"110\"/>\n  <QueueIdentifier Count=\"1\" Number=\"16\"/>\n  <QueueIdentifier Count=\"807\" Number=\"115\"/>\n  <QueueIdentifier Count=\"1\" Number=\"18\"/>\n  <QueueIdentifier Count=\"109\" Number=\"116\"/>\n  <QueueIdentifier Count=\"76\" Number=\"20\"/>\n  <QueueIdentifier Count=\"206\" Number=\"118\"/>\n  <QueueIdentifier Count=\"2\" Number=\"21\"/>\n  <QueueIdentifier Count=\"795\" Number=\"120\"/>\n  <QueueIdentifier Count=\"9\" Number=\"22\"/>\n  <QueueIdentifier Count=\"72\" Number=\"195\"/>\n  <QueueIdentifier Count=\"12\" Number=\"24\"/>\n  <QueueIdentifier Count=\"105\" Number=\"25\"/>\n </QueueInfo>\n <Totals Count=\"385\" Type=\"MESSAGES\"/>\n <Totals Count=\"0\" Type=\"SPECIALS\"/>\n <Totals Count=\"6047\" Type=\"PNRS\"/>\n</QueueCountRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.access",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</eb:ConversationId><eb:Service>QueueAccessLLSRQ</eb:Service><eb:Action>QueueAccessLLSRS</eb:Action><eb:MessageData><eb:MessageId>1368800116507391600</eb:MessageId><eb:Timestamp>2026-11-02T03:14:10</eb:Timestamp><eb:RefToMessageId>mid:672fb639-8d29-4bf8-aa6a-8967f0f8eea7</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueAccessRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.1.1\">\n <stl:ApplicationResults status=\"NotProcessed\">\n  <stl:Error type=\"BusinessLogic\" timeStamp=\"2026-11-02T03:14:10Z\">\n   <stl:SystemSpecificResults>\n    <stl:Message>QUEUE SELECTED WAS EMPTY</stl:Message>\n    <stl:ShortText>ERR.SWS.HOST.ERROR_IN_RESPONSE</stl:ShortText>\n   </stl:SystemSpecificResults>\n  </stl:Error>\n </stl:ApplicationResults>\n</QueueAccessRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.count",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</eb:ConversationId><eb:Service>QueueCountLLSRQ</eb:Service><eb:Action>QueueCountLLSRS</eb:Action><eb:MessageData><eb:MessageId>696261116508481040</eb:MessageId><eb:Timestamp>2026-11-02T03:14:10</eb:Timestamp><eb:RefToMessageId>mid:fd1cd62a-a2f9-4578-9099-81324d05e11f</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueCountRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.2.1\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-02T03:14:10Z\"/>\n </stl:ApplicationResults>\n <QueueInfo DateTime=\"11-01T21:14\" PseudoCityCode=\"XXXX\">\n  <QueueIdentifier Count=\"385\" Number=\"S\"/>\n  <QueueIdentifier Count=\"1\" Number=\"28\"/>\n  <QueueIdentifier Count=\"707\" Number=\"0\"/>\n  <QueueIdentifier Count=\"9\" Number=\"42\"/>\n  <QueueIdentifier Count=\"1203\" Number=\"1\"/>\n  <QueueIdentifier Count=\"1\" Number=\"45\"/>\n  <QueueIdentifier Count=\"4\" Number=\"2\"/>\n  <QueueIdentifier Count=\"1\" Number=\"50\"/>\n  <QueueIdentifier Count=\"11\" Number=\"5\"/>\n  <QueueIdentifier Count=\"303\" Number=\"100\"/>\n  <QueueIdentifier Count=\"95\" Number=\"6\"/>\n  <QueueIdentifier Count=\"373\" Number=\"101\"/>\n  <QueueIdentifier Count=\"230\" Number=\"7\"/>\n  <QueueIdentifier Count=\"9\" Number=\"102\"/>\n  <QueueIdentifier Count=\"772\" Number=\"9\"/>\n  <QueueIdentifier Count=\"2\" Number=\"103\"/>\n  <QueueIdentifier Count=\"9\" Number=\"11\"/>\n  <QueueIdentifier Count=\"114\" Number=\"108\"/>\n  <QueueIdentifier Count=\"5\" Number=\"12\"/>\n  <QueueIdentifier Count=\"3\" Number=\"110\"/>\n  <QueueIdentifier Count=\"1\" Number=\"16\"/>\n  <QueueIdentifier Count=\"807\" Number=\"115\"/>\n  <QueueIdentifier Count=\"1\" Number=\"18\"/>\n  <QueueIdentifier Count=\"109\" Number=\"116\"/>\n  <QueueIdentifier Count=\"76\" Number=\"20\"/>\n  <QueueIdentifier Count=\"206\" Number=\"118\"/>\n  <QueueIdentifier Count=\"2\" Number=\"21\"/>\n  <QueueIdentifier Count=\"795\" Number=\"120\"/>\n  <QueueIdentifier Count=\"9\" Number=\"22\"/>\n  <QueueIdentifier Count=\"72\" Number=\"195\"/>\n  <QueueIdentifier Count=\"12\" Number=\"24\"/>\n  <QueueIdentifier Count=\"105\" Number=\"25\"/>\n </QueueInfo>\n <Totals Count=\"385\" Type=\"MESSAGES\"/>\n <Totals Count=\"0\" Type=\"SPECIALS\"/>\n <Totals Count=\"6047\" Type=\"PNRS\"/>\n</QueueCountRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.access",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</eb:ConversationId><eb:Service>QueueAccessLLSRQ</eb:Service><eb:Action>QueueAccessLLSRS</eb:Action><eb:MessageData><eb:MessageId>1369004116509910910</eb:MessageId><eb:Timestamp>2026-11-02T03:14:11</eb:Timestamp><eb:RefToMessageId>mid:348634ba-1102-4b60-88d7-b22dcde08237</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueAccessRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.1.1\">\n <stl:ApplicationResults status=\"NotProcessed\">\n  <stl:Error type=\"BusinessLogic\" timeStamp=\"2026-11-02T03:14:11Z\">\n   <stl:SystemSpecificResults>\n    <stl:Message>QUEUE SELECTED WAS EMPTY</stl:Message>\n    <stl:ShortText>ERR.SWS.HOST.ERROR_IN_RESPONSE</stl:ShortText>\n   </stl:SystemSpecificResults>\n  </stl:Error>\n </stl:ApplicationResults>\n</QueueAccessRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.access",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</eb:ConversationId><eb:Service>QueueAccessLLSRQ</eb:Service><eb:Action>QueueAccessLLSRS</eb:Action><eb:MessageData><eb:MessageId>1368905116511721330</eb:MessageId><eb:Timestamp>2026-11-02T03:14:11</eb:Timestamp><eb:RefToMessageId>mid:4cb87408-be0e-4d2c-a5c0-d6eb90c05604</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueAccessRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.1.1\">\n <stl:ApplicationResults status=\"NotProcessed\">\n  <stl:Error type=\"BusinessLogic\" timeStamp=\"2026-11-02T03:14:11Z\">\n   <stl:SystemSpecificResults>\n    <stl:Message>QUEUE SELECTED WAS EMPTY</stl:Message>\n    <stl:ShortText>ERR.SWS.HOST.ERROR_IN_RESPONSE</stl:ShortText>\n   </stl:SystemSpecificResults>\n  </stl:Error>\n </stl:ApplicationResults>\n</QueueAccessRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.count",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</eb:ConversationId><eb:Service>QueueCountLLSRQ</eb:Service><eb:Action>QueueCountLLSRS</eb:Action><eb:MessageData><eb:MessageId>1368862116512881600</eb:MessageId><eb:Timestamp>2026-11-02T03:14:11</eb:Timestamp><eb:RefToMessageId>mid:a68247d9-8b80-4be1-a29d-f98fc874cdba</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueCountRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.2.1\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-02T03:14:11Z\"/>\n </stl:ApplicationResults>\n <QueueInfo DateTime=\"11-01T21:14\" PseudoCityCode=\"XXXX\">\n  <QueueIdentifier Count=\"385\" Number=\"S\"/>\n  <QueueIdentifier Count=\"1\" Number=\"28\"/>\n  <QueueIdentifier Count=\"707\" Number=\"0\"/>\n  <QueueIdentifier Count=\"9\" Number=\"42\"/>\n  <QueueIdentifier Count=\"1203\" Number=\"1\"/>\n  <QueueIdentifier Count=\"1\" Number=\"45\"/>\n  <QueueIdentifier Count=\"4\" Number=\"2\"/>\n  <QueueIdentifier Count=\"1\" Number=\"50\"/>\n  <QueueIdentifier Count=\"11\" Number=\"5\"/>\n  <QueueIdentifier Count=\"303\" Number=\"100\"/>\n  <QueueIdentifier Count=\"95\" Number=\"6\"/>\n  <QueueIdentifier Count=\"373\" Number=\"101\"/>\n  <QueueIdentifier Count=\"230\" Number=\"7\"/>\n  <QueueIdentifier Count=\"9\" Number=\"102\"/>\n  <QueueIdentifier Count=\"772\" Number=\"9\"/>\n  <QueueIdentifier Count=\"2\" Number=\"103\"/>\n  <QueueIdentifier Count=\"9\" Number=\"11\"/>\n  <QueueIdentifier Count=\"114\" Number=\"108\"/>\n  <QueueIdentifier Count=\"5\" Number=\"12\"/>\n  <QueueIdentifier Count=\"3\" Number=\"110\"/>\n  <QueueIdentifier Count=\"1\" Number=\"16\"/>\n  <QueueIdentifier Count=\"807\" Number=\"115\"/>\n  <QueueIdentifier Count=\"1\" Number=\"18\"/>\n  <QueueIdentifier Count=\"109\" Number=\"116\"/>\n  <QueueIdentifier Count=\"76\" Number=\"20\"/>\n  <QueueIdentifier Count=\"206\" Number=\"118\"/>\n  <QueueIdentifier Count=\"2\" Number=\"21\"/>\n  <QueueIdentifier Count=\"795\" Number=\"120\"/>\n  <QueueIdentifier Count=\"9\" Number=\"22\"/>\n  <QueueIdentifier Count=\"72\" Number=\"195\"/>\n  <QueueIdentifier Count=\"12\" Number=\"24\"/>\n  <QueueIdentifier Count=\"105\" Number=\"25\"/>\n </QueueInfo>\n <Totals Count=\"385\" Type=\"MESSAGES\"/>\n <Totals Count=\"0\" Type=\"SPECIALS\"/>\n <Totals Count=\"6047\" Type=\"PNRS\"/>\n</QueueCountRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "close",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>3792aacf-e3c3-4363-9000-15f67b73a5dc</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCloseRS</eb:Action><eb:MessageData><eb:MessageId>1369002116515020820</eb:MessageId><eb:Timestamp>2026-11-02T03:14:11</eb:Timestamp><eb:RefToMessageId>mid:4fbbf8b2-5f08-4e22-a76d-639bb7280ddb</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCloseRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"1\" status=\"Approved\"/></soap-env:Body></soap-env:Envelope>"
+    }
+  ]
+}

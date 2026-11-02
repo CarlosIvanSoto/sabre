@@ -94,6 +94,32 @@ describe('RestTransport', () => {
       expect(error.raw).toEqual(body);
     });
 
+    it('extrae errors[0].type y errors[0].description (502 real de Get Seats byPnrLocator en CERT)', async () => {
+      // Body de /v3/offers/getseats/byPnrLocator con un PNR de otro PCC (2026-11-02, #124); PCC redactado.
+      const body = {
+        errors: [
+          {
+            type: 'DOWNLINE_ERROR',
+            description:
+              'Error occurred while invoking service (SID:2) Viewership is restricted for the PNR, caused by [Viewership is restricted for the PNR (PNR not created by XXXX), code: 700102, severity: MODERATE]',
+          },
+        ],
+      };
+      const error = (await catchError(transport(mockFetch(json(502, body))).request(shop))) as SabreGatewayError;
+
+      expect(error).toBeInstanceOf(SabreGatewayError);
+      expect(error).toMatchObject({ status: 502, code: 'DOWNLINE_ERROR', retryable: false });
+      expect(error.message).toBe(`bargainFinderMax: HTTP 502 DOWNLINE_ERROR: ${body.errors[0]!.description}`);
+      expect(error.raw).toEqual(body);
+    });
+
+    it('errors[0].code y descriptionText tienen prioridad sobre type y description', async () => {
+      const body = { errors: [{ code: '305', type: 'DOWNLINE_ERROR', descriptionText: 'texto', description: 'otro' }] };
+      const error = (await catchError(transport(mockFetch(json(401, body))).request(shop))) as SabreGatewayError;
+      expect(error.code).toBe('305');
+      expect(error.message).toBe('bargainFinderMax: HTTP 401 305: texto');
+    });
+
     it('errorCode y error tienen prioridad sobre errors[0].code', async () => {
       const errors = [{ code: '305', descriptionText: 'detalle' }];
       const withErrorCode = await catchError(transport(mockFetch(json(403, { errorCode: 'ERR.2SG.SEC.NOT_AUTHORIZED', errors }))).request(shop));

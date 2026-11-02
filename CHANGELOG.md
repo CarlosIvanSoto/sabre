@@ -77,8 +77,8 @@ as a minor bump. Versions `0.2.4` and earlier stay published as they are.
 - Injectable `logger` that emits structured events and always redacts secrets, the
   `Authorization` header and passenger data.
 - Gateway errors (`SabreGatewayError`) take their `code`, best effort, from `errorCode`,
-  `error` or `errors[0].code`, and add `errors[0].descriptionText` to the message when Sabre
-  sends it.
+  `error`, `errors[0].code` or `errors[0].type`, and add `errors[0].descriptionText` (or
+  `errors[0].description`) to the message when Sabre sends it.
 - `SabreLegacy` SOAP client, with the same `SabreConfig` as `Sabre`. The session's user, PCC and
   domain come from `credentials.username`. It opens `SessionCreateRQ` 2.0.0 when the credentials
   have `clientId` and `clientSecret`, and 1.0.0 when they have neither. Both were checked in

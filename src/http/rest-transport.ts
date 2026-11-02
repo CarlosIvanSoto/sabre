@@ -262,7 +262,9 @@ function gatewayError(service: string, status: number, body: unknown): SabreGate
 /**
  * Best-effort: el campo del código `ERR.2SG.*` no está confirmado (issue de fuente #21). Se
  * prueban `errorCode`, `error` y `errors[0].code`; este último, visto en un 401 de Get Seats
- * en CERT (`{ errors: [{ code: '305', descriptionText, statusText }] }`, 2026-10-31).
+ * en CERT (`{ errors: [{ code: '305', descriptionText, statusText }] }`, 2026-10-31). Si no
+ * viene, `errors[0].type`: un 502 de Get Seats `byPnrLocator` en CERT lo trae así
+ * (`{ errors: [{ type: 'DOWNLINE_ERROR', description }] }`, 2026-11-02, #124).
  */
 function extractCode(body: unknown): string | undefined {
   if (typeof body !== 'object' || body === null) return undefined;
@@ -270,12 +272,12 @@ function extractCode(body: unknown): string | undefined {
     const value = (body as Record<string, unknown>)[key];
     if (typeof value === 'string' && value !== '') return value;
   }
-  return firstErrorField(body, 'code');
+  return firstErrorField(body, 'code') ?? firstErrorField(body, 'type');
 }
 
-/** `errors[0].descriptionText`, si viene: el único detalle legible de esa forma. */
+/** Detalle legible de `errors[0]`: `descriptionText` o, si no viene, `description`. */
 function extractDescription(body: unknown): string | undefined {
-  return firstErrorField(body, 'descriptionText');
+  return firstErrorField(body, 'descriptionText') ?? firstErrorField(body, 'description');
 }
 
 function firstErrorField(body: unknown, key: string): string | undefined {

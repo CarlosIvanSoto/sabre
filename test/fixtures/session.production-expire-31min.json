@@ -1,0 +1,145 @@
+{
+  "recordedAt": "2026-11-02",
+  "environment": "production",
+  "scenario": "expire",
+  "results": [
+    {
+      "step": "openSession",
+      "ok": true,
+      "ms": 256
+    },
+    {
+      "step": "ping",
+      "ok": false,
+      "ms": 221,
+      "error": {
+        "name": "SabreSessionError",
+        "message": "ping: SOAP fault soap-env:Client.InvalidSecurityToken: Invalid or Expired binary security token: [REDACTED]",
+        "code": "USG_INVALID_SECURITY_TOKEN",
+        "retryable": false,
+        "status": 500,
+        "kind": "expired",
+        "fault": {
+          "faultcode": "soap-env:Client.InvalidSecurityToken",
+          "faultstring": "Invalid or Expired binary security token: [REDACTED]",
+          "detail": "<StackTrace>com.sabre.universalservices.base.session.SessionException: errors.session.USG_INVALID_SECURITY_TOKEN</StackTrace>",
+          "usgIn": [
+            "detail"
+          ]
+        }
+      }
+    },
+    {
+      "step": "close",
+      "ok": true,
+      "ms": 0
+    }
+  ],
+  "findings": {
+    "sessionVersion": "2.0.0",
+    "opened": true,
+    "domainWorks": true,
+    "soapActionNeeded": false,
+    "tokenEchoed": {
+      "ping": true
+    },
+    "expiredAfterMinutes": 31,
+    "expired": {
+      "name": "SabreSessionError",
+      "message": "ping: SOAP fault soap-env:Client.InvalidSecurityToken: Invalid or Expired binary security token: [REDACTED]",
+      "code": "USG_INVALID_SECURITY_TOKEN",
+      "retryable": false,
+      "status": 500,
+      "kind": "expired",
+      "fault": {
+        "faultcode": "soap-env:Client.InvalidSecurityToken",
+        "faultstring": "Invalid or Expired binary security token: [REDACTED]",
+        "detail": "<StackTrace>com.sabre.universalservices.base.session.SessionException: errors.session.USG_INVALID_SECURITY_TOKEN</StackTrace>",
+        "usgIn": [
+          "detail"
+        ]
+      }
+    }
+  },
+  "events": [
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 244,
+        "messageId": "814010066866111600",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.open",
+      "context": {
+        "version": "2.0.0",
+        "pseudoCityCode": "XXXX"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "ping",
+        "action": "OTA_PingRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "error",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "ping",
+        "action": "OTA_PingRQ",
+        "attempt": 0,
+        "status": 500,
+        "durationMs": 218,
+        "messageId": "1026844085469171410",
+        "error": {
+          "name": "SabreGatewayError",
+          "retryable": false,
+          "protocol": "soap",
+          "status": 500,
+          "code": "USG_INVALID_SECURITY_TOKEN",
+          "message": "ping: SOAP fault soap-env:Client.InvalidSecurityToken: Invalid or Expired binary security token: [REDACTED]"
+        }
+      }
+    }
+  ],
+  "responses": [
+    {
+      "operation": "openSession",
+      "status": 200,
+      "attempts": 1,
+      "contentType": "text/xml; charset=utf-8",
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>43f0aa79-0b07-489e-aae8-e03b67d82191</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCreateRS</eb:Action><eb:MessageData><eb:MessageId>814010066866111600</eb:MessageId><eb:Timestamp>2026-11-02T01:51:26</eb:Timestamp><eb:RefToMessageId>mid:3cae35d1-cdf7-47fa-97ed-39e81f285b15</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCreateRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"2.0.0\" status=\"Approved\">\t<ConversationId>43f0aa79-0b07-489e-aae8-e03b67d82191</ConversationId></SessionCreateRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "ping",
+      "status": 500,
+      "attempts": 1,
+      "contentType": "text/xml; charset=utf-8",
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>43f0aa79-0b07-489e-aae8-e03b67d82191</eb:ConversationId><eb:Service>OTA_PingRQ</eb:Service><eb:Action>ErrorRS</eb:Action><eb:MessageData><eb:MessageId>1026844085469171410</eb:MessageId><eb:Timestamp>2026-11-02T02:22:26</eb:Timestamp><eb:RefToMessageId>mid:025c7eb4-7c07-42ec-a9ca-86c0f897decf</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><soap-env:Fault><faultcode>soap-env:Client.InvalidSecurityToken</faultcode><faultstring>Invalid or Expired binary security token: [REDACTED]</faultstring><detail><StackTrace>com.sabre.universalservices.base.session.SessionException: errors.session.USG_INVALID_SECURITY_TOKEN</StackTrace></detail></soap-env:Fault></soap-env:Body></soap-env:Envelope>"
+    }
+  ]
+}

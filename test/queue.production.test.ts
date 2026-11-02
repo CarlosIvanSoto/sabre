@@ -6,6 +6,7 @@ import { parseQueueParagraph, SabreBusinessError } from '../src/index.js';
 import countAfterWalk from './fixtures/queue.production-count.json';
 import walk from './fixtures/queue.production-walk.json';
 import emptyQueueWalk from './fixtures/queue.production-walk-empty-queue.json';
+import placeWithoutPic from './fixtures/queue.production-place-sin-pic.json';
 import { mockFetch } from './helpers.js';
 import { legacyClient, queueRS, rejection, soap, success, xml } from './soap-helpers.js';
 
@@ -145,5 +146,21 @@ describe('recorrido de solo lectura en producción (cola 2, 4 PNR)', () => {
       expect(parsed.messages).toEqual([{ instructionCode: 84, text: 'RATE/CONFIRMATION NUMBER RTND' }]);
       expect(parsed.unparsed.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('place sin PIC en producción: INSTRUCTION NUMBER NOT IN RANGE', () => {
+  it('Sabre lo rechaza como SabreBusinessError, y el SDK ya no lo deja salir sin instructionCode', async () => {
+    const { fetch, session } = await open(one(placeWithoutPic as Fixture, 'queue.place'));
+    expect(await rejection(session.queue.place({ to: [{ queue: 51 }], locators: ['AAAAAA'] }))).toBeInstanceOf(TypeError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // La respuesta grabada, servida a un place con PIC, es el rechazo tal cual.
+    const error = await rejection(session.queue.place({ to: [{ queue: 51, instructionCode: 11 }], locators: ['AAAAAA'] }));
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect(error).toMatchObject({
+      code: 'ERR.SWS.HOST.ERROR_IN_RESPONSE',
+      message: 'queuePlace: INSTRUCTION NUMBER NOT IN RANGE (ERR.SWS.HOST.ERROR_IN_RESPONSE)',
+    });
   });
 });

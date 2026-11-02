@@ -323,6 +323,11 @@ export class QueueManagement {
     if (locators.length > 0 && this.#state === 'unknown') {
       fail('no se sabe si la sesión sigue dentro de una cola: llama a queue.exit() antes de colocar por localizador');
     }
+    if (this.#state === 'outside' && to.some((target) => target.instructionCode === undefined)) {
+      fail(
+        'queue.place fuera de una cola necesita instructionCode en cada destino: Sabre lo exige en un place manual (INSTRUCTION NUMBER NOT IN RANGE)',
+      );
+    }
     const send = queuePlaceRequest(queuePlacePayload(to, locators), options);
     // Fuera de una cola, colocar no toca el cursor: el estado no cambia, ni con un error.
     if (this.#state === 'outside') return parsePlaceResult(await this.#context.send(send));

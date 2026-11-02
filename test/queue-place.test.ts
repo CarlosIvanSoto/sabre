@@ -88,12 +88,26 @@ describe('queue.place: request', () => {
   it('con locators, fuera de una cola, manda los UniqueID después de las colas', async () => {
     const { fetch, session } = await openWith(ok(DOC_SAMPLE));
     await session.queue.place({
-      to: [{ queue: 400, pcc: 'IPC1', instructionCode: 11 }, { queue: { name: 'S' } }],
+      to: [{ queue: 400, pcc: 'IPC1', instructionCode: 11 }, { queue: { name: 'S' }, instructionCode: 7 }],
       locators: ['ABC123', 'DEF456'],
     });
     expect(body(fetch, 1)).toContain(
-      '<QueueInfo><QueueIdentifier Number="400" PrefatoryInstructionCode="11" PseudoCityCode="IPC1"/><QueueIdentifier Name="S" PseudoCityCode="H8GI"/><UniqueID ID="ABC123"/><UniqueID ID="DEF456"/></QueueInfo>',
+      '<QueueInfo><QueueIdentifier Number="400" PrefatoryInstructionCode="11" PseudoCityCode="IPC1"/><QueueIdentifier Name="S" PrefatoryInstructionCode="7" PseudoCityCode="H8GI"/><UniqueID ID="ABC123"/><UniqueID ID="DEF456"/></QueueInfo>',
     );
+  });
+
+  it.each([
+    ['con locators', { to: [{ queue: 400 }], locators: ['ABC123'] }],
+    ['sin locators (el PNR del AAA)', { to: [{ queue: 400 }] }],
+    ['si falta en uno de los destinos', { to: [{ queue: 400, instructionCode: 11 }, { queue: 401 }], locators: ['ABC123'] }],
+  ])('fuera de una cola, sin instructionCode lanza TypeError sin red (%s)', async (_name, request) => {
+    const { fetch, session } = await openWith();
+    expect(await rejection(session.queue.place(request))).toEqual(
+      new TypeError(
+        'sabre-client: queue.place fuera de una cola necesita instructionCode en cada destino: Sabre lo exige en un place manual (INSTRUCTION NUMBER NOT IN RANGE)',
+      ),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('escapa los localizadores', () => {
@@ -122,7 +136,7 @@ describe('queue.place: request', () => {
 
   it('acepta 10 destinos y 6 localizadores', async () => {
     const { session } = await openWith(ok(DOC_SAMPLE));
-    const to = Array.from({ length: 10 }, (_, queue) => ({ queue }));
+    const to = Array.from({ length: 10 }, (_, queue) => ({ queue, instructionCode: 11 }));
     const locators = Array.from({ length: 6 }, () => 'ABC123');
     await expect(session.queue.place({ to, locators })).resolves.toMatchObject({ text: ['OK 1030 NMIUTF'] });
   });
@@ -142,14 +156,14 @@ describe('queue.place: request', () => {
 
   it('nunca se reintenta ante un fallo de red', async () => {
     const { fetch, session } = await openWith(new TypeError('fetch failed'), ok(DOC_SAMPLE));
-    await rejection(session.queue.place({ to: [{ queue: 1 }], locators: ['ABC123'] }, { retry: { maxRetries: 3, baseDelayMs: 0 } }));
+    await rejection(session.queue.place({ to: [{ queue: 1, instructionCode: 11 }], locators: ['ABC123'] }, { retry: { maxRetries: 3, baseDelayMs: 0 } }));
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('entrega la respuesta cruda como queue.place', async () => {
     const onRawResponse = vi.fn();
     const { session } = await openWith(ok(DOC_SAMPLE));
-    await session.queue.place({ to: [{ queue: 1 }] }, { onRawResponse });
+    await session.queue.place({ to: [{ queue: 1, instructionCode: 11 }] }, { onRawResponse });
     expect(onRawResponse.mock.calls[0]?.[0]).toMatchObject({ operation: 'queue.place', protocol: 'soap' });
   });
 });
@@ -237,7 +251,7 @@ describe('queue.place fuera de una cola', () => {
 
   it('lee los QueueInfo del design en placements', async () => {
     const { session } = await openWith(ok(DESIGN_OUTSIDE));
-    const result = await session.queue.place({ to: [{ queue: 400 }], locators: ['ABC123', 'DEF456'] });
+    const result = await session.queue.place({ to: [{ queue: 400, instructionCode: 11 }], locators: ['ABC123', 'DEF456'] });
     expect(result.placements).toEqual([
       { queue: 400, pcc: 'IPCC1', locator: 'ABC123', placedAt: '12-21T12:00' },
       { queue: { name: 'TEST' }, pcc: 'IPCC1', locator: 'DEF456', placedAt: '12-21T12:01' },
@@ -246,26 +260,26 @@ describe('queue.place fuera de una cola', () => {
 
   it('sin locators coloca el PNR del AAA y devuelve un QueuePlaceResult', async () => {
     const { fetch, session } = await openWith(ok(DOC_SAMPLE));
-    expect(await session.queue.place({ to: [{ queue: 400 }] })).toMatchObject({ text: ['OK 1030 NMIUTF'] });
+    expect(await session.queue.place({ to: [{ queue: 400, instructionCode: 11 }] })).toMatchObject({ text: ['OK 1030 NMIUTF'] });
     expect(body(fetch, 1)).not.toContain('UniqueID');
   });
 
   it('BAD PNR LOCATOR es un SabreBusinessError y la sesión sigue afuera', async () => {
     const { session } = await openWith(ok(placeRS(entry('Error', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', 'BAD PNR LOCATOR'))));
-    const error = await rejection(session.queue.place({ to: [{ queue: 400 }], locators: ['ZZZZZZ'] }));
+    const error = await rejection(session.queue.place({ to: [{ queue: 400, instructionCode: 11 }], locators: ['ZZZZZZ'] }));
     expect(error).toMatchObject({ service: 'queuePlace', message: 'queuePlace: BAD PNR LOCATOR' });
     expect(session.queue.state).toBe('outside');
   });
 
   it('un fallo de red no cambia el estado: colocar fuera de una cola no toca el cursor', async () => {
     const { session } = await openWith(new TypeError('fetch failed'));
-    await rejection(session.queue.place({ to: [{ queue: 400 }], locators: ['ABC123'] }));
+    await rejection(session.queue.place({ to: [{ queue: 400, instructionCode: 11 }], locators: ['ABC123'] }));
     expect(session.queue.state).toBe('outside');
   });
 
   it.each([['FF MILEAGE AGREEMENT EXISTS'], ['CITY MEX NOT AUTHORIZED']])('el warning %s va en warnings', async (text) => {
     const { session } = await openWith(ok(placeRS(`${success}${entry('Warning', 'WARN.SWS.HOST.WARNING_RETURNED', text)}`, '<Text>OK</Text>')));
-    const result = await session.queue.place({ to: [{ queue: 400 }], locators: ['ABC123'] });
+    const result = await session.queue.place({ to: [{ queue: 400, instructionCode: 11 }], locators: ['ABC123'] });
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]?.message).toBe(`queuePlace: ${text}`);
   });

@@ -18,7 +18,8 @@
 //  2. place fuera de una cola: los PNR designados a SABRE_TEST_QUEUE.
 //  3. count: cuántos quedaron.
 //  4. access(SABRE_TEST_QUEUE): el primero.
-//  5. place dentro de la cola, a SABRE_TEST_QUEUE_2: ¿devuelve el siguiente, el mismo o el fin?
+//  5. place dentro de la cola, a SABRE_TEST_QUEUE_2 y sin PIC: ¿devuelve el siguiente, el mismo o
+//     el fin?
 //  6. remove hasta el fin de SABRE_TEST_QUEUE.
 //  7. count: ¿place dentro de la cola dejó el PNR en SABRE_TEST_QUEUE?
 //  8. Limpieza: access + remove en las dos colas, hasta vaciarlas.
@@ -26,7 +27,9 @@
 //
 // Variables: las de scripts/validate-queue.mjs (credenciales, SABRE_QUEUE_PCC), más
 // SABRE_PLACE_LOCATORS (de 1 a 6, separados por coma; con 2 o más la pregunta del paso 5 se
-// responde mejor), SABRE_TEST_QUEUE y SABRE_TEST_QUEUE_2 (número o nombre de cola).
+// responde mejor), SABRE_TEST_QUEUE y SABRE_TEST_QUEUE_2 (número o nombre de cola), y
+// SABRE_INSTRUCTION_CODE: el PIC de cada colocación (11 por defecto, el de todos los ejemplos). Sin
+// PIC, producción rechaza el place con INSTRUCTION NUMBER NOT IN RANGE (#97).
 import { createRecorder, env, legacyClient, legacyEnvironment, queueRef } from './lib/legacy-recorder.mjs';
 
 const { environment, credentials, queuePcc, queuePccLabel, secrets } = legacyEnvironment();
@@ -43,6 +46,11 @@ const testQueueText = env('SABRE_TEST_QUEUE');
 const testQueue2Text = env('SABRE_TEST_QUEUE_2');
 if (testQueueText === testQueue2Text) {
   console.error('SABRE_TEST_QUEUE y SABRE_TEST_QUEUE_2 tienen que ser colas distintas');
+  process.exit(2);
+}
+const instructionCode = Number(process.env.SABRE_INSTRUCTION_CODE ?? 11);
+if (!Number.isInteger(instructionCode)) {
+  console.error('SABRE_INSTRUCTION_CODE debe ser un entero (0–191 o 200–254)');
   process.exit(2);
 }
 const testQueue = queueRef(testQueueText);
@@ -62,7 +70,7 @@ const countStep = (name) =>
   }));
 
 console.log(
-  `entorno ${environment} · colas de prueba ${testQueueText} y ${testQueue2Text} · PCC de las colas: ${queuePccLabel} · ${designated.length} PNR designados (${designated.map(aliasOf).join(', ')})`,
+  `entorno ${environment} · colas de prueba ${testQueueText} y ${testQueue2Text} · PCC de las colas: ${queuePccLabel} · PIC ${instructionCode} · ${designated.length} PNR designados (${designated.map(aliasOf).join(', ')})`,
 );
 const session = await legacy.openSession(options);
 
@@ -102,13 +110,15 @@ try {
     results.push({ step: 'las colas de prueba no están vacías: no se coloca nada', ok: false });
   } else {
     started = true;
-    const target = (queue) => [{ queue, ...pccRequest }];
-    await step('place fuera de una cola', () => session.queue.place({ to: target(testQueue), locators: designated }, options), stepSummary);
+    // El PIC va solo en el place manual (fuera de una cola). Dentro de la cola va sin PIC, para
+    // confirmar que ahí no se pide.
+    const target = (queue, pic) => [{ queue, ...(pic && { instructionCode }), ...pccRequest }];
+    await step('place fuera de una cola', () => session.queue.place({ to: target(testQueue, true), locators: designated }, options), stepSummary);
     afterPlace = await countStep('count después de place');
 
     accessed = await step(`access ${testQueueText}`, () => session.queue.access({ queue: testQueue, ...pccRequest }, options), stepSummary);
     if (accessed !== undefined && !accessed.done && designated.includes(accessed.item.locator)) {
-      placeInside = await step(`place dentro de la cola a ${testQueue2Text}`, () => session.queue.place({ to: target(testQueue2) }, options), stepSummary);
+      placeInside = await step(`place dentro de la cola a ${testQueue2Text}`, () => session.queue.place({ to: target(testQueue2, false) }, options), stepSummary);
       foreign ||= !(await removeDesignated(placeInside, `limpieza ${testQueueText}`));
     } else {
       foreign ||= accessed !== undefined && !accessed.done;
@@ -157,7 +167,7 @@ const findings = {
   finalState: session.queue.state,
 };
 
-writeFixture(`queue.${environment}-place`, { environment, designated: designated.length }, findings);
+writeFixture(`queue.${environment}-place`, { environment, designated: designated.length, instructionCode }, findings);
 if (!started) {
   console.error('⚠️ una de las colas de prueba no estaba vacía: no se colocó ni se sacó nada.');
   process.exit(1);

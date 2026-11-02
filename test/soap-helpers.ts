@@ -38,6 +38,14 @@ export function entry(kind: 'Error' | 'Warning', code: string, text: string, sho
   return `<stl:${kind} type="${type}" timeStamp="2026-10-31T12:00:00-06:00"><stl:SystemSpecificResults><stl:Message code="${code}">${text}</stl:Message>${shortText === undefined ? '' : `<stl:ShortText>${shortText}</stl:ShortText>`}</stl:SystemSpecificResults></stl:${kind}>`;
 }
 
+/**
+ * Un `stl:Error` con la forma real de producción (#96): `Message` sin `@code` y el código en
+ * `ShortText`, p. ej. `QUEUE SELECTED WAS EMPTY` o `CANNOT DO THIS IF OFF QUEUE`.
+ */
+export function hostError(text: string): string {
+  return `<stl:Error type="BusinessLogic" timeStamp="2026-11-02T02:48:28Z"><stl:SystemSpecificResults><stl:Message>${text}</stl:Message><stl:ShortText>ERR.SWS.HOST.ERROR_IN_RESPONSE</stl:ShortText></stl:SystemSpecificResults></stl:Error>`;
+}
+
 export function fault(faultcode: string, faultstring: string, detail = ''): string {
   return `<soap-env:Fault><faultcode>${faultcode}</faultcode><faultstring>${faultstring}</faultstring>${detail === '' ? '' : `<detail>${detail}</detail>`}</soap-env:Fault>`;
 }

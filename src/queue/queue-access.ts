@@ -13,6 +13,16 @@ const NAMESPACE = 'http://webservices.sabre.com/sabreXML/2011/10';
 
 /** Texto exacto del fin de cola. Es la respuesta normal cuando no queda ningún PNR. */
 export const END_OF_DISPLAY = 'END OF DISPLAY FOR REQUESTED DATA';
+/**
+ * Una cola vacía, como `stl:Error` de `access` y `list` (producción, #96). Las fuentes solo
+ * mostraban `END OF DISPLAY`.
+ */
+export const QUEUE_EMPTY = 'QUEUE SELECTED WAS EMPTY';
+/** `QXI` con la sesión fuera de una cola, como `stl:Error` (producción, #96). */
+export const OFF_QUEUE = 'CANNOT DO THIS IF OFF QUEUE';
+
+/** Por qué terminó la cola: el fin de cola de siempre o una cola vacía al entrar. */
+export type QueueEndReason = 'end-of-display' | 'empty';
 
 /** Máximo de filtros de `selection` y de colas de `remove({ from })`, según el design 2.1.1. */
 export const MAX_SELECTIONS = 8;
@@ -79,7 +89,7 @@ export interface QueueItem {
  */
 export type QueueStep =
   | { done: false; item: QueueItem; warnings: SabreWarning[] }
-  | { done: true; reason: 'end-of-display'; message: string; warnings: SabreWarning[] };
+  | { done: true; reason: QueueEndReason; message: string; warnings: SabreWarning[] };
 
 /** Qué acción de navegación se manda en `Navigation@Action`. */
 type NavigationAction = 'I' | 'QR' | 'QXI';
@@ -181,21 +191,37 @@ export function isEndOfDisplay(text: string | undefined): boolean {
  * partes, entero.
  */
 export function isEndOfDisplayResult(error: { message: string; service: string }): boolean {
+  return resultHasText(error, END_OF_DISPLAY);
+}
+
+/** Si un `stl:Warning` o `stl:Error` trae `text` como una de sus partes, entero. */
+export function resultHasText(error: { message: string; service: string }, text: string): boolean {
   const prefix = `${error.service}: `;
   const description = error.message.startsWith(prefix) ? error.message.slice(prefix.length) : error.message;
   return description
     .split(/ \/ | \(|\)/)
-    .some((part) => isEndOfDisplay(part));
+    .some((part) => part.trim() === text);
 }
 
-/** El fin de cola, si llegó como `stl:Error` de `service`. Si no, `undefined`. */
-export function endOfDisplayError(error: unknown, service: string): SabreBusinessError | undefined {
+/**
+ * El fin de cola, si llegó como `stl:Error` de `service`: `END OF DISPLAY` o una cola vacía
+ * (`QUEUE SELECTED WAS EMPTY`). Si no, `undefined`.
+ */
+export function queueEndError(error: unknown, service: string): { reason: QueueEndReason; error: SabreBusinessError } | undefined {
   if (!(error instanceof SabreBusinessError) || error.service !== service) return undefined;
-  return [error, ...error.errors].some(isEndOfDisplayResult) ? error : undefined;
+  const results = [error, ...error.errors];
+  if (results.some((result) => resultHasText(result, QUEUE_EMPTY))) return { reason: 'empty', error };
+  if (results.some(isEndOfDisplayResult)) return { reason: 'end-of-display', error };
+  return undefined;
 }
 
-export function endStep(warnings: SabreWarning[]): QueueStep {
-  return { done: true, reason: 'end-of-display', message: END_OF_DISPLAY, warnings };
+/** Si el error es el de `QXI` con la sesión fuera de una cola. */
+export function isOffQueueError(error: unknown): error is SabreBusinessError {
+  return error instanceof SabreBusinessError && [error, ...error.errors].some((result) => resultHasText(result, OFF_QUEUE));
+}
+
+export function endStep(warnings: SabreWarning[], reason: QueueEndReason = 'end-of-display'): QueueStep {
+  return { done: true, reason, message: reason === 'empty' ? QUEUE_EMPTY : END_OF_DISPLAY, warnings };
 }
 
 /**

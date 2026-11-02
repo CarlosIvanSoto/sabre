@@ -7,7 +7,8 @@ import type { SoapResponse } from '../http/soap-transport.js';
 import { isPseudoCityCode } from '../session/credentials.js';
 import type { SessionRequest } from '../session/session.js';
 import {
-  endOfDisplayError,
+  isOffQueueError,
+  queueEndError,
   endStep,
   MAX_REMOVE_FROM,
   MAX_SELECTIONS,
@@ -19,6 +20,7 @@ import {
   type QueueNavigationOptions,
   queueNavigationPayload,
   type QueueRemoveRequest,
+  type QueueEndReason,
   type QueueItem,
   type QueueSelection,
   type QueueStep,
@@ -79,8 +81,8 @@ export interface QueueProcessRequest extends QueueAccessRequest {
 export interface QueueProcessResult {
   /** Cuántos PNR se pasaron al callback. */
   visited: number;
-  /** Por qué terminó: el fin de cola o `limit`. */
-  ended: 'end-of-display' | 'limit';
+  /** Por qué terminó: el fin de cola, una cola vacía al entrar, o `limit`. */
+  ended: QueueEndReason | 'limit';
 }
 
 /** @internal Lo que la sesión le presta al módulo de colas. */
@@ -155,8 +157,8 @@ export class QueueManagement {
     try {
       return parseQueueList(await this.#context.send(send));
     } catch (error) {
-      const end = endOfDisplayError(error, send.service);
-      if (end !== undefined) return emptyList([...end.warnings]);
+      const end = queueEndError(error, send.service);
+      if (end !== undefined) return emptyList([...end.error.warnings]);
       throw error;
     }
   }
@@ -201,8 +203,9 @@ export class QueueManagement {
 
   /**
    * Sale de la cola sin cerrar la transacción (`QXI`) y deja `state` en `'outside'`. Fuera de una
-   * cola lanza `TypeError` sin red. En `'unknown'` manda `QXI` igual y, si Sabre lo rechaza porque
-   * la sesión ya no estaba en una cola, lo da por bueno.
+   * cola lanza `TypeError` sin red. En `'unknown'` manda `QXI` igual y, si Sabre lo rechaza con
+   * `CANNOT DO THIS IF OFF QUEUE` (la sesión ya no estaba en una cola), lo da por bueno. Cualquier
+   * otro error lanza y deja `'unknown'`.
    */
   async exit(options: QueueNavigationOptions = {}): Promise<void> {
     this.#requireQueue('exit');
@@ -211,9 +214,9 @@ export class QueueManagement {
     try {
       await this.#context.send(request);
     } catch (error) {
-      if (before === 'unknown' && error instanceof SabreBusinessError) {
-        // Sabre respondió con un error de negocio: lo más probable es que ya no hubiera cola.
-        // El texto exacto de "no estás en una cola" no está documentado: se confirma en #96.
+      if (before === 'unknown' && isOffQueueError(error)) {
+        // Sabre dice que la sesión ya no estaba en una cola (`CANNOT DO THIS IF OFF QUEUE`,
+        // producción, #96): la salida se da por buena. Cualquier otro error lanza.
         this.#context.log.emit('info', 'sabre.queue.exitTolerated', { code: error.code, error });
         this.#state = 'outside';
         return;
@@ -264,7 +267,7 @@ export class QueueManagement {
         visited++;
         step = await this.#processAction(action, options);
       }
-      return { visited, ended: 'end-of-display' };
+      return { visited, ended: step.reason };
     } catch (error) {
       if (startedOutside) await this.#exitQuietly(error, options);
       throw error;
@@ -340,10 +343,10 @@ export class QueueManagement {
     try {
       result = parse(await this.#context.send(request));
     } catch (error) {
-      const end = endOfDisplayError(error, request.service);
+      const end = queueEndError(error, request.service);
       if (end !== undefined) {
         this.#state = 'outside';
-        return endStep([...end.warnings]) as T;
+        return endStep([...end.error.warnings], end.reason) as T;
       }
       this.#onError(error);
       throw error;

@@ -31,6 +31,8 @@ export type {
 export type { QueueListEntry, QueueListOptions, QueueListRequest, QueueListResponse } from './queue/queue-list.js';
 export type { QueueRef } from './queue/queue-ref.js';
 export type { QueueCount, QueueCountOptions, QueueCountRequest, QueueCountResponse } from './queue/queue-count.js';
+export { resolveHostDate } from './queue/host-date.js';
+export type { HostDateDirection, ResolveHostDateOptions } from './queue/host-date.js';
 export type { Air } from './air/air.js';
 export type {
   BargainFinderMaxRequest,

@@ -26,55 +26,18 @@
 // SABRE_QUEUE_PCC (el PCC de las colas; por defecto, el de la sesión). Con SABRE_QUEUE_PCC=target se
 // usa SABRE_TARGET_PCC.
 //
-// Anonimización, porque el párrafo es el PNR entero:
-// - cada localizador pasa a uno falso (AAAAAA, AAAAAB…), igual en todo el sobre;
-// - PassengerName y Group pasan a valores falsos; AgentSine a `AAA` (salvo `SABRE`); todo
-//   PseudoCityCode, el usuario y las credenciales a `XXXX`;
-// - del párrafo quedan tal cual solo las líneas de una lista blanca (avisos PIC, encabezados fijos,
-//   END OF DISPLAY, la cabecera de la lista y las líneas vacías). Las demás se enmascaran: letras a
-//   `X`, dígitos a `9`, se conservan espacios y puntuación.
-// Si después queda un localizador real, un nombre, una línea original enmascarada, un secreto o
-// algo con forma de token, no se escribe la fixture. La consola solo muestra los alias.
-import { writeFileSync } from 'node:fs';
-import { SabreError, SabreLegacy } from '../dist/index.js';
+// La anonimización y la protección contra fugas están en scripts/lib/legacy-recorder.mjs: el
+// párrafo es el PNR entero, así que se enmascara por estructura. Si queda un dato real, no se
+// escribe la fixture. La consola solo muestra los alias.
+import { createRecorder, env, legacyClient, legacyEnvironment, queueRef, sessionSendOf } from './lib/legacy-recorder.mjs';
 
 const scenario = process.argv[2];
 if (scenario !== 'walk' && scenario !== 'empty' && scenario !== 'count') {
   console.error(`escenario desconocido: ${scenario ?? '(ninguno)'} (usa walk, empty o count)`);
   process.exit(2);
 }
-const environment = process.env.SABRE_ENVIRONMENT ?? 'sandbox';
-if (environment !== 'sandbox' && environment !== 'production') {
-  console.error(`SABRE_ENVIRONMENT debe ser sandbox o production (recibido: ${environment})`);
-  process.exit(2);
-}
-const env = (name, fallback) => {
-  const value = process.env[name] ?? fallback;
-  if (value === undefined || value === '') {
-    console.error(`falta la variable de entorno ${name}`);
-    process.exit(2);
-  }
-  return value;
-};
-
-const rawUser = env('SABRE_USERNAME');
-const user = rawUser.startsWith('V1:')
-  ? rawUser.split(':').slice(1, -2).join(':')
-  : rawUser.includes('-')
-    ? rawUser.split('-').slice(0, -2).join('-')
-    : rawUser;
-const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
-const domain = process.env.SABRE_DOMAIN ?? 'AA';
-const password = env('SABRE_PASSWORD');
-const clientId = env('SABRE_CLIENT_ID');
-const clientSecret = env('SABRE_CLIENT_SECRET');
-const username = `${user}-${pcc}-${domain}`;
-
-const queuePccEnv = process.env.SABRE_QUEUE_PCC;
-const queuePcc = queuePccEnv === 'target' ? env('SABRE_TARGET_PCC') : queuePccEnv;
+const { environment, credentials, queuePcc, queuePccLabel, secrets } = legacyEnvironment();
 const pccRequest = queuePcc === undefined ? {} : { pcc: queuePcc };
-
-const queueRef = (text) => (/^\d+$/.test(text) ? Number(text) : { name: text });
 const queueText = scenario === 'empty' ? env('SABRE_EMPTY_QUEUE') : env('SABRE_QUEUE');
 const queue = queueRef(queueText);
 const limit = Number(process.env.SABRE_QUEUE_LIMIT ?? 10);
@@ -83,115 +46,12 @@ if (!Number.isInteger(limit) || limit < 1) {
   process.exit(2);
 }
 
-// --- Anonimización ------------------------------------------------------------------------------
-const secrets = [username, `V1:${user}:${pcc}:${domain}`, user, pcc, queuePcc, password, clientId, clientSecret]
-  .filter((value) => typeof value === 'string' && value.length >= 3)
-  .sort((a, b) => b.length - a.length);
-const redactSecrets = (text) => secrets.reduce((value, secret) => value.split(secret).join('XXXX'), String(text));
+const { aliasOf, step, stepSummary, results, options, logger, writeFixture } = createRecorder(secrets);
+const legacy = legacyClient(environment, credentials, logger);
 
-const locatorAliases = new Map();
-const aliasOf = (locator) => {
-  if (!locatorAliases.has(locator)) {
-    const n = locatorAliases.size;
-    locatorAliases.set(locator, `AAAA${String.fromCharCode(65 + Math.floor(n / 26))}${String.fromCharCode(65 + (n % 26))}`);
-  }
-  return locatorAliases.get(locator);
-};
-const NAMES = ['UNO', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE', 'DIEZ'];
-const realNames = new Map();
-const fakeName = (name) => {
-  if (!realNames.has(name)) realNames.set(name, `PASAJERO/${NAMES[realNames.size] ?? realNames.size + 1}`);
-  return realNames.get(name);
-};
-const maskedLines = new Set();
-
-const decode = (text) =>
-  text.replace(/&(amp|lt|gt|quot|apos);/g, (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" })[e]);
-const encode = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-const SAFE_LINES = [
-  /^\s*$/,
-  /^\s*\d{3}\s{2,}[A-Z][A-Z0-9 ,.\/-]*$/, // aviso PIC: 011  SEE REMARKS
-  /^\s*END OF DISPLAY FOR REQUESTED DATA\s*$/,
-  /^\s*(TKT\/TIME LIMIT|PHONES|REMARKS|ADDRESS|INVOICED|GENERAL FACTS|[A-Z0-9]{2} FACTS|NO ITIN)\s*$/,
-  /^\s*PASSENGER EMAIL DATA EXISTS\s+\*PE TO DISPLAY ALL\s*$/,
-];
-function anonymizeLine(line) {
-  if (SAFE_LINES.some((pattern) => pattern.test(line))) return line;
-  const header = /^(\s*QUEUE LIST FOR )\S+(\s+QUEUE )(\S+)\s*$/.exec(line);
-  if (header !== null) return `${header[1]}XXXX${header[2]}${header[3]}`;
-  const received = /^(\s*RECEIVED FROM - )(.*)$/.exec(line);
-  const masked = (text) => text.replace(/\p{L}/gu, 'X').replace(/\p{N}/gu, '9');
-  const result = received === null ? masked(line) : `${received[1]}${masked(received[2])}`;
-  if (line.trim().length >= 4 && result.trim() !== line.trim()) maskedLines.add(line.trim());
-  return result;
-}
-
-function anonymize(body) {
-  // Primero los localizadores conocidos, para que el alias sea el mismo en todo el sobre.
-  let text = body.replace(/(<(?:\w+:)?UniqueID\b[^>]*\bID=")([^"]+)(")/g, (_, a, locator, b) => `${a}${aliasOf(locator)}${b}`);
-  for (const [locator, alias] of locatorAliases) text = text.split(locator).join(alias);
-  text = text.replace(/(<(?:\w+:)?PassengerName>)([^<]*)(<\/)/g, (_, a, name, b) => `${a}${fakeName(decode(name))}${b}`);
-  text = text.replace(/(<(?:\w+:)?Group>)([^<]*)(<\/)/g, (_, a, value, b) => (value === '' ? `${a}${b}` : `${a}GRUPO${b}`));
-  text = text.replace(/(\bAgentSine=")([^"]*)(")/g, (_, a, sine, b) => `${a}${sine === 'SABRE' ? sine : 'AAA'}${b}`);
-  text = text.replace(/(\bPseudoCityCode=")([^"]*)(")/g, '$1XXXX$3');
-  text = text.replace(/(<(?:\w+:)?Paragraph\b[^>]*>)([\s\S]*?)(<\/(?:\w+:)?Paragraph>)/g, (_, open, inner, close) => {
-    const lines = inner.replace(/(<(?:\w+:)?Text\b[^>/]*>)([\s\S]*?)(<\/(?:\w+:)?Text>)/g, (__, a, line, b) => `${a}${encode(anonymizeLine(decode(line)))}${b}`);
-    return `${open}${lines}${close}`;
-  });
-  return redactSecrets(text);
-}
-
-// --- Cliente y captura --------------------------------------------------------------------------
-const events = [];
-const logger = Object.fromEntries(
-  ['debug', 'info', 'warn', 'error'].map((level) => [
-    level,
-    (message, context) => events.push({ level, message, context: JSON.parse(JSON.stringify(context ?? {})) }),
-  ]),
-);
-const legacy = new SabreLegacy({
-  environment,
-  authVersion: 'v3',
-  credentials: { username, password, clientId, clientSecret },
-  retry: { maxRetries: 0 },
-  logger,
-});
-
-const raws = [];
-const options = { onRawResponse: (raw) => raws.push({ operation: raw.operation, status: raw.status, attempts: raw.attempts, body: raw.body }) };
-const results = [];
-
-function describeError(error) {
-  if (!(error instanceof Error)) return { thrown: String(error) };
-  return {
-    name: error.name,
-    message: error.message,
-    ...(error instanceof SabreError && { code: error.code, retryable: error.retryable, status: error.status }),
-  };
-}
-
-/** Corre un paso y guarda su resultado; los localizadores se registran para el alias. */
-async function step(name, run, summarize = () => undefined) {
-  try {
-    const value = await run();
-    results.push({ step: name, ok: true, ...(summarize(value) ?? {}) });
-    return value;
-  } catch (error) {
-    results.push({ step: name, ok: false, error: describeError(error) });
-    return undefined;
-  }
-}
-const stepSummary = (value) =>
-  value === undefined
-    ? undefined
-    : value.done
-      ? { done: true, message: value.message, warnings: value.warnings.length }
-      : { done: false, locator: aliasOf(value.item.locator), warnings: value.warnings.length };
-
-console.log(`entorno ${environment} · escenario ${scenario} · cola ${queueText} · PCC de las colas: ${queuePccEnv === 'target' ? 'SABRE_TARGET_PCC' : queuePcc === undefined ? 'el de la sesión' : 'SABRE_QUEUE_PCC'}`);
+console.log(`entorno ${environment} · escenario ${scenario} · cola ${queueText} · PCC de las colas: ${queuePccLabel}`);
 const session = await legacy.openSession(options);
-const send = Object.getOwnPropertySymbols(Object.getPrototypeOf(session)).find((s) => s.description === 'sabre-client.session.send');
+const send = sessionSendOf(session);
 if (send === undefined) {
   console.error('no se encontró sessionSend en el prototipo de la sesión');
   await session.close();
@@ -266,32 +126,4 @@ const findings = {
   finalState: session.queue.state,
 };
 
-const responses = raws.map((raw) => ({ ...raw, body: anonymize(raw.body) }));
-const fixture = {
-  recordedAt: new Date().toISOString().slice(0, 10),
-  environment,
-  scenario,
-  queue: typeof queue === 'number' ? queue : { name: 'XXXX' },
-  results: JSON.parse(anonymize(JSON.stringify(results))),
-  findings: JSON.parse(anonymize(JSON.stringify(findings))),
-  events: JSON.parse(anonymize(JSON.stringify(events))),
-  responses,
-};
-const text = `${JSON.stringify(fixture, null, 2)}\n`;
-
-const leaks = [
-  ...[password, clientId, clientSecret, user, pcc, queuePcc].filter((s) => typeof s === 'string' && s.length >= 3 && text.includes(s)).map(() => 'secreto'),
-  ...[...locatorAliases.keys()].filter((locator) => text.includes(locator)).map(() => 'localizador'),
-  ...[...realNames.keys()].filter((name) => name.length >= 3 && text.includes(name)).map(() => 'nombre'),
-  ...[...maskedLines].filter((line) => text.includes(line)).map(() => 'línea del párrafo'),
-  ...(/IceSess|Shared\/IDL/.test(text) ? ['token'] : []),
-];
-for (const r of fixture.results) console.log(`${r.ok ? '✔' : '✘'} ${r.step} ${JSON.stringify({ ...r, step: undefined, ok: undefined })}`);
-console.log('\nhallazgos:', JSON.stringify(fixture.findings, null, 2));
-if (leaks.length > 0) {
-  console.error(`⚠️ la fixture todavía trae datos reales (${[...new Set(leaks)].join(', ')}): no se escribe.`);
-  process.exit(1);
-}
-const file = new URL(`../test/fixtures/queue.${environment}-${scenario}.json`, import.meta.url);
-writeFileSync(file, text);
-console.log(`fixture: ${file.pathname}`);
+writeFixture(`queue.${environment}-${scenario}`, { environment, scenario, queue: typeof queue === 'number' ? queue : { name: 'XXXX' } }, findings);

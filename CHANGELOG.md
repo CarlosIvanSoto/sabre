@@ -12,8 +12,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 against `0.2.4` will not work unchanged. Since the package is still `0.x`, the rewrite ships
 as a minor bump. Versions `0.2.4` and earlier stay published as they are.
 
-`0.3.0` will be released once Tier 1 and Tier 2 (Get Seats) of the Air Booking flow are done.
-Get Ancillaries is NDC only and moved to after `0.3.0`.
+`0.3.0` will be released once Tier 1 and Tier 2 (Get Seats) of the Air Booking flow and Tier 3
+(SOAP sessions and queues) are done. Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 ### Added
 
@@ -79,6 +79,37 @@ Get Ancillaries is NDC only and moved to after `0.3.0`.
 - Gateway errors (`SabreGatewayError`) take their `code`, best effort, from `errorCode`,
   `error` or `errors[0].code`, and add `errors[0].descriptionText` to the message when Sabre
   sends it.
+- `SabreLegacy` SOAP client, with the same `SabreConfig` as `Sabre`. The session's user, PCC and
+  domain come from `credentials.username`. It opens `SessionCreateRQ` 2.0.0 when the credentials
+  have `clientId` and `clientSecret`, and 1.0.0 when they have neither. Both were checked in
+  production.
+- SOAP sessions: `legacy.withSession(callback)` opens a session and always closes it, and
+  `legacy.openSession()` hands it over with an idempotent `close()`. A session is exclusive: a
+  second concurrent call throws `TypeError` without calling the network. `session.ping()`,
+  `session.idleMs` and `openSession({ keepAlive: true })` (a ping after 13 minutes of
+  inactivity). No session pool, and no automatic reopening.
+- `SabreSessionError`, a subclass of `SabreGatewayError` with `kind`: `'limit'`, `'invalid'`,
+  `'expired'` or `'blocked'`. After one, the session is unusable and later calls throw without
+  calling the network.
+- Queue Management in `session.queue`: `count`, `list`, `access`, `ignore`, `remove`, `place` and
+  `exit`, with `QueueRef` (a queue number from 0 to 511, or `{ name }`). The end of the queue is a
+  result (`{ done: true, reason: 'end-of-display' | 'empty' }`), not an error. The operations that
+  move forward return the next PNR. `session.queue.state` tracks whether the session is inside a
+  queue. `place` requires `instructionCode` (the PIC) in every target, because production rejects
+  a `place` without it.
+- `session.queue.process(request, callback)` walks a queue, runs the action the callback returns
+  (`remove`, `ignore` or `place`) and always leaves the queue, with an optional `limit`.
+- `parseQueueParagraph`, a best-effort parser for the host-format PNR of a queue item: queue
+  notices, names, segments, the ticketing field and the received-from line. Lines it does not
+  recognize go to `unparsed`. `resolveHostDate` resolves the year of a host date against a
+  reference date.
+- SOAP reliability: `onRawResponse` on every `SabreLegacy` operation, with the whole envelope
+  and the session token replaced by `[REDACTED]`. Retries: reads (`count`, `list`, `ping`) are
+  retried on transient failures. The operations that move the cursor are retried only on
+  `USG_*_BUSY` and `PREVIOUS ENTRY ACTIVE`, and never after a network failure.
+- `sabre-client/testing`, a separate entry point that is not part of the main bundle:
+  `createQueueFake` returns a `fetch` that answers like Sabre's sessions and queues, for testing
+  queue logic without the network. `queueFixtures` holds anonymized production responses.
 - Web Standard APIs only: runs on Node.js `>=22.12` and on server-side edge runtimes.
   ESM-only build.
 

@@ -12,8 +12,8 @@ TypeScript SDK for the Sabre APIs.
 
 ## Status
 
-`0.3.0` is **not released yet**. It will be released once both Tier 1 and Tier 2 of the
-Air Booking flow are done. Until then, `npm install sabre-client` installs `0.2.4`.
+`0.3.0` is **not released yet**. It will be released once Tier 1 and Tier 2 of the Air Booking
+flow and Tier 3 (SOAP sessions and queues) are done. Until then, `npm install sabre-client` installs `0.2.4`.
 
 Prereleases of the rewrite are published under the `next` tag:
 
@@ -39,7 +39,16 @@ Tier 2 adds seat selection:
 | - | - | - |
 | Seat map | Get Seats v3 (`byReservationPayload` and `byPnrLocator`) | `sabre.air.getSeats` |
 
-Planned after `0.3.0`: Get Ancillaries (NDC only), and a `SabreLegacy` client for SOAP services.
+Tier 3 adds the `SabreLegacy` SOAP client, with a stateful session and Queue Management (see
+[SOAP sessions and queues](#soap-sessions-and-queues-sabrelegacy)):
+
+| Step | Service | Method |
+| - | - | - |
+| Session | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
+| Queues | Get Queue Count, Access Queue, Place Queue Message | `session.queue.count`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
+| Queue paragraph | — (pure function) | `parseQueueParagraph`, `resolveHostDate` |
+
+Planned after `0.3.0`: Get Ancillaries (NDC only).
 
 ## Requirements
 
@@ -246,6 +255,170 @@ Things to know:
   against Sabre yet. Prices arrive as numbers even though the spec says strings, so the types
   accept both.
 
+## SOAP sessions and queues (`SabreLegacy`)
+
+`SabreLegacy` is the client for Sabre's SOAP services. It takes the same `SabreConfig` as `Sabre`.
+The session's user, PCC and domain come from `credentials.username`
+(`V1:<user>:<PCC>:<domain>` or `<user>-<PCC>-<domain>`). The `SessionCreateRQ` version comes from
+the credentials: 2.0.0 with `clientId` and `clientSecret`, 1.0.0 without them. Passing only one of
+the two, or a `username` in neither format, throws a `TypeError` when the client is created.
+
+```ts
+import { SabreLegacy } from 'sabre-client';
+
+const legacy = new SabreLegacy({
+  environment: 'production',
+  authVersion: 'v2',
+  credentials: { username: 'V1:<user>:<PCC>:AA', password: process.env.SABRE_EPR_PASSWORD! },
+});
+
+const counts = await legacy.withSession((session) => session.queue.count());
+```
+
+### Sessions
+
+- **`withSession(callback)` is the recommended form.** It opens a session, lends it to the
+  callback and always closes it, also when the callback throws. It returns what the callback
+  returns. If closing fails, it logs `sabre.session.closeFailed` and keeps the callback's result
+  or error.
+- **`openSession(options?)`** is for controlling the session's lifetime yourself. Close it with
+  `try { … } finally { await session.close() }`. `close()` is idempotent. If the runtime has
+  `Symbol.asyncDispose`, `await using` works too, but the types do not declare it.
+- **A session is exclusive.** Sabre does not allow concurrent calls on one session, so a second
+  call while another is in flight throws `TypeError: sabre-client: session busy` without calling
+  the network. Calls after `close()` throw `session closed`.
+- **Inactivity.** Sabre documents a 15-minute inactivity timeout (in production, sessions have
+  lasted longer). `session.idleMs` is the
+  time since Sabre last answered, and `session.ping()` resets it. With
+  `openSession({ keepAlive: true })`, the SDK pings after 13 minutes of inactivity. It is off by
+  default, because a timer does not survive between serverless or edge invocations.
+- **No pool, and no automatic reopening.** Each `withSession` opens and closes one session. After
+  a `SabreSessionError`, the session is unusable: later calls throw `session unusable` without
+  calling the network, and `close()` resolves without calling it. The SDK does not reopen the
+  session, because the queue cursor is already lost. Starting over is your decision.
+
+### Queues
+
+The queue operations live in `session.queue`. `pcc` is optional in every call and defaults to the
+session's PCC. A queue is a number from 0 to 511 or `{ name }` for alphabetic queues
+(`QueueRef`). The queues returned by `count` can be passed straight to the other operations.
+
+| Method | Sabre service | Returns |
+| - | - | - |
+| `count({ pcc? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, warnings }` |
+| `list({ queue, pcc?, primaryPassenger? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, without entering the queue |
+| `access({ queue, pcc?, selection? })` | `QueueAccessLLSRQ` | `QueueStep` |
+| `ignore()` | `QueueAccessLLSRQ` (`I`) | `QueueStep` |
+| `remove({ from? })` | `QueueAccessLLSRQ` (`QR`) | `QueueStep` |
+| `place({ to, locators? })` | `QueuePlaceLLSRQ` | `QueueStep` inside a queue, `{ placements, text, warnings }` outside |
+| `exit()` | `QueueAccessLLSRQ` (`QXI`) | `void` |
+
+```ts
+type QueueStep =
+  | { done: false; item: QueueItem; warnings: SabreWarning[] }
+  | { done: true; reason: 'end-of-display' | 'empty'; message: string; warnings: SabreWarning[] };
+```
+
+- **The end of the queue is a result, not an error.** `END OF DISPLAY FOR REQUESTED DATA` gives
+  `{ done: true, reason: 'end-of-display' }`, and an empty queue (`QUEUE SELECTED WAS EMPTY`)
+  gives `reason: 'empty'`. In both cases the session is left outside the queue. Any other Sabre
+  error is thrown as a `SabreBusinessError`.
+- **The operations that move forward return the next item**, so there is no extra call per PNR.
+  Inside a queue, `place` moves the current PNR to the target queues and returns the next one.
+- **The SDK tracks whether the session is inside a queue** (`session.queue.state`: `'outside'`,
+  `'inside'` or `'unknown'`). `ignore`, `remove` and `exit` outside a queue throw a `TypeError`
+  without calling the network. So do `access` while inside a queue, and `place` with `locators`
+  inside a queue or in `'unknown'`. When an operation fails inside a queue with an error that is
+  not a session error, the state becomes `'unknown'`, because the SDK cannot tell whether Sabre
+  left the session inside. Call `exit()` to get out: in `'unknown'`, it tolerates
+  `CANNOT DO THIS IF OFF QUEUE`.
+- **`place`**: inside a queue it places the current PNR. With `locators` (up to 6), it places
+  those PNRs from outside a queue. Without either, it places the PNR in the AAA.
+- **`instructionCode` (the PIC) is required in every `place` target.** It must be 0–191 or 200–254.
+  Production rejects a `place` without it, although the design says it is optional.
+- **`QueueItem`** has `locator`, the `placedAt` and `placedBy` of `Line`, `primaryPassenger` and
+  `group` when Sabre sends them, and `paragraph`: the PNR in host format, line by line and
+  untouched. `placedAt` is the text that arrived, with or without the year. `resolveHostDate`
+  turns it into a full date.
+- `count` inside a queue does not count the PNR on screen.
+
+### Walking a queue with `process`
+
+`process` enters the queue, calls your callback for each PNR, runs the action it returns and stops
+at the end of the queue. It does nothing the primitives cannot do: it covers the common case and
+makes sure the session leaves the queue.
+
+```ts
+const result = await legacy.withSession((session) =>
+  session.queue.process({ queue: 12, limit: 200 }, (item) => {
+    if (isDone(item)) return { action: 'remove' };
+    if (needsReview(item)) return { action: 'place', to: [{ queue: 50, instructionCode: 11 }] };
+    return { action: 'ignore' };
+  }),
+);
+// result: { visited: number; ended: 'end-of-display' | 'empty' | 'limit' }
+```
+
+- When it reaches `limit`, it leaves the queue with `QXI`. `limit` is optional and has no default
+  cap, but passing one is recommended.
+- If the callback throws, `process` leaves the queue with `QXI` and rethrows. It does not turn the
+  error into `ignore`. To carry on, catch the error in the callback and return `ignore`.
+
+### Reading the paragraph
+
+`parseQueueParagraph(item.paragraph, { referenceDate })` is a separate pure function that does not
+run on its own. It returns `{ messages, passengers, segments, ticketing, receivedFrom, unparsed }`:
+the queue notices (`011  SEE REMARKS` → `{ instructionCode: 11, text: 'SEE REMARKS' }`), names,
+segments with their status, the ticketing field with an `issued` flag, and the received-from line.
+
+- **It is best effort.** The host format has no contract. A line the parser does not recognize
+  goes to `unparsed`, and the parser does not throw.
+- **`referenceDate` is required.** Host dates have no year (`06SEP`), so the year is resolved
+  against that date. Segments and ticketing take the nearest date within ±6 months, and the
+  received-from line goes backwards. Dates come out as ISO strings without a time zone.
+- It does not read deadlines that airlines write as free text in remarks, SSR or OSI. Their format
+  belongs to each airline. The text is still in `paragraph`.
+
+### Testing your queue logic: `sabre-client/testing`
+
+`sabre-client/testing` is a separate entry point with a fake of Sabre's sessions and queues. It is
+not part of the main bundle. `createQueueFake` returns a `fetch` that you pass in `config.fetch`,
+so your test goes through the SDK's real transport, session and parsing, without the network:
+
+```ts
+import { SabreLegacy } from 'sabre-client';
+import { createQueueFake } from 'sabre-client/testing';
+
+const fake = createQueueFake({
+  queues: {
+    '12': [
+      [' 1.1DOE/JANE', ' 1 XX 123Y 15DEC 2 MEXCUN HK1', 'ABCD.ABCD*AAA 1200/01NOV26 AAAAAA H'],
+      { locator: 'BBBBBB', paragraph: [' 1.1ROE/JOHN'] },
+    ],
+  },
+});
+const legacy = new SabreLegacy({ ...config, fetch: fake.fetch });
+
+await legacy.withSession((session) => session.queue.process({ queue: 12 }, () => ({ action: 'remove' })));
+
+fake.locators(12); // []
+fake.openSessions; // 0: the session was closed
+```
+
+- Each PNR is a paragraph, with the locator taken from its signature line, or
+  `{ locator, paragraph?, placedAt?, placedBy?, primaryPassenger? }`. A paragraph without a
+  signature line gets a synthetic one. `pnrs` adds PNRs that are not in any queue, for
+  `place({ locators })`. The fake has no AAA: outside a queue, `place` needs `locators`.
+- It answers like production: empty queues, the end of the queue, `place` moving the PNR, the
+  required PIC, and an expired session with `fake.expireSessions()`. `fake.calls` lists what the
+  SDK asked for.
+- **Not simulated**: PCCs (the queues are the same for any `pcc`) and `selection`, which gets an
+  error instead of the whole queue.
+- `queueFixtures` holds the anonymized responses recorded in production (`walk`, `emptyQueue`,
+  `place`, …), as `{ operation, status, body }`.
+
+`examples/queue-review.mjs` is a full example, and its test runs it against the fake.
+
 ## Error handling
 
 Every error thrown by the SDK extends `SabreError`:
@@ -255,6 +428,7 @@ Every error thrown by the SDK extends `SabreError`:
 | `SabreGatewayError` | HTTP or gateway failure (`ERR.2SG.*`, `401`, `429`, `5xx`, OAuth errors) | `protocol`, `status`, `code` |
 | `SabreOrchestrationError` | Orchestrated service error inside a `200` (`SP.*`) | `code` |
 | `SabreBusinessError` | Error from a service's own catalog (e.g. `No Availability`, a booking that was not created) | `service`, `code`, `warnings`, `errors` |
+| `SabreSessionError` | SOAP session failure in `SabreLegacy`, a subclass of `SabreGatewayError` | `kind`: `'limit'` (more than 50 sessions), `'invalid'`, `'expired'`, `'blocked'` |
 | `SabreWarning` | Non-fatal warning (e.g. `category: WARNING` in Create Booking) | `service`, `code` |
 
 All of them have `retryable`, which says whether the retry policy may try again.
@@ -283,7 +457,8 @@ try {
 ## Raw response
 
 Every REST operation (`air.bargainFinderMax`, `air.revalidateItinerary`, `air.getSeats`,
-`booking.create`, `booking.get` and `booking.cancel`) accepts an `onRawResponse` callback in its
+`booking.create`, `booking.get` and `booking.cancel`), and every `SabreLegacy` operation, accepts
+an `onRawResponse` callback in its
 options, next to `signal`. It receives Sabre's response as it arrived, for example to store it
 next to the typed result. For `air.getSeats`, `operation` names the endpoint that was called
 (`air.getSeatsByPayload` or `air.getSeatsByPnrLocator`):
@@ -306,6 +481,10 @@ const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r)
   failing callback never makes `booking.create` lose its `confirmationId`. To persist
   asynchronously, keep the value and write it after the call returns.
 
+In `SabreLegacy`, `protocol` is `'soap'`, `body` is the whole SOAP envelope, and `operation` is
+`'openSession'`, `'close'`, `'ping'` or `'queue.<method>'`. The session token
+(`BinarySecurityToken`) is replaced by `[REDACTED]` wherever it appears. Nothing else is changed.
+
 > [!WARNING]
 > `body` is the raw response and **contains passenger data**. The SDK never sends it to the
 > logger. Where you store it is up to you.
@@ -316,6 +495,12 @@ Only idempotent operations are retried: Bargain Finder Max and Revalidate Itiner
 are read-only `POST`s). Create Booking is never retried. Retries use exponential backoff with
 full jitter and a 500 ms floor, on `429`, `500`, `503`, `504`, `SP.PROVIDER_ERROR` and the
 temporary errors in the Bargain Finder Max catalog.
+
+In `SabreLegacy`, `count`, `list` and `ping` are reads and are retried on transient failures. The
+operations that move the queue cursor (`access`, `ignore`, `remove`, `place`, `exit`) are retried
+only on the `USG_*_BUSY` codes, which are taken to mean that Sabre did not process the request, and on
+`PREVIOUS ENTRY ACTIVE` (3 × 1 s). They are never retried after a network failure, because the PNR
+may already have moved: the queue state becomes `'unknown'`.
 
 ## Token reuse
 
@@ -361,7 +546,9 @@ const sabre = new Sabre({
 
 The SDK logs structured events (`sabre.request.start`, `sabre.request.end`,
 `sabre.request.retry`, `sabre.request.rawResponseHookFailed`, `sabre.auth.token.refresh`,
-`sabre.auth.token.store`, `sabre.booking.seat.priced`), never raw
+`sabre.auth.token.store`, `sabre.booking.seat.priced`, `sabre.session.open`,
+`sabre.session.close`, `sabre.session.closeFailed`, `sabre.session.keepAliveFailed`,
+`sabre.queue.exitTolerated`, `sabre.queue.exitFailed`), never raw
 request or response bodies. Secrets, the `Authorization` header and passenger data are always
 redacted before they reach your logger.
 

@@ -13,7 +13,7 @@ SDK de TypeScript para las APIs de Sabre.
 ## Estado
 
 `0.3.0` **todavía no está publicada**. Se publica cuando estén terminados el Tier 1 y el
-Tier 2 del flujo de Air Booking. Mientras tanto, `npm install sabre-client` instala `0.2.4`.
+Tier 2 del flujo de Air Booking, y el Tier 3 (sesiones SOAP y colas). Mientras tanto, `npm install sabre-client` instala `0.2.4`.
 
 Las prereleases de la reescritura se publican con el tag `next`:
 
@@ -39,8 +39,16 @@ El Tier 2 agrega la elección de asiento:
 | - | - | - |
 | Mapa de asientos | Get Seats v3 (`byReservationPayload` y `byPnrLocator`) | `sabre.air.getSeats` |
 
-Planeado después de `0.3.0`: Get Ancillaries (solo NDC) y un cliente `SabreLegacy` para los
-servicios SOAP.
+El Tier 3 agrega el cliente SOAP `SabreLegacy`, con una sesión stateful y Queue Management (ver
+[Sesiones SOAP y colas](#sesiones-soap-y-colas-sabrelegacy)):
+
+| Paso | Servicio | Método |
+| - | - | - |
+| Sesión | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
+| Colas | Get Queue Count, Access Queue, Place Queue Message | `session.queue.count`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
+| Párrafo de cola | — (función pura) | `parseQueueParagraph`, `resolveHostDate` |
+
+Planeado después de `0.3.0`: Get Ancillaries (solo NDC).
 
 ## Requisitos
 
@@ -248,6 +256,173 @@ A tener en cuenta:
   probaron contra Sabre. Los precios llegan como número aunque el spec diga string, así que
   los tipos aceptan los dos.
 
+## Sesiones SOAP y colas (`SabreLegacy`)
+
+`SabreLegacy` es el cliente de los servicios SOAP de Sabre. Recibe la misma `SabreConfig` que
+`Sabre`. Usuario, PCC y domain de la sesión salen de `credentials.username`
+(`V1:<user>:<PCC>:<domain>` o `<user>-<PCC>-<domain>`). La versión de `SessionCreateRQ` sale de
+las credenciales: 2.0.0 con `clientId` y `clientSecret`, 1.0.0 sin ellos. Si pasas solo uno de los
+dos, o un `username` que no está en ninguno de los dos formatos, se lanza un `TypeError` al crear
+el cliente.
+
+```ts
+import { SabreLegacy } from 'sabre-client';
+
+const legacy = new SabreLegacy({
+  environment: 'production',
+  authVersion: 'v2',
+  credentials: { username: 'V1:<user>:<PCC>:AA', password: process.env.SABRE_EPR_PASSWORD! },
+});
+
+const counts = await legacy.withSession((session) => session.queue.count());
+```
+
+### Sesiones
+
+- **`withSession(callback)` es la forma recomendada.** Abre una sesión, se la presta al callback y
+  la cierra siempre, también si el callback lanza. Devuelve lo mismo que el callback. Si el cierre
+  falla, registra `sabre.session.closeFailed` y conserva el resultado o el error del callback.
+- **`openSession(options?)`** sirve para controlar tú la vida de la sesión. Se cierra con
+  `try { … } finally { await session.close() }`. `close()` es idempotente. Si el runtime tiene
+  `Symbol.asyncDispose`, también funciona `await using`, pero los tipos no lo declaran.
+- **Una sesión es exclusiva.** Sabre no admite llamadas concurrentes en una misma sesión, así que
+  una segunda llamada mientras otra está en vuelo lanza `TypeError: sabre-client: session busy`
+  sin llamar a la red. Las llamadas después de `close()` lanzan `session closed`.
+- **Inactividad.** Sabre documenta un timeout de 15 minutos de inactividad (en producción, las
+  sesiones duraron más).
+  `session.idleMs` es el tiempo desde la última respuesta de Sabre, y `session.ping()` lo
+  reinicia. Con `openSession({ keepAlive: true })`, el SDK manda un ping a los 13 minutos de
+  inactividad. Viene apagado, porque un timer no sobrevive entre invocaciones serverless o edge.
+- **Sin pool, y sin reabrir sola.** Cada `withSession` abre y cierra una sesión. Después de un
+  `SabreSessionError`, la sesión queda inutilizable: las llamadas siguientes lanzan
+  `session unusable` sin red, y `close()` resuelve sin red. El SDK no la reabre, porque el cursor
+  de la cola ya se perdió. Volver a empezar es decisión tuya.
+
+### Colas
+
+Las operaciones de cola están en `session.queue`. `pcc` es opcional en cada llamada, y por defecto
+es el de la sesión. Una cola es un número de 0 a 511, o `{ name }` para las colas alfabéticas
+(`QueueRef`). Las colas que devuelve `count` se pasan tal cual a las demás operaciones.
+
+| Método | Servicio de Sabre | Devuelve |
+| - | - | - |
+| `count({ pcc? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, warnings }` |
+| `list({ queue, pcc?, primaryPassenger? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, sin entrar a la cola |
+| `access({ queue, pcc?, selection? })` | `QueueAccessLLSRQ` | `QueueStep` |
+| `ignore()` | `QueueAccessLLSRQ` (`I`) | `QueueStep` |
+| `remove({ from? })` | `QueueAccessLLSRQ` (`QR`) | `QueueStep` |
+| `place({ to, locators? })` | `QueuePlaceLLSRQ` | `QueueStep` dentro de una cola, `{ placements, text, warnings }` fuera |
+| `exit()` | `QueueAccessLLSRQ` (`QXI`) | `void` |
+
+```ts
+type QueueStep =
+  | { done: false; item: QueueItem; warnings: SabreWarning[] }
+  | { done: true; reason: 'end-of-display' | 'empty'; message: string; warnings: SabreWarning[] };
+```
+
+- **El fin de cola es un resultado, no un error.** `END OF DISPLAY FOR REQUESTED DATA` da
+  `{ done: true, reason: 'end-of-display' }`, y una cola vacía (`QUEUE SELECTED WAS EMPTY`) da
+  `reason: 'empty'`. En los dos casos la sesión queda fuera de la cola. Cualquier otro error de
+  Sabre se lanza como `SabreBusinessError`.
+- **Las operaciones que avanzan devuelven el ítem siguiente**, así que no hace falta una llamada
+  extra por PNR. Dentro de una cola, `place` mueve el PNR actual a las colas de destino y devuelve
+  el siguiente.
+- **El SDK lleva la cuenta de si la sesión está dentro de una cola** (`session.queue.state`:
+  `'outside'`, `'inside'` o `'unknown'`). Fuera de una cola, `ignore`, `remove` y `exit` lanzan un
+  `TypeError` sin llamar a la red. Lo mismo pasa con `access` estando dentro de una cola, y con
+  `place` con `locators` dentro de una cola o en `'unknown'`. Si una operación falla
+  dentro de una cola con un error que no es de sesión, el estado pasa a `'unknown'`, porque el SDK
+  no sabe si Sabre dejó la sesión adentro. Para salir, llama a `exit()`: con `'unknown'`, tolera
+  `CANNOT DO THIS IF OFF QUEUE`.
+- **`place`**: dentro de una cola coloca el PNR actual. Con `locators` (hasta 6), coloca esos PNR
+  desde fuera de una cola. Sin ninguno de los dos, coloca el PNR del AAA.
+- **`instructionCode` (el PIC) es obligatorio en cada destino de `place`.** Tiene que estar en
+  0–191 o 200–254. Producción rechaza un `place` sin PIC, aunque el design lo dé como opcional.
+- **`QueueItem`** trae `locator`, el `placedAt` y el `placedBy` de `Line`, `primaryPassenger` y
+  `group` cuando Sabre los manda, y `paragraph`: el PNR en formato de host, línea por línea y
+  sin tocar. `placedAt` es el texto que llegó, con o sin año. `resolveHostDate` lo convierte en una
+  fecha completa.
+- `count` dentro de una cola no cuenta el PNR que está en pantalla.
+
+### Recorrer una cola con `process`
+
+`process` entra a la cola, llama a tu callback por cada PNR, ejecuta la acción que devuelve y
+termina en el fin de cola. No hace nada que no se pueda hacer con las primitivas: cubre el caso
+común y se asegura de que la sesión salga de la cola.
+
+```ts
+const result = await legacy.withSession((session) =>
+  session.queue.process({ queue: 12, limit: 200 }, (item) => {
+    if (isDone(item)) return { action: 'remove' };
+    if (needsReview(item)) return { action: 'place', to: [{ queue: 50, instructionCode: 11 }] };
+    return { action: 'ignore' };
+  }),
+);
+// result: { visited: number; ended: 'end-of-display' | 'empty' | 'limit' }
+```
+
+- Al llegar a `limit`, sale de la cola con `QXI`. `limit` es opcional y no tiene tope por defecto,
+  pero conviene pasarlo.
+- Si el callback lanza, `process` sale de la cola con `QXI` y propaga el error. No lo convierte en
+  `ignore`. Para seguir de largo, atrapa el error en el callback y devuelve `ignore`.
+
+### Leer el párrafo
+
+`parseQueueParagraph(item.paragraph, { referenceDate })` es una función pura aparte, que no corre
+sola. Devuelve `{ messages, passengers, segments, ticketing, receivedFrom, unparsed }`: los avisos
+de cola (`011  SEE REMARKS` → `{ instructionCode: 11, text: 'SEE REMARKS' }`), los nombres, los
+segmentos con su estado, el campo de ticketing con una marca `issued` y la línea de recibido.
+
+- **Es best effort.** El formato de host no tiene contrato. Una línea que el parser no reconoce va
+  a `unparsed`, y el parser no lanza.
+- **`referenceDate` es obligatorio.** Las fechas del host vienen sin año (`06SEP`), así que el año
+  se resuelve contra esa fecha. Los segmentos y el ticketing toman la fecha más cercana dentro de
+  ±6 meses, y la línea de recibido se resuelve hacia atrás. Las fechas salen como strings ISO sin
+  zona horaria.
+- No lee los plazos que las aerolíneas escriben como texto libre en remarks, SSR u OSI. Su formato
+  lo pone cada aerolínea. El texto sigue en `paragraph`.
+
+### Probar tu lógica de colas: `sabre-client/testing`
+
+`sabre-client/testing` es una entrada aparte, con un fake de las sesiones y las colas de Sabre. No
+forma parte del bundle principal. `createQueueFake` devuelve un `fetch` que pasas en
+`config.fetch`, así que tu test pasa por el transporte, la sesión y el parseo reales del SDK, sin
+red:
+
+```ts
+import { SabreLegacy } from 'sabre-client';
+import { createQueueFake } from 'sabre-client/testing';
+
+const fake = createQueueFake({
+  queues: {
+    '12': [
+      [' 1.1DOE/JANE', ' 1 XX 123Y 15DEC 2 MEXCUN HK1', 'ABCD.ABCD*AAA 1200/01NOV26 AAAAAA H'],
+      { locator: 'BBBBBB', paragraph: [' 1.1ROE/JOHN'] },
+    ],
+  },
+});
+const legacy = new SabreLegacy({ ...config, fetch: fake.fetch });
+
+await legacy.withSession((session) => session.queue.process({ queue: 12 }, () => ({ action: 'remove' })));
+
+fake.locators(12); // []
+fake.openSessions; // 0: la sesión se cerró
+```
+
+- Cada PNR es un párrafo, con el localizador tomado de su línea de firma, o
+  `{ locator, paragraph?, placedAt?, placedBy?, primaryPassenger? }`. A un párrafo sin línea de
+  firma se le agrega una sintética. `pnrs` agrega PNR que no están en ninguna cola, para
+  `place({ locators })`. El fake no tiene AAA: fuera de una cola, `place` necesita `locators`.
+- Responde como producción: colas vacías, el fin de cola, `place` que mueve el PNR, el PIC
+  obligatorio y una sesión vencida con `fake.expireSessions()`. `fake.calls` lista lo que pidió el
+  SDK.
+- **No simula** los PCC (las colas son las mismas para cualquier `pcc`) ni `selection`, que recibe
+  un error en vez de la cola entera.
+- `queueFixtures` trae las respuestas anonimizadas que se grabaron en producción (`walk`,
+  `emptyQueue`, `place`…), como `{ operation, status, body }`.
+
+`examples/queue-review.mjs` es un ejemplo completo, y su test lo corre contra el fake.
+
 ## Manejo de errores
 
 Todos los errores que lanza el SDK extienden `SabreError`:
@@ -257,6 +432,7 @@ Todos los errores que lanza el SDK extienden `SabreError`:
 | `SabreGatewayError` | Falla HTTP o del gateway (`ERR.2SG.*`, `401`, `429`, `5xx`, errores de OAuth) | `protocol`, `status`, `code` |
 | `SabreOrchestrationError` | Error de un servicio orquestado dentro de un `200` (`SP.*`) | `code` |
 | `SabreBusinessError` | Error del catálogo propio de un servicio (p. ej. `No Availability`, una reserva que no se creó) | `service`, `code`, `warnings`, `errors` |
+| `SabreSessionError` | Falla de la sesión SOAP de `SabreLegacy`, subclase de `SabreGatewayError` | `kind`: `'limit'` (más de 50 sesiones), `'invalid'`, `'expired'`, `'blocked'` |
 | `SabreWarning` | Aviso no fatal (p. ej. `category: WARNING` en Create Booking) | `service`, `code` |
 
 Todos tienen `retryable`, que indica si la política de reintentos puede volver a intentar.
@@ -285,7 +461,8 @@ try {
 ## Respuesta cruda
 
 Toda operación REST (`air.bargainFinderMax`, `air.revalidateItinerary`, `air.getSeats`,
-`booking.create`, `booking.get` y `booking.cancel`) acepta un callback `onRawResponse` en sus
+`booking.create`, `booking.get` y `booking.cancel`), y toda operación de `SabreLegacy`, acepta un
+callback `onRawResponse` en sus
 opciones, junto a `signal`. Recibe la respuesta de Sabre tal cual llegó, por ejemplo para
 guardarla junto al resultado tipado. En `air.getSeats`, `operation` indica el endpoint que se
 llamó (`air.getSeatsByPayload` o `air.getSeatsByPnrLocator`):
@@ -308,6 +485,10 @@ const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r)
   nunca hace que `booking.create` pierda su `confirmationId`. Para guardar de forma asíncrona,
   conserva el valor y escríbelo cuando la llamada vuelva.
 
+En `SabreLegacy`, `protocol` es `'soap'`, `body` es el sobre SOAP completo, y `operation` es
+`'openSession'`, `'close'`, `'ping'` o `'queue.<método>'`. El token de la sesión
+(`BinarySecurityToken`) se reemplaza por `[REDACTED]` donde aparezca. No se cambia nada más.
+
 > [!WARNING]
 > `body` es la respuesta cruda y **trae datos de pasajeros**. El SDK nunca lo manda al logger.
 > Dónde lo guardas es tu responsabilidad.
@@ -318,6 +499,12 @@ Solo se reintentan las operaciones idempotentes: Bargain Finder Max y Revalidate
 (ambas son `POST` de solo lectura). Create Booking nunca se reintenta. Los reintentos usan
 backoff exponencial con full jitter y un piso de 500 ms, ante `429`, `500`, `503`, `504`,
 `SP.PROVIDER_ERROR` y los errores temporales del catálogo de Bargain Finder Max.
+
+En `SabreLegacy`, `count`, `list` y `ping` son lecturas y se reintentan ante fallos transitorios.
+Las operaciones que mueven el cursor de la cola (`access`, `ignore`, `remove`, `place`, `exit`) se
+reintentan solo ante los `USG_*_BUSY`, que se toman como señal de que Sabre no procesó el request, y ante
+`PREVIOUS ENTRY ACTIVE` (3 × 1 s). Nunca se reintentan después de un fallo de red, porque el PNR
+pudo haberse movido: el estado de la cola pasa a `'unknown'`.
 
 ## Reutilizar el token
 
@@ -362,7 +549,9 @@ const sabre = new Sabre({
 
 El SDK registra eventos estructurados (`sabre.request.start`, `sabre.request.end`,
 `sabre.request.retry`, `sabre.request.rawResponseHookFailed`, `sabre.auth.token.refresh`,
-`sabre.auth.token.store`, `sabre.booking.seat.priced`) y nunca los bodies
+`sabre.auth.token.store`, `sabre.booking.seat.priced`, `sabre.session.open`,
+`sabre.session.close`, `sabre.session.closeFailed`, `sabre.session.keepAliveFailed`,
+`sabre.queue.exitTolerated`, `sabre.queue.exitFailed`) y nunca los bodies
 crudos de request o response. Los secretos, el header `Authorization` y los datos de pasajeros
 se redactan siempre antes de llegar a tu logger.
 

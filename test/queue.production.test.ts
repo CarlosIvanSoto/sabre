@@ -2,7 +2,9 @@
 // scripts/validate-queue.mjs. Las fixtures vienen anonimizadas: PCC y firmas como `XXXX`/`AAA`,
 // localizadores como alias y el párrafo enmascarado.
 import { describe, expect, it } from 'vitest';
-import { SabreBusinessError } from '../src/index.js';
+import { parseQueueParagraph, SabreBusinessError } from '../src/index.js';
+import countAfterWalk from './fixtures/queue.production-count.json';
+import walk from './fixtures/queue.production-walk.json';
 import emptyQueueWalk from './fixtures/queue.production-walk-empty-queue.json';
 import { mockFetch } from './helpers.js';
 import { legacyClient, queueRS, rejection, soap, success, xml } from './soap-helpers.js';
@@ -79,5 +81,69 @@ describe('stl:Error con la forma real', () => {
     expect(error).toBeInstanceOf(SabreBusinessError);
     expect(error).toMatchObject({ code: 'ERR.SWS.HOST.ERROR_IN_RESPONSE', message: 'queueAccess: IGD (ERR.SWS.HOST.ERROR_IN_RESPONSE)' });
     expect(session.queue.state).toBe('outside');
+  });
+});
+
+/** La cuenta de la cola 2 en un `count`. */
+const queue2 = (count: { queues: Array<{ queue: unknown; count: number }> }) => count.queues.find((q) => q.queue === 2)?.count;
+
+describe('recorrido de solo lectura en producción (cola 2, 4 PNR)', () => {
+  /** Las respuestas del recorrido en el orden de la API pública, sin las pruebas crudas del script. */
+  async function replayWalk() {
+    const operations = walk.responses.filter((response) => !response.operation.startsWith('probe.'));
+    const fetch = mockFetch(...operations.map((response) => xml(response.status, response.body)));
+    const { client } = legacyClient(fetch);
+    const session = await client.openSession();
+    const before = await session.queue.count();
+    const list = await session.queue.list({ queue: 2 });
+    const visited = [];
+    let step = await session.queue.access({ queue: 2 });
+    const inside = await session.queue.count();
+    while (!step.done) {
+      visited.push(step.item);
+      step = await session.queue.ignore();
+    }
+    await session.close();
+    return { before, list, visited, inside, step, session };
+  }
+
+  it('recorre los PNR en el orden de list y termina en END OF DISPLAY', async () => {
+    const { list, visited, step, session } = await replayWalk();
+    expect(list.locators).toEqual(['AAAAAA', 'AAAAAB', 'AAAAAC', 'AAAAAD']);
+    expect(visited.map((item) => item.locator)).toEqual(list.locators);
+    expect(step).toMatchObject({ done: true, reason: 'end-of-display', message: 'END OF DISPLAY FOR REQUESTED DATA' });
+    expect(session.queue.state).toBe('outside');
+  });
+
+  it('count dentro de la cola no mueve el cursor, y no cuenta el PNR abierto', async () => {
+    const { before, inside, visited } = await replayWalk();
+    expect(queue2(before)).toBe(4);
+    expect(queue2(inside)).toBe(3);
+    // Después del count, ignore devolvió el segundo PNR de la lista.
+    expect(visited[1]?.locator).toBe('AAAAAB');
+  });
+
+  it('después del recorrido la cola sigue con sus 4 PNR', async () => {
+    const fetch = mockFetch(...countAfterWalk.responses.map((response) => xml(response.status, response.body)));
+    const session = await legacyClient(fetch).client.openSession();
+    expect(queue2(await session.queue.count())).toBe(4);
+  });
+
+  it('el Line de access no trae Number, y su DateTime no es el de list', async () => {
+    const { list, visited } = await replayWalk();
+    for (const [index, item] of visited.entries()) {
+      expect(item.placedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+      expect(item.placedAt).not.toBe(list.entries[index]?.placedAt);
+      expect(list.entries[index]?.position).toBe(index + 1);
+    }
+  });
+
+  it('parseQueueParagraph lee el párrafo real enmascarado sin lanzar', async () => {
+    const { visited } = await replayWalk();
+    for (const item of visited) {
+      const parsed = parseQueueParagraph(item.paragraph, { referenceDate: '2026-11-01' });
+      expect(parsed.messages).toEqual([{ instructionCode: 84, text: 'RATE/CONFIRMATION NUMBER RTND' }]);
+      expect(parsed.unparsed.length).toBeGreaterThan(0);
+    }
   });
 });

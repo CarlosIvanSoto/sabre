@@ -13,6 +13,8 @@
 //   dentro de la cola?, y el texto de `QXI` fuera de una cola) → access → count dentro de la cola →
 //   ignore hasta el fin de cola o SABRE_QUEUE_LIMIT PNR (10 por defecto) → exit si hace falta.
 // - `empty` (una sesión): count → list(SABRE_EMPTY_QUEUE) → access → exit si hace falta.
+// - `count` (una sesión): solo count, para comprobar cuántos PNR tiene SABRE_QUEUE después de un
+//   recorrido. No entra a ninguna cola.
 //
 // Las pruebas crudas usan el método interno de la sesión (`sessionSend`), sacado del prototipo con
 // Object.getOwnPropertySymbols: el SDK no deja mandar `I` ni `QXI` cuando cree que la sesión está
@@ -37,8 +39,8 @@ import { writeFileSync } from 'node:fs';
 import { SabreError, SabreLegacy } from '../dist/index.js';
 
 const scenario = process.argv[2];
-if (scenario !== 'walk' && scenario !== 'empty') {
-  console.error(`escenario desconocido: ${scenario ?? '(ninguno)'} (usa walk o empty)`);
+if (scenario !== 'walk' && scenario !== 'empty' && scenario !== 'count') {
+  console.error(`escenario desconocido: ${scenario ?? '(ninguno)'} (usa walk, empty o count)`);
   process.exit(2);
 }
 const environment = process.env.SABRE_ENVIRONMENT ?? 'sandbox';
@@ -73,7 +75,7 @@ const queuePcc = queuePccEnv === 'target' ? env('SABRE_TARGET_PCC') : queuePccEn
 const pccRequest = queuePcc === undefined ? {} : { pcc: queuePcc };
 
 const queueRef = (text) => (/^\d+$/.test(text) ? Number(text) : { name: text });
-const queueText = scenario === 'walk' ? env('SABRE_QUEUE') : env('SABRE_EMPTY_QUEUE');
+const queueText = scenario === 'empty' ? env('SABRE_EMPTY_QUEUE') : env('SABRE_QUEUE');
 const queue = queueRef(queueText);
 const limit = Number(process.env.SABRE_QUEUE_LIMIT ?? 10);
 if (!Number.isInteger(limit) || limit < 1) {
@@ -206,10 +208,17 @@ const rawNavigation = (action) =>
     ...options,
   });
 
+class CountOnly extends Error {}
 let listed;
 const visited = [];
 try {
-  await step('count', () => session.queue.count(pccRequest, options), (r) => ({ queues: r.queues.length, totals: r.totals }));
+  const sameQueue = (ref) => (typeof ref === 'number' ? ref === queue : typeof queue === 'object' && ref.name === queue.name);
+  await step('count', () => session.queue.count(pccRequest, options), (r) => ({
+    queues: r.queues.length,
+    totals: r.totals,
+    queue: { queue: queueText, count: r.queues.find((q) => sameQueue(q.queue))?.count ?? 0 },
+  }));
+  if (scenario === 'count') throw new CountOnly();
   listed = await step('list', () => session.queue.list({ queue, ...pccRequest }, options), (r) => ({ locators: r.locators.map(aliasOf) }));
 
   if (scenario === 'walk') {
@@ -224,13 +233,18 @@ try {
   if (current !== undefined && !current.done) visited.push(current.item.locator);
 
   if (scenario === 'walk' && current !== undefined && !current.done) {
-    await step('count dentro de la cola', () => session.queue.count(pccRequest, options), (r) => ({ queues: r.queues.length }));
+    await step('count dentro de la cola', () => session.queue.count(pccRequest, options), (r) => ({
+      queues: r.queues.length,
+      queue: { queue: queueText, count: r.queues.find((q) => sameQueue(q.queue))?.count ?? 0 },
+    }));
     while (current !== undefined && !current.done && visited.length < limit) {
       current = await step('ignore', () => session.queue.ignore(options), stepSummary);
       if (current !== undefined && !current.done) visited.push(current.item.locator);
     }
   }
   if (session.queue.state !== 'outside') await step('exit', () => session.queue.exit(options));
+} catch (error) {
+  if (!(error instanceof CountOnly)) throw error;
 } finally {
   await step('close', () => session.close(options));
 }

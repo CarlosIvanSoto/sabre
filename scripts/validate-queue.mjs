@@ -20,7 +20,9 @@
 //
 // Variables: las de scripts/validate-session.mjs (SABRE_USERNAME, SABRE_PASSWORD, SABRE_PCC o
 // SABRE_ORGANIZATION, SABRE_CLIENT_ID, SABRE_CLIENT_SECRET, SABRE_DOMAIN, SABRE_ENVIRONMENT), más
-// SABRE_QUEUE, SABRE_EMPTY_QUEUE (un número o un nombre de cola) y SABRE_QUEUE_LIMIT.
+// SABRE_QUEUE, SABRE_EMPTY_QUEUE (un número o un nombre de cola), SABRE_QUEUE_LIMIT y
+// SABRE_QUEUE_PCC (el PCC de las colas; por defecto, el de la sesión). Con SABRE_QUEUE_PCC=target se
+// usa SABRE_TARGET_PCC.
 //
 // Anonimización, porque el párrafo es el PNR entero:
 // - cada localizador pasa a uno falso (AAAAAA, AAAAAB…), igual en todo el sobre;
@@ -66,6 +68,10 @@ const clientId = env('SABRE_CLIENT_ID');
 const clientSecret = env('SABRE_CLIENT_SECRET');
 const username = `${user}-${pcc}-${domain}`;
 
+const queuePccEnv = process.env.SABRE_QUEUE_PCC;
+const queuePcc = queuePccEnv === 'target' ? env('SABRE_TARGET_PCC') : queuePccEnv;
+const pccRequest = queuePcc === undefined ? {} : { pcc: queuePcc };
+
 const queueRef = (text) => (/^\d+$/.test(text) ? Number(text) : { name: text });
 const queueText = scenario === 'walk' ? env('SABRE_QUEUE') : env('SABRE_EMPTY_QUEUE');
 const queue = queueRef(queueText);
@@ -76,7 +82,7 @@ if (!Number.isInteger(limit) || limit < 1) {
 }
 
 // --- Anonimización ------------------------------------------------------------------------------
-const secrets = [username, `V1:${user}:${pcc}:${domain}`, user, pcc, password, clientId, clientSecret]
+const secrets = [username, `V1:${user}:${pcc}:${domain}`, user, pcc, queuePcc, password, clientId, clientSecret]
   .filter((value) => typeof value === 'string' && value.length >= 3)
   .sort((a, b) => b.length - a.length);
 const redactSecrets = (text) => secrets.reduce((value, secret) => value.split(secret).join('XXXX'), String(text));
@@ -181,7 +187,7 @@ const stepSummary = (value) =>
       ? { done: true, message: value.message, warnings: value.warnings.length }
       : { done: false, locator: aliasOf(value.item.locator), warnings: value.warnings.length };
 
-console.log(`entorno ${environment} · escenario ${scenario} · cola ${queueText}`);
+console.log(`entorno ${environment} · escenario ${scenario} · cola ${queueText} · PCC de las colas: ${queuePccEnv === 'target' ? 'SABRE_TARGET_PCC' : queuePcc === undefined ? 'el de la sesión' : 'SABRE_QUEUE_PCC'}`);
 const session = await legacy.openSession(options);
 const send = Object.getOwnPropertySymbols(Object.getPrototypeOf(session)).find((s) => s.description === 'sabre-client.session.send');
 if (send === undefined) {
@@ -203,8 +209,8 @@ const rawNavigation = (action) =>
 let listed;
 const visited = [];
 try {
-  await step('count', () => session.queue.count({}, options), (r) => ({ queues: r.queues.length, totals: r.totals }));
-  listed = await step('list', () => session.queue.list({ queue }, options), (r) => ({ locators: r.locators.map(aliasOf) }));
+  await step('count', () => session.queue.count(pccRequest, options), (r) => ({ queues: r.queues.length, totals: r.totals }));
+  listed = await step('list', () => session.queue.list({ queue, ...pccRequest }, options), (r) => ({ locators: r.locators.map(aliasOf) }));
 
   if (scenario === 'walk') {
     // ¿list dejó la sesión dentro de la cola? Un `I` crudo: un PNR quiere decir que sí.
@@ -214,11 +220,11 @@ try {
     await step('probe.QXI fuera de una cola', () => rawNavigation('QXI'), (r) => ({ payload: r.payloadName }));
   }
 
-  let current = await step('access', () => session.queue.access({ queue }, options), stepSummary);
+  let current = await step('access', () => session.queue.access({ queue, ...pccRequest }, options), stepSummary);
   if (current !== undefined && !current.done) visited.push(current.item.locator);
 
   if (scenario === 'walk' && current !== undefined && !current.done) {
-    await step('count dentro de la cola', () => session.queue.count({}, options), (r) => ({ queues: r.queues.length }));
+    await step('count dentro de la cola', () => session.queue.count(pccRequest, options), (r) => ({ queues: r.queues.length }));
     while (current !== undefined && !current.done && visited.length < limit) {
       current = await step('ignore', () => session.queue.ignore(options), stepSummary);
       if (current !== undefined && !current.done) visited.push(current.item.locator);
@@ -260,7 +266,7 @@ const fixture = {
 const text = `${JSON.stringify(fixture, null, 2)}\n`;
 
 const leaks = [
-  ...[password, clientId, clientSecret, user, pcc].filter((s) => s.length >= 3 && text.includes(s)).map(() => 'secreto'),
+  ...[password, clientId, clientSecret, user, pcc, queuePcc].filter((s) => typeof s === 'string' && s.length >= 3 && text.includes(s)).map(() => 'secreto'),
   ...[...locatorAliases.keys()].filter((locator) => text.includes(locator)).map(() => 'localizador'),
   ...[...realNames.keys()].filter((name) => name.length >= 3 && text.includes(name)).map(() => 'nombre'),
   ...[...maskedLines].filter((line) => text.includes(line)).map(() => 'línea del párrafo'),

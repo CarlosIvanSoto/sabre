@@ -96,6 +96,8 @@ export interface SoapResponse {
   warnings: SabreWarning[];
   /** `eb:MessageId` de la respuesta, el dato que pide soporte de Sabre. */
   messageId: string | undefined;
+  /** El sobre redactado, como `raw` de los errores que arme la operación al leer el payload. */
+  raw: string;
   /** El `BinarySecurityToken` del header, solo con `readSecurityToken`. */
   securityToken: string | undefined;
   status: number;
@@ -249,6 +251,7 @@ export class SoapTransport {
       return {
         ...result,
         messageId,
+        raw: text,
         securityToken: request.readSecurityToken === true ? readSecurityToken(original) : undefined,
         status: response.status,
       };

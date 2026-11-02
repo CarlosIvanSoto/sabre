@@ -3,6 +3,9 @@ export const VERSION = '0.3.0';
 export { Sabre } from './sabre.js';
 export { SabreLegacy } from './sabre-legacy.js';
 export type { OpenSessionOptions, SabreSession } from './session/session.js';
+export type { QueueManagement } from './queue/queue-management.js';
+export type { QueueRef } from './queue/queue-ref.js';
+export type { QueueCount, QueueCountOptions, QueueCountRequest, QueueCountResponse } from './queue/queue-count.js';
 export type { Air } from './air/air.js';
 export type {
   BargainFinderMaxRequest,

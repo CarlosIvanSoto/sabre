@@ -42,7 +42,9 @@ as a minor bump. Versions `0.2.4` and earlier stay published as they are.
   without a seat map throws a non-retryable `SabreBusinessError`; otherwise errors and
   `warnings[]` are returned on the result. `onRawResponse` gets `air.getSeatsByPayload` or
   `air.getSeatsByPnrLocator` as `operation`. Prices are typed as `number | string`, because
-  production sends numbers although the spec says strings.
+  production sends numbers although the spec says strings. Known limitation: `byPnrLocator`
+  has no `targetPcc`, so it cannot read a booking created in another PCC (Sabre answers
+  `502 Viewership is restricted for the PNR`), and it has not been checked against Sabre yet.
 - `buildSeatAvailabilityRequest` to build the Get Seats request from a revalidated itinerary
   (segments `S1`, `S2`, …, fare components and passengers). `segments` picks flights by number,
   starting at 1.

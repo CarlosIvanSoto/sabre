@@ -251,10 +251,15 @@ A tener en cuenta:
   `SabreBusinessError` no reintentable; con mapa, los errores y los `warnings[]` vuelven en
   `seatMap.errors` y `seatMap.warnings`. Los dos endpoints son de lectura, así que los `429` y
   `5xx` del gateway se reintentan.
+- **`byPnrLocator` solo lee PNR del PCC con el que te autenticas.** Su request no tiene
+  `targetPcc`, a diferencia de Create, Get y Cancel Booking. Si la reserva se creó con
+  `targetPcc` en otro PCC, Sabre responde `502` con `Viewership is restricted for the PNR`,
+  que llega como `SabreGatewayError`.
 - **Qué está comprobado.** `byReservationPayload` se probó en producción, en solo lectura, con
-  un vuelo directo y una conexión. `byPnrLocator` y la reserva con asiento todavía no se
-  probaron contra Sabre. Los precios llegan como número aunque el spec diga string, así que
-  los tipos aceptan los dos.
+  un vuelo directo y una conexión. La reserva con asiento se probó en sandbox: el asiento llega
+  al PNR y `sabre.booking.get` lo devuelve en `flights[].seats[]`. `byPnrLocator` todavía no se
+  probó contra Sabre, porque las únicas reservas posibles en sandbox viven en otro PCC. Los
+  precios llegan como número aunque el spec diga string, así que los tipos aceptan los dos.
 
 ## Sesiones SOAP y colas (`SabreLegacy`)
 

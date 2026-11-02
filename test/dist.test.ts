@@ -17,3 +17,35 @@ describe.skipIf(dist === undefined)('build ESM (dist/)', () => {
     expect(err.name).toBe('SabreGatewayError');
   });
 });
+
+// La subruta `sabre-client/testing` (#98): segunda entrada de tsup, fuera del bundle principal.
+const testingPath = '../dist/testing.js';
+const testing: typeof import('../src/testing/index.js') | undefined = await import(/* @vite-ignore */ testingPath).catch(
+  () => undefined,
+);
+
+describe.skipIf(dist === undefined || testing === undefined)('build ESM de sabre-client/testing (dist/)', () => {
+  it('el bundle principal no incluye el fake ni las fixtures', async () => {
+    // Sin tipos de Node en el typecheck: se importa por una ruta en variable.
+    const fsPath = 'node:fs/promises';
+    const { readFile } = (await import(/* @vite-ignore */ fsPath)) as { readFile: (path: URL, encoding: 'utf8') => Promise<string> };
+    const index = await readFile(new URL('../dist/index.js', import.meta.url), 'utf8');
+    expect(index).not.toContain('createQueueFake');
+    expect(index).not.toContain('sabre-client/testing');
+    expect(index).not.toMatch(/from ["']\.\/[^"']*testing/);
+    expect(dist).not.toHaveProperty('createQueueFake');
+  });
+
+  it('el fake de dist/testing.js funciona con el SabreLegacy de dist/index.js', async () => {
+    const fake = testing!.createQueueFake({ queues: { '12': [{ locator: 'AAAAAA' }] } });
+    const legacy = new dist!.SabreLegacy({
+      environment: 'production',
+      authVersion: 'v2',
+      credentials: { username: 'V1:7971:ABCD:AA', password: 'x' },
+      fetch: fake.fetch,
+    });
+    const result = await legacy.withSession((session) => session.queue.process({ queue: 12 }, () => ({ action: 'remove' })));
+    expect(result).toEqual({ visited: 1, ended: 'end-of-display' });
+    expect(Object.keys(testing!.queueFixtures)).toContain('walk');
+  });
+});

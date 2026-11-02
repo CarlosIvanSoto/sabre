@@ -3,7 +3,17 @@ export const VERSION = '0.3.0';
 export { Sabre } from './sabre.js';
 export { SabreLegacy } from './sabre-legacy.js';
 export type { OpenSessionOptions, SabreSession } from './session/session.js';
-export type { QueueManagement } from './queue/queue-management.js';
+export type { QueueManagement, QueueState } from './queue/queue-management.js';
+export type {
+  QueueAccessOptions,
+  QueueAccessRequest,
+  QueueItem,
+  QueueNavigationOptions,
+  QueueRemoveRequest,
+  QueueRemoveTarget,
+  QueueSelection,
+  QueueStep,
+} from './queue/queue-access.js';
 export type { QueueRef } from './queue/queue-ref.js';
 export type { QueueCount, QueueCountOptions, QueueCountRequest, QueueCountResponse } from './queue/queue-count.js';
 export type { Air } from './air/air.js';

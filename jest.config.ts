@@ -6,6 +6,7 @@ const jestConfig: JestConfigWithTsJest = {
   // // testEnvironment: 'node',
   // prettierPath: null,
   ...createDefaultPreset(),
+  roots: ['<rootDir>/src'],
 };
 
 export default jestConfig;

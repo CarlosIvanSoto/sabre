@@ -2,15 +2,21 @@ import { Search, Ticketing } from "./air";
 import { Authentication } from "./authentication/authentication";
 import { Booking, FlightTickets } from "./booking-management";
 import { PostOptions } from "./common/interfaces";
-import { baseUrl, conversationId, domain, userAgent } from "./config";
-import { SabreError } from "./errors";
+import { baseUrl, domain } from "./config";
+import { SabreParseError } from "./errors";
+import { buildChain } from "./http/chain";
+import { Middleware, SabreRequest, SabreResponse } from "./http/types";
 import { SabreOptions } from "./interfaces";
+import { createAuthMiddleware, createBearerAuthMiddleware } from "./middleware/auth";
+import { createDefaultHeadersMiddleware } from "./middleware/default-headers";
+import { createErrorMappingMiddleware } from "./middleware/error-mapping";
 import { Reservation } from "./trip-management/reservation";
 
 export class Sabre {
-  private readonly headers: Headers;
   private readonly secret: string;
   private readonly auth_secret: string | null;
+  private readonly chain: (req: SabreRequest) => Promise<SabreResponse>;
+  private token: string | null = null;
   public readonly grant_type_v2: string;
   public readonly grant_type_v3: string;
 
@@ -36,99 +42,102 @@ export class Sabre {
 
     if (!this.options.username || !this.options.password || !this.options.organization) {
       throw new Error(`Missing Sabre authorization. Pass it to the constructor new Sabre({
-        username: '773400', 
+        username: '773400',
         password: 'PASSWORD_GOES_HERE',
         organization: '7TZA', // pcc
       });})`)
     }
 
-    this.headers = new Headers({
-      'User-Agent': userAgent,
-      'Conversation-ID': conversationId
-    });
-
     this.secret = this.getSecret()
     this.auth_secret = this.getAuthSecret()
     this.grant_type_v2 = this.getGrantTypeV2()
     this.grant_type_v3 = this.getGrantTypeV3()
+
+    const middlewares: Middleware[] = [
+      createDefaultHeadersMiddleware(),
+      createErrorMappingMiddleware(),
+      createBearerAuthMiddleware(() => this.token),
+    ]
+    if (this.options.auth) {
+      middlewares.push(createAuthMiddleware(this.options.auth))
+    }
+    this.chain = buildChain(middlewares)
   }
 
   setAuthorization(token: string): void {
-    this.headers.set('Authorization', `Bearer ${token}`)
-    this.headers.set('Content-Type', 'application/json')
+    this.token = token
   }
 
-  async fetchRequest<T>(
-    path: string,
-    options = {},
-  ): Promise<T> {
-    const response = await fetch(`${baseUrl}${path}`, options);
+  /**
+   * Escape hatch: envía una petición cruda por la cadena de middleware
+   * configurada (cabeceras por defecto, mapeo de errores, auth bearer).
+   * Útil para endpoints que aún no tienen un submódulo propio o para
+   * depuración.
+   */
+  request(req: SabreRequest): Promise<SabreResponse> {
+    return this.chain(req)
+  }
 
-    if (!response.ok) {
-      let errorDetails = `Request failed with status ${response.status}`;
-      try {
-        const jsonError = await response.json() as unknown;
-        errorDetails = JSON.stringify(jsonError);
-      } catch (e) {
-        console.error(e)
-        errorDetails = response.statusText;
-      }
-      throw new SabreError(
-        `Request failed with status ${response.status}`,
-        response.status,
-        errorDetails);
+  private async runRequest<T>(req: SabreRequest): Promise<T> {
+    const res = await this.chain(req)
+    try {
+      return JSON.parse(res.body) as T
+    } catch (err) {
+      throw new SabreParseError(
+        `Could not parse response body from ${req.url} as JSON`,
+        res.body,
+        { cause: err },
+      )
     }
-
-    const data = await response.json() as T;
-    return data;
   }
-  async post<T>(path: string, entity?: unknown, options: PostOptions = {}): Promise<T> {
-    const requestOptions = {
+
+  async post<T>(path: string, entity?: unknown, _options: PostOptions = {}): Promise<T> {
+    const req: SabreRequest = {
       method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify(entity),
-      ...options,
+      url: `${baseUrl}${path}`,
+      headers: { 'Content-Type': 'application/json' },
+      body: entity === undefined ? undefined : JSON.stringify(entity),
     };
 
-    return this.fetchRequest<T>(path, requestOptions);
+    return this.runRequest<T>(req);
   }
 
-  async auth<T>(path: string, entity?: unknown, options: PostOptions = {}): Promise<T> {
+  async auth<T>(path: string, entity?: unknown, _options: PostOptions = {}): Promise<T> {
     /**
-     * La palabra 'basic' seguida de un EPR codificado en base64 
-     * como par base64(base64(V1:usuario:grupo:dominio):base64(contraseña)), 
+     * La palabra 'basic' seguida de un EPR codificado en base64
+     * como par base64(base64(V1:usuario:grupo:dominio):base64(contraseña)),
      * p.e. basic VmpFNmRYTmxjbWxrT21keWIzVndPbVJ2YldGcGJnPT06TVRJek5EVT0=
      */
-    this.headers.set('Authorization', `Basic ${this.secret}`)
-    this.headers.set('Content-Type', 'application/x-www-form-urlencoded')
-
-    const requestOptions = {
+    const req: SabreRequest = {
       method: 'POST',
-      headers: this.headers,
-      body: entity,
-      ...options,
+      url: `${baseUrl}${path}`,
+      headers: {
+        'Authorization': `Basic ${this.secret}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: entity as string | undefined,
     };
 
-    return this.fetchRequest<T>(path, requestOptions);
+    return this.runRequest<T>(req);
   }
-  async authClient<T>(path: string, entity?: unknown, options: PostOptions = {}): Promise<T> {
+
+  async authClient<T>(path: string, entity?: unknown, _options: PostOptions = {}): Promise<T> {
     /**
-     * Credenciales de clientId codificadas con el algoritmo base64 
+     * Credenciales de clientId codificadas con el algoritmo base64
      * pasadas como encabezado de autorización (Authorization: Basic base64(cliendId:clientSecret))
      */
     if (!this.auth_secret) throw new Error('Missing Sabre client id or client secret')
-    this.headers.set('Authorization', `Basic ${this.auth_secret}`)
-    this.headers.set('Content-Type', 'application/x-www-form-urlencoded')
-
-    const requestOptions = {
+    const req: SabreRequest = {
       method: 'POST',
-      headers: this.headers,
-      body: entity,
-      ...options,
+      url: `${baseUrl}${path}`,
+      headers: {
+        'Authorization': `Basic ${this.auth_secret}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: entity as string | undefined,
     };
-    console.log(requestOptions)
 
-    return this.fetchRequest<T>(path, requestOptions);
+    return this.runRequest<T>(req);
   }
 
   private getSecret(): string {

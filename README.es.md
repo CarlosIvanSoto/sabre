@@ -12,16 +12,15 @@ SDK de TypeScript para las APIs de Sabre.
 
 ## Estado
 
-`0.3.0` **todavía no está publicada**. Se publica cuando estén terminados el Tier 1 y el
-Tier 2 del flujo de Air Booking, y el Tier 3 (sesiones SOAP y colas). Mientras tanto, `npm install sabre-client` instala `0.2.4`.
-
-Las prereleases de la reescritura se publican con el tag `next`:
+`0.3.0` es la primera versión publicada de la reescritura. Cubre el Tier 1 y el Tier 2 del
+flujo de Air Booking por REST, y el Tier 3 (sesiones SOAP y colas).
 
 ```sh
-npm install sabre-client@next
+npm install sabre-client
 ```
 
-La API todavía puede cambiar antes de `0.3.0`.
+El paquete sigue en `0.x`: una versión minor puede traer cambios incompatibles, y el
+[CHANGELOG](./CHANGELOG.md) los marca.
 
 El Tier 1 cubre el flujo básico de Air Booking por REST:
 

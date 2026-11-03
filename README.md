@@ -255,9 +255,12 @@ Things to know:
   which surfaces as a `SabreGatewayError`.
 - **What has been checked.** `byReservationPayload` was checked read-only in production, for
   a nonstop and a connection. Booking with a seat was checked in sandbox: the seat reaches the
-  PNR and `sabre.booking.get` returns it in `flights[].seats[]`. `byPnrLocator` has not been
-  checked against Sabre yet, because the only sandbox bookings available live in another PCC.
-  Prices arrive as numbers even though the spec says strings, so the types accept both.
+  PNR and `sabre.booking.get` returns it in `flights[].seats[]`. `byPnrLocator` was checked in
+  sandbox with a booking made in the PCC you authenticate with: it returns the map for the PNR's
+  segments, with Sabre's own passenger and segment ids (`pnr_pax_1`, `segment_ancs_1`) instead
+  of `P1` and `S1`. In sandbox neither endpoint reflects occupancy: every seat comes back as
+  `F`, including the one the PNR holds. Prices arrive as numbers even though the spec says
+  strings, so the types accept both.
 
 ## SOAP sessions and queues (`SabreLegacy`)
 

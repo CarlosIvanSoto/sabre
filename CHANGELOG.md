@@ -7,6 +7,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Get Seats `byPnrLocator` is now checked against Sabre (sandbox), with a booking created in
+  the PCC used to authenticate. The "not checked against Sabre yet" limitation no longer
+  applies; reading a booking from another PCC is still not possible, because the request has
+  no `targetPcc`. In sandbox, seats come back as free (`F`) even when the PNR holds them.
+
 ## [0.3.0] - 2026-11-02
 
 **Complete rewrite.** It is not an incremental update to

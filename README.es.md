@@ -256,9 +256,12 @@ A tener en cuenta:
   que llega como `SabreGatewayError`.
 - **Qué está comprobado.** `byReservationPayload` se probó en producción, en solo lectura, con
   un vuelo directo y una conexión. La reserva con asiento se probó en sandbox: el asiento llega
-  al PNR y `sabre.booking.get` lo devuelve en `flights[].seats[]`. `byPnrLocator` todavía no se
-  probó contra Sabre, porque las únicas reservas posibles en sandbox viven en otro PCC. Los
-  precios llegan como número aunque el spec diga string, así que los tipos aceptan los dos.
+  al PNR y `sabre.booking.get` lo devuelve en `flights[].seats[]`. `byPnrLocator` se probó en
+  sandbox con una reserva hecha en el PCC con el que te autenticas: devuelve el mapa de los
+  segmentos del PNR, con ids propios de Sabre para pasajero y segmento (`pnr_pax_1`,
+  `segment_ancs_1`) en lugar de `P1` y `S1`. En sandbox ninguno de los dos endpoints refleja la
+  ocupación: todos los asientos vienen en `F`, también el que tiene el PNR. Los precios llegan
+  como número aunque el spec diga string, así que los tipos aceptan los dos.
 
 ## Sesiones SOAP y colas (`SabreLegacy`)
 

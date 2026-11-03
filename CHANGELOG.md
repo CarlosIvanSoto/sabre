@@ -7,13 +7,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-**Complete rewrite.** This will be released as `0.3.0`. It is not an incremental update to
+## [0.3.0] - 2026-11-02
+
+**Complete rewrite.** It is not an incremental update to
 `0.2.4`: the package is rebuilt from scratch on a different architecture, and code written
 against `0.2.4` will not work unchanged. Since the package is still `0.x`, the rewrite ships
 as a minor bump. Versions `0.2.4` and earlier stay published as they are.
 
-`0.3.0` will be released once Tier 1 and Tier 2 (Get Seats) of the Air Booking flow and Tier 3
-(SOAP sessions and queues) are done. Get Ancillaries is NDC only and moved to after `0.3.0`.
+`0.3.0` covers Tier 1 and Tier 2 (Get Seats) of the Air Booking flow and Tier 3 (SOAP sessions
+and queues). Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 ### Added
 
@@ -118,3 +120,6 @@ as a minor bump. Versions `0.2.4` and earlier stay published as they are.
 ### Removed
 
 - The whole `0.2.4` API. There is no compatibility layer.
+
+[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/CarlosIvanSoto/sabre/releases/tag/v0.3.0

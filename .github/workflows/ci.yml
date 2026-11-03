@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [rewrite-v0.3]
+    branches: [main, rewrite-v0.3]
   pull_request:
-    branches: [rewrite-v0.3]
+    branches: [main, rewrite-v0.3]
 
 jobs:
   test:

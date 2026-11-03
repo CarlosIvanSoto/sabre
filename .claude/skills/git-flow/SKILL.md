@@ -12,9 +12,9 @@ issue; siguen la vía corta de la sección 9.
 
 ## Constantes del proyecto
 
-- **Rama de integración (base):** `rewrite-v0.3`, que también es la rama por defecto del repo. Todas las ramas salen de aquí y todos los PR apuntan aquí.
-  Nunca usar `main` como base, ni hacer `git diff main`, `git log main` o similares (regla de independencia de `CLAUDE.md`).
-- **Repo:** `CarlosIvanSoto/sabre` · **Milestone:** `v0.3.0 — Tier 1`.
+- **Rama de integración (base):** `main`, que también es la rama por defecto del repo. Todas las ramas salen de aquí y todos los PR apuntan aquí.
+  La implementación anterior vive en `legacy/0.2`: nunca se usa como base.
+- **Repo:** `CarlosIvanSoto/sabre` · **Milestone:** el del issue (uno por tier o hito del plan).
 - **Checks locales (los mismos del CI):** `npm run check:portable && npm run typecheck && npm run build && npm test`.
 - **Prohibido en commits y PR:** líneas `Co-Authored-By`, `Claude-Session`, "Generated with Claude" o cualquier atribución a IA.
 
@@ -31,18 +31,18 @@ Decide en qué situación estás:
 
 | Situación | Qué hacer |
 |---|---|
-| En `rewrite-v0.3` con cambios sin commitear | Ir al paso 1 (identificar issue) y crear la rama; los cambios viajan con `git switch -c`. |
+| En `main` con cambios sin commitear | Ir al paso 1 (identificar issue) y crear la rama; los cambios viajan con `git switch -c`. |
 | En una rama de tarea | Seguir en ella; saltar al paso 3. |
 | Cambios que mezclan varias tareas | Separarlos: solo entra a la rama lo que pertenece al issue. Lo demás se queda sin commitear y se avisa al usuario. |
 | Solo cambian archivos de proceso (ver sección 9) | Ir a la sección 9; no hace falta issue. |
-| `origin/rewrite-v0.3` no existe | Avisar: la rama de integración debe publicarse primero (`git push -u origin rewrite-v0.3`) con confirmación explícita del usuario. |
+| `origin/main` no existe | Avisar: la rama de integración debe publicarse primero (`git push -u origin main`) con confirmación explícita del usuario. |
 
 ## 1. Identificar el issue
 
 - Si viene como argumento, úsalo. Si no, deducirlo del nombre de la rama (`feat/12-...` → #12) o preguntar al usuario mostrando candidatos:
-  `gh issue list --milestone "v0.3.0 — Tier 1" --state open`
+  `gh issue list --state open` (o `--milestone "<milestone>"`)
 - Leerlo: `gh issue view <N> --json number,title,body,labels,milestone`.
-- **Sin issue no hay rama**, salvo los ajustes de proceso de la sección 9. Si el trabajo no tiene issue, proponer crearlo con la plantilla `.github/ISSUE_TEMPLATE/tarea.md` (título `[Fx.y] ...`, etiquetas `tier-1`, `fase-x`, `tipo: ...`, milestone) y esperar confirmación del usuario.
+- **Sin issue no hay rama**, salvo los ajustes de proceso de la sección 9. Si el trabajo no tiene issue, proponer crearlo con la plantilla `.github/ISSUE_TEMPLATE/tarea.md` (título con el código de tarea del plan, etiquetas de tier, `fase-x` y `tipo: ...`, milestone) y esperar confirmación del usuario.
 - Si el issue tiene la etiqueta `bloqueado`, avisar antes de continuar.
 - Los issues `tipo: decisión` y `tipo: fuente` se cierran en el wiki, no en este repo. Solo llevan rama si además tocan código o docs del repo.
 
@@ -62,11 +62,11 @@ Formato: `<tipo>/<issue>-<slug-kebab-case>` (slug corto, 2–5 palabras, sin ace
 Ejemplos: `feat/7-auth-token-cache`, `fix/21-shape-error-gateway`, `chore/3-ci-node18`.
 
 ```bash
-git switch rewrite-v0.3 && git pull --ff-only   # solo si no hay cambios pendientes
+git switch main && git pull --ff-only   # solo si no hay cambios pendientes
 git switch -c feat/7-auth-token-cache
 ```
 
-Si ya hay cambios sin commitear en `rewrite-v0.3`, crear la rama directamente con `git switch -c` (no hacer pull antes).
+Si ya hay cambios sin commitear en `main`, crear la rama directamente con `git switch -c` (no hacer pull antes).
 
 ## 3. Commits
 
@@ -115,7 +115,7 @@ Revisar también la definición de terminado del issue (checklist en su cuerpo) 
 Antes de cualquier acción remota, mostrar un resumen corto y esperar el visto bueno:
 
 - rama y base
-- lista de commits (`git log --oneline rewrite-v0.3..HEAD`)
+- lista de commits (`git log --oneline main..HEAD`)
 - resultado de los checks
 - título del PR propuesto
 
@@ -125,7 +125,7 @@ Antes de cualquier acción remota, mostrar un resumen corto y esperar el visto b
 git push -u origin <rama>
 ```
 
-- Nunca hacer push directo a `rewrite-v0.3` ni a `main`.
+- Nunca hacer push directo a `main` ni a `legacy/0.2`.
 - Si hay que reescribir la rama ya subida (rebase sobre la base), usar solo `git push --force-with-lease`, nunca `--force`.
 
 ## 7. Pull Request
@@ -135,18 +135,18 @@ Título = el mensaje del futuro squash commit, en Conventional Commits con el c�
 
 ```bash
 gh pr create \
-  --base rewrite-v0.3 \
+  --base main \
   --head <rama> \
   --title "<tipo>(<scope>): <resumen> [Fx.y]" \
-  --milestone "v0.3.0 — Tier 1" \
-  --label "<las etiquetas tier-1 / fase-x / tipo del issue, sin 'bloqueado'>" \
+  --milestone "<el milestone del issue>" \
+  --label "<las etiquetas de tier / fase-x / tipo del issue, sin 'bloqueado'>" \
   --assignee @me \
   --body-file <archivo temporal en el scratchpad>
 ```
 
 El cuerpo sigue `.github/pull_request_template.md` y se llena de verdad:
 
-- `Closes #N` en la primera línea (cierra el issue al hacer merge; `rewrite-v0.3` es la rama por
+- `Closes #N` en la primera línea (cierra el issue al hacer merge; `main` es la rama por
   defecto del repo). Comprobar que quedó enlazado:
   `gh pr view <PR> --json closingIssuesReferences`. Si sale vacío, revisar la palabra clave y
   volver a guardar el cuerpo con `gh pr edit <PR> --body-file ...`.
@@ -162,16 +162,16 @@ Al terminar, devolver al usuario la URL del PR.
 
 ## 8. Merge y limpieza (cuando el usuario lo pida)
 
-Estrategia: **squash merge** → un commit por issue en `rewrite-v0.3`, con el título del PR como mensaje.
+Estrategia: **squash merge** → un commit por issue en `main`, con el título del PR como mensaje.
 
 ```bash
 gh pr checks <PR> --watch          # esperar CI en verde
 gh pr merge <PR> --squash --delete-branch
-git switch rewrite-v0.3 && git pull --ff-only
+git switch main && git pull --ff-only
 git branch -d <rama>               # si sigue existiendo en local
 ```
 
-Si la base avanzó mientras el PR estaba abierto: `git fetch origin && git rebase origin/rewrite-v0.3`, repetir checks y `git push --force-with-lease`.
+Si la base avanzó mientras el PR estaba abierto: `git fetch origin && git rebase origin/main`, repetir checks y `git push --force-with-lease`.
 
 Después del merge, verificar que el issue quedó cerrado y, si hubo hallazgos, que están en la página correspondiente del wiki.
 
@@ -192,12 +192,12 @@ y `.github/workflows/`. Esos cambios llevan issue y siguen los pasos 1–8.
 
 **Cómo:**
 
-1. Rama `chore/proceso-<slug>` desde `rewrite-v0.3`, por ejemplo `chore/proceso-cierre-manual-issues`.
+1. Rama `chore/proceso-<slug>` desde `main`, por ejemplo `chore/proceso-cierre-manual-issues`.
    No se mezclan con una rama de tarea: si aparecen en medio de una tarea, se quedan sin commitear y
    se llevan a su propia rama.
 2. Commit `chore(proceso): <resumen>`, con el cuerpo explicando el porqué y sin footer `Refs`.
 3. Los checks del paso 4 no hacen falta (no se toca código); la CI del PR corre igual.
-4. Confirmar con el usuario (paso 5), push (paso 6) y PR contra `rewrite-v0.3` con título
+4. Confirmar con el usuario (paso 5), push (paso 6) y PR contra `main` con título
    `chore(proceso): <resumen>`, sin código de tarea `[Fx.y]`, sin milestone ni etiquetas de fase.
    El cuerpo puede ser corto: qué cambia y por qué. Las secciones de la plantilla que no apliquen
    (definición de terminado, referencias del wiki) se marcan "No aplica".
@@ -206,7 +206,7 @@ y `.github/workflows/`. Esos cambios llevan issue y siguen los pasos 1–8.
 ## Reglas que no se rompen
 
 - Nada de commits sin issue asociado, salvo los ajustes de proceso de la sección 9.
-- Nada de push directo a `rewrite-v0.3` o `main`; todo entra por PR.
+- Nada de push directo a `main` o `legacy/0.2`; todo entra por PR.
 - Nada de `--force` (solo `--force-with-lease`, y solo en ramas propias).
 - Nada de `--no-verify` para saltarse hooks.
 - Nada de `git stash` sin etiqueta: el stash se comparte con otros worktrees. Para apartar trabajo, usar un commit WIP en la rama.

@@ -558,7 +558,7 @@ const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r)
   asynchronously, keep the value and write it after the call returns.
 
 In `SabreLegacy`, `protocol` is `'soap'`, `body` is the whole SOAP envelope, and `operation` is
-`'openSession'`, `'close'`, `'ping'` or `'queue.<method>'`. The session token
+`'openSession'`, `'close'`, `'ping'`, `'command'` or `'queue.<method>'`. The session token
 (`BinarySecurityToken`) is replaced by `[REDACTED]` wherever it appears. Nothing else is changed.
 
 > [!WARNING]

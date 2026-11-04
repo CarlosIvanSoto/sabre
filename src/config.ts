@@ -10,6 +10,11 @@ export type SabreAuthVersion = 'v3' | 'v2';
 
 /** Credenciales para OAuth Token Create v3: Client ID/Secret más usuario EPR. */
 export interface SabreCredentials {
+  /**
+   * Versión de OAuth para la que se armaron. `buildCredentials` la pone; la config la usa cuando
+   * no trae su propio `authVersion`.
+   */
+  authVersion?: 'v3';
   clientId: string;
   clientSecret: string;
   /** Usuario EPR. */
@@ -20,6 +25,11 @@ export interface SabreCredentials {
 
 /** Credenciales para OAuth Token Create v2: solo EPR; `clientId`/`clientSecret` se ignoran. */
 export interface SabreCredentialsV2 {
+  /**
+   * Versión de OAuth para la que se armaron. `buildCredentials` la pone, y con ella la config no
+   * necesita repetir `authVersion: 'v2'`.
+   */
+  authVersion?: 'v2';
   clientId?: string;
   clientSecret?: string;
   /** Usuario EPR. */
@@ -56,8 +66,20 @@ export interface SabreConfigV2 extends SabreBaseConfig {
   credentials: SabreCredentialsV2;
 }
 
-/** Config del cliente, discriminada por `authVersion`. */
-export type SabreConfig = SabreConfigV3 | SabreConfigV2;
+/**
+ * OAuth Token Create v2 sin `authVersion` en la config: la versión sale de las credenciales,
+ * como las devuelve `buildCredentials({ authVersion: 'v2', … })`.
+ */
+export interface SabreConfigV2FromCredentials extends SabreBaseConfig {
+  authVersion?: never;
+  credentials: SabreCredentialsV2 & { authVersion: 'v2' };
+}
+
+/**
+ * Config del cliente, discriminada por `authVersion`: el de la config o, si falta, el de
+ * `credentials`. Sin ninguno de los dos, es v3.
+ */
+export type SabreConfig = SabreConfigV3 | SabreConfigV2 | SabreConfigV2FromCredentials;
 
 export const BASE_URLS: Readonly<Record<SabreEnvironment, string>> = Object.freeze({
   sandbox: 'https://api.cert.platform.sabre.com',
@@ -106,13 +128,22 @@ export function resolveConfig(config: SabreConfig): ResolvedConfig {
     fail(`environment debe ser 'sandbox' o 'production' (recibido: ${JSON.stringify(environment)})`);
   }
 
-  const authVersion = config.authVersion ?? 'v3';
-  if (authVersion !== 'v3' && authVersion !== 'v2') {
-    fail(`authVersion debe ser 'v3' o 'v2' (recibido: ${JSON.stringify(authVersion)})`);
+  const configVersion = config.authVersion ?? undefined;
+  if (configVersion !== undefined && configVersion !== 'v3' && configVersion !== 'v2') {
+    fail(`authVersion debe ser 'v3' o 'v2' (recibido: ${JSON.stringify(configVersion)})`);
   }
 
   const { credentials } = config;
   if (!isObject(credentials)) fail('credentials es requerido');
+  // La marca que pone `buildCredentials`: evita repetir `authVersion` en la config (#148).
+  const credentialsVersion = credentials.authVersion ?? undefined;
+  if (credentialsVersion !== undefined && credentialsVersion !== 'v3' && credentialsVersion !== 'v2') {
+    fail(`credentials.authVersion debe ser 'v3' o 'v2' (recibido: ${JSON.stringify(credentialsVersion)})`);
+  }
+  if (configVersion !== undefined && credentialsVersion !== undefined && configVersion !== credentialsVersion) {
+    fail(`authVersion '${configVersion}' no coincide con credentials.authVersion '${credentialsVersion}'`);
+  }
+  const authVersion: SabreAuthVersion = configVersion ?? credentialsVersion ?? 'v3';
   requireString(credentials.username, 'credentials.username');
   requireString(credentials.password, 'credentials.password');
   if (authVersion === 'v3') {

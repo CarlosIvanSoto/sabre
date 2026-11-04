@@ -87,7 +87,6 @@ const logger = process.env.SABRE_DEBUG === '1' ? console : undefined;
 
 const sabre = new Sabre({
   environment,
-  authVersion,
   credentials,
   fetch: countingFetch,
   ...(tokenStore === undefined ? {} : { tokenStore }),

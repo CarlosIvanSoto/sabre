@@ -9,7 +9,8 @@ export const credentials = {
 };
 
 export function config(overrides: Partial<SabreConfig> = {}): SabreConfig {
-  return { credentials, environment: 'sandbox', ...overrides };
+  // `Partial` de una unión mezcla variantes: el resultado se valida en runtime, no aquí.
+  return { credentials, environment: 'sandbox', ...overrides } as SabreConfig;
 }
 
 export function json(status: number, body?: unknown, headers: Record<string, string> = {}): Response {

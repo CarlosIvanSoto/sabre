@@ -7,6 +7,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `buildCredentials` now returns its `authVersion` in the credentials object, and the `Sabre` and
+  `SabreLegacy` config takes it from there when the config has no `authVersion` of its own. With
+  `buildCredentials({ authVersion: 'v2', … })`, the config no longer has to repeat
+  `authVersion: 'v2'`, in the types or at runtime (#148). A config `authVersion` that does not
+  match the credentials throws a `TypeError`. Hand-built credentials work as before.
+- New types: `BuiltCredentialsV3`, `BuiltCredentialsV2` and `SabreConfigV2FromCredentials`.
+
 ## [0.4.0] - 2026-11-04
 
 Two additions, with nothing removed or changed in the `0.3.0` API: a helper to build

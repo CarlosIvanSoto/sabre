@@ -7,6 +7,8 @@ export type {
   BuildCredentialsOptions,
   BuildCredentialsOptionsV2,
   BuildCredentialsOptionsV3,
+  BuiltCredentialsV2,
+  BuiltCredentialsV3,
 } from './auth/credentials.js';
 export type { OpenSessionOptions, SabreSession } from './session/session.js';
 export type { SabreCommandOptions, SabreCommandResponse } from './session/command.js';
@@ -175,6 +177,7 @@ export type {
   SabreAuthVersion,
   SabreConfig,
   SabreConfigV2,
+  SabreConfigV2FromCredentials,
   SabreConfigV3,
   SabreCredentials,
   SabreCredentialsV2,

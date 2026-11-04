@@ -344,13 +344,24 @@ or issue tickets. There is no list of allowed or blocked commands.
 
 ```ts
 const screen = await legacy.withSession((session) => session.command('W/PT¥*', { idempotent: true }));
-// screen.text      → 'PSGR TYPE - ON'
+// screen.text      → 'PSGR TYPE - ON' (as Sabre sends it, not trimmed)
 // screen.warnings  → the stl:Warning entries, if any
 // screen.messageId → eb:MessageId, for Sabre support
 ```
 
 - **The command is sent as is.** In this service Sabre's `‡` separator is written `¥`
   (`W/PT‡*` in Sabre Red is `W/PT¥*` here); the SDK does not convert it.
+- **The screen is not trimmed.** Host screens are aligned by column and can start with a space
+  (` 17MAR  WED…`), so `text` is the content of `Response` as is. Trim it yourself if you need to.
+- **Up to 1023 characters, counted as Sabre does:** `!`, `%`, `$`, `&`, `¥` and `§` count 2. A
+  longer command throws a `TypeError` without calling the network (Sabre would answer
+  `REQUEST EXCEEDED MAXIMUM LENGTH`).
+- **Sabre blocks some commands on its own** (`SO`, `/@`, `¤¤`, per its whitelist), even though
+  the SDK has no list of its own.
+- **Some commands cost more.** `JR` and `WPNI` count as "Worldfare" searches.
+- **Host masks** are answered with the first two characters of the mask.
+- **Prefer a structured API.** Sabre asks not to use this service for what already has one: when
+  the SDK has an operation for it, use that.
 - **No retries by default**, because the SDK cannot tell a read from a change. Pass
   `{ idempotent: true }` for read-only commands and they follow the [retry policy](#retries).
 - **A host message is not an error.** `DUTY CODE 9 REQUIRED` or `FORMAT` come back in `text`. A

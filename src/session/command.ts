@@ -4,11 +4,16 @@
 // script de configuración de agencia del 2026-11-03.
 import type { RequestOptions } from '../air/bargain-finder-max.js';
 import { SabreGatewayError, type SabreWarning } from '../errors/index.js';
-import { type SoapResponse, textOf, xmlEscape } from '../http/soap-transport.js';
+import { type SoapResponse, textOf, untrimmedPayload, xmlEscape } from '../http/soap-transport.js';
 import type { SessionRequest } from './session.js';
 
 export const SABRE_COMMAND_SERVICE = 'sabreCommand';
 const NAMESPACE = 'http://webservices.sabre.com/sabreXML/2011/10';
+
+/** Largo máximo de `HostCommand`, contado como Sabre (ver `sabreCommandLength`). */
+export const MAX_COMMAND_LENGTH = 1023;
+/** Caracteres que Sabre cuenta doble en el largo del comando. */
+const DOUBLE_WIDTH = new Set(['!', '%', '$', '&', '¥', '§']);
 
 export interface SabreCommandOptions extends RequestOptions {
   /**
@@ -20,9 +25,10 @@ export interface SabreCommandOptions extends RequestOptions {
 
 export interface SabreCommandResponse {
   /**
-   * La pantalla tal como la devuelve Sabre (`Response`), sin interpretar y sin espacios al
-   * principio ni al final. Un mensaje de host (`DUTY CODE 9 REQUIRED`, `FORMAT`) llega aquí: no
-   * lanza.
+   * La pantalla tal como la devuelve Sabre (`Response`), sin interpretar y sin recortar: las
+   * pantallas van alineadas por columna y pueden empezar con un espacio (` 17MAR  WED…`). Recortar
+   * es decisión de quien la lee. Un mensaje de host (`DUTY CODE 9 REQUIRED`, `FORMAT`) llega aquí:
+   * no lanza.
    */
   text: string;
   /** Los `stl:Warning` de la respuesta. No lanzan. */
@@ -49,9 +55,23 @@ export function commandToken(command: string): string {
   return (command.trim().split(/[¥‡\s]/u)[0] ?? '').slice(0, 4);
 }
 
+/**
+ * Largo del comando como lo cuenta Sabre: cada carácter vale 1, salvo `!`, `%`, `$`, `&`, `¥` y
+ * `§`, que valen 2. Más de `MAX_COMMAND_LENGTH` y Sabre responde `REQUEST EXCEEDED MAXIMUM LENGTH`.
+ */
+export function sabreCommandLength(command: string): number {
+  let length = 0;
+  for (const char of command) length += DOUBLE_WIDTH.has(char) ? 2 : 1;
+  return length;
+}
+
 /** Valida el comando y arma la request. Sin reintento salvo `idempotent: true`. */
 export function sabreCommandRequest(command: string, options: SabreCommandOptions): SessionRequest {
   if (typeof command !== 'string' || command.trim() === '') fail('command es requerido y debe ser un string no vacío');
+  const length = sabreCommandLength(command);
+  if (length > MAX_COMMAND_LENGTH) {
+    fail(`command mide ${length} y el máximo es ${MAX_COMMAND_LENGTH} (!, %, $, &, ¥ y § cuentan 2); Sabre respondería REQUEST EXCEEDED MAXIMUM LENGTH`);
+  }
   const { idempotent = false, ...requestOptions } = options;
   if (typeof idempotent !== 'boolean') fail('idempotent debe ser un boolean');
   return {
@@ -65,8 +85,9 @@ export function sabreCommandRequest(command: string, options: SabreCommandOption
 }
 
 /**
- * Lee `SabreCommandLLSRS`: solo la pantalla, los avisos y el `MessageId`. Sin `Response` la
- * pantalla queda vacía. Otro elemento en el `Body` es una respuesta que el SDK no entiende.
+ * Lee `SabreCommandLLSRS`: solo la pantalla, los avisos y el `MessageId`. La pantalla sale de un
+ * parseo sin recorte (`untrimmedPayload`), no del payload compartido. Sin `Response` la pantalla
+ * queda vacía. Otro elemento en el `Body` es una respuesta que el SDK no entiende.
  */
 export function parseSabreCommandResponse(response: SoapResponse): SabreCommandResponse {
   if (response.payloadName !== 'SabreCommandLLSRS') {
@@ -78,7 +99,7 @@ export function parseSabreCommandResponse(response: SoapResponse): SabreCommandR
     });
   }
   return {
-    text: textOf(response.payload.Response) ?? '',
+    text: textOf((untrimmedPayload(response.raw) ?? response.payload).Response) ?? '',
     warnings: response.warnings,
     messageId: response.messageId,
   };

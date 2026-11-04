@@ -156,7 +156,8 @@ export class SabreSession {
    * Manda un comando de host (`SabreCommandLLSRQ` 2.0.0) y devuelve la pantalla como texto, sin
    * interpretarla. Es una vía de escape: sin tipos ni garantías, y un comando puede cambiar la
    * configuración del PCC o emitir. El comando va tal cual; el separador de Sabre Red (`‡`) se
-   * escribe `¥`. Sin reintento salvo `{ idempotent: true }`, para comandos de solo lectura.
+   * escribe `¥`. Sin reintento salvo `{ idempotent: true }`, para comandos de solo lectura. La
+   * pantalla llega sin recortar, y más de 1023 caracteres (contados como Sabre) lanza sin red.
    */
   async command(command: string, options: SabreCommandOptions = {}): Promise<SabreCommandResponse> {
     const request = sabreCommandRequest(command, options);

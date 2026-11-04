@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SabreConfig } from '../src/config.js';
 import { SabreBusinessError, SabreGatewayError, SabreLegacy, SabreSessionError } from '../src/index.js';
-import { commandToken, sabreCommandPayload, sabreCommandRequest } from '../src/session/command.js';
+import { commandToken, MAX_COMMAND_LENGTH, sabreCommandLength, sabreCommandPayload, sabreCommandRequest } from '../src/session/command.js';
 import { mockFetch } from './helpers.js';
 import { entry, fault, hostError, memoryLogger, SESSION_TOKEN, soap, tokenHeader, xml } from './soap-helpers.js';
 
@@ -70,7 +70,32 @@ describe('commandToken', () => {
   });
 });
 
+describe('sabreCommandLength', () => {
+  it.each<[string, number]>([
+    ['W/PT¥*', 7],
+    ['*IM', 3],
+    ['!%$&¥§', 12],
+    ['‡', 1],
+    ['', 0],
+  ])('%s → %i', (command, length) => {
+    expect(sabreCommandLength(command)).toBe(length);
+  });
+});
+
 describe('sabreCommandRequest', () => {
+  it(`acepta hasta ${MAX_COMMAND_LENGTH} contados como Sabre`, () => {
+    expect(() => sabreCommandRequest('A'.repeat(MAX_COMMAND_LENGTH), {})).not.toThrow();
+    expect(() => sabreCommandRequest(`${'¥'.repeat(511)}A`, {})).not.toThrow();
+  });
+
+  it.each<[string, string]>([
+    ['1024 caracteres simples', 'A'.repeat(MAX_COMMAND_LENGTH + 1)],
+    ['512 ¥ (cuentan 2 cada uno)', '¥'.repeat(512)],
+  ])('rechaza %s con TypeError', (_, command) => {
+    expect(() => sabreCommandRequest(command, {})).toThrow(TypeError);
+    expect(() => sabreCommandRequest(command, {})).toThrow(/^sabre-client: command mide 1024 y el máximo es 1023/);
+  });
+
   it('sin reintento por defecto; con idempotent: true entra en la política', () => {
     expect(sabreCommandRequest('W/PT¥*', {}).idempotent).toBe(false);
     expect(sabreCommandRequest('W/PT¥*', { idempotent: true }).idempotent).toBe(true);
@@ -101,6 +126,22 @@ describe('session.command', () => {
     expect(sent).toContain(`>${SESSION_TOKEN}</wsse:BinarySecurityToken>`);
   });
 
+  it('entrega la pantalla sin recortar: espacios al principio, al final y saltos de línea', async () => {
+    const screen = ' 17MAR  WED   MEX/CST                \n  1 AM  402  Y    MEXCUN  0700  0915\n';
+    const fetch = mockFetch(opened(), xml(200, soap(commandRS(screen))));
+    const session = await legacy(fetch).client.openSession();
+
+    await expect(session.command('1MEXCUN17MAR')).resolves.toMatchObject({ text: screen });
+  });
+
+  it('un comando que excede el largo lanza TypeError sin llamar a la red', async () => {
+    const fetch = mockFetch(opened());
+    const session = await legacy(fetch).client.openSession();
+
+    await expect(session.command('¥'.repeat(512))).rejects.toThrow(TypeError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('un mensaje de host en la pantalla no lanza: llega en text', async () => {
     const fetch = mockFetch(opened(), xml(200, soap(commandRS('DUTY CODE 9 REQUIRED'))));
     const session = await legacy(fetch).client.openSession();
@@ -124,6 +165,28 @@ describe('session.command', () => {
     const screen = await session.command('W/PT¥*');
     expect(screen.warnings).toHaveLength(1);
     expect(screen.warnings[0]?.code).toBe('WARN.SWS.HOST.WARNING_IN_RESPONSE');
+  });
+
+  it('lee un stl:Warning con la forma del diseño: HostCommand, Message@code y ShortText', async () => {
+    const results =
+      '<stl:Warning type="BusinessLogic" timeStamp="2026-11-04T12:00:00Z"><stl:SystemSpecificResults><stl:HostCommand LNIATA="6B3525">W/PT¥*</stl:HostCommand><stl:Message code="12">CHECK FORMAT</stl:Message><stl:ShortText>WARN.SWS.HOST.WARNING_IN_RESPONSE</stl:ShortText></stl:SystemSpecificResults></stl:Warning>';
+    const fetch = mockFetch(opened(), xml(200, soap(commandRS('OK', results))));
+    const session = await legacy(fetch).client.openSession();
+
+    const screen = await session.command('W/PT¥*');
+    expect(screen.warnings).toHaveLength(1);
+    expect(screen.warnings[0]?.code).toBe('12');
+    expect(screen.warnings[0]?.message).toBe('sabreCommand: CHECK FORMAT (WARN.SWS.HOST.WARNING_IN_RESPONSE)');
+  });
+
+  it.each(['Application', 'BusinessLogic'])('un stl:Error type="%s" con la forma del diseño lanza SabreBusinessError', async (type) => {
+    const results = `<stl:Error type="${type}" timeStamp="2026-11-04T12:00:00Z"><stl:SystemSpecificResults><stl:HostCommand LNIATA="6B3525">W/PT¥*</stl:HostCommand><stl:Message code="3">INVALID ACTION CODE</stl:Message><stl:ShortText>ERR.SWS.HOST.ERROR_IN_RESPONSE</stl:ShortText></stl:SystemSpecificResults></stl:Error>`;
+    const fetch = mockFetch(opened(), xml(200, soap(commandRS('', results))));
+    const session = await legacy(fetch).client.openSession();
+
+    const error = await session.command('W/PT¥*').catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect(error).toMatchObject({ code: '3', message: 'sabreCommand: INVALID ACTION CODE (ERR.SWS.HOST.ERROR_IN_RESPONSE)' });
   });
 
   it('un stl:Error lanza SabreBusinessError', async () => {

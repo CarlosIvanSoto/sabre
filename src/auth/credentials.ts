@@ -35,6 +35,15 @@ export interface BuildCredentialsOptionsV2 extends BuildCredentialsBase {
 
 export type BuildCredentialsOptions = BuildCredentialsOptionsV3 | BuildCredentialsOptionsV2;
 
+/** Lo que devuelve `buildCredentials` para v3: lleva `authVersion: 'v3'`. */
+export type BuiltCredentialsV3 = SabreCredentials & { authVersion: 'v3' };
+
+/**
+ * Lo que devuelve `buildCredentials` para v2: lleva `authVersion: 'v2'`, así que la config no
+ * necesita repetirlo (#148).
+ */
+export type BuiltCredentialsV2 = SabreCredentialsV2 & { authVersion: 'v2' };
+
 const DEFAULT_DOMAIN = 'AA';
 
 function fail(message: string): never {
@@ -49,12 +58,13 @@ function requireString(value: unknown, field: string): asserts value is string {
  * Arma el `credentials` para `Sabre` y `SabreLegacy` a partir del usuario, el PCC, el domain y
  * la contraseña del EPR, más `clientId`/`clientSecret` cuando los hay. El username queda como
  * `<user>-<PCC>-<domain>` (v3) o `V1:<user>:<PCC>:<domain>` (v2). No lee variables de entorno
- * ni toca la red; un dato inválido lanza `TypeError` sin repetir secretos.
+ * ni toca la red; un dato inválido lanza `TypeError` sin repetir secretos. El resultado lleva
+ * `authVersion`, que la config usa si no trae el suyo.
  */
-export function buildCredentials(options: BuildCredentialsOptionsV3): SabreCredentials;
-export function buildCredentials(options: BuildCredentialsOptionsV2): SabreCredentialsV2;
-export function buildCredentials(options: BuildCredentialsOptions): SabreCredentials | SabreCredentialsV2;
-export function buildCredentials(options: BuildCredentialsOptions): SabreCredentials | SabreCredentialsV2 {
+export function buildCredentials(options: BuildCredentialsOptionsV3): BuiltCredentialsV3;
+export function buildCredentials(options: BuildCredentialsOptionsV2): BuiltCredentialsV2;
+export function buildCredentials(options: BuildCredentialsOptions): BuiltCredentialsV3 | BuiltCredentialsV2;
+export function buildCredentials(options: BuildCredentialsOptions): BuiltCredentialsV3 | BuiltCredentialsV2 {
   if (typeof options !== 'object' || options === null) fail('buildCredentials recibe un objeto');
 
   const authVersion: SabreAuthVersion = options.authVersion ?? 'v3';
@@ -80,5 +90,8 @@ export function buildCredentials(options: BuildCredentialsOptions): SabreCredent
   }
 
   const username = authVersion === 'v3' ? `${user}-${pcc}-${domain}` : `V1:${user}:${pcc}:${domain}`;
-  return clientId === undefined ? { username, password } : { clientId, clientSecret: clientSecret!, username, password };
+  if (authVersion === 'v3') return { authVersion, clientId: clientId!, clientSecret: clientSecret!, username, password };
+  return clientId === undefined
+    ? { authVersion, username, password }
+    : { authVersion, clientId, clientSecret: clientSecret!, username, password };
 }

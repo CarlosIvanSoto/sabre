@@ -115,6 +115,12 @@ const sabre = new Sabre({ environment: 'sandbox', credentials });
 const legacy = new SabreLegacy({ environment: 'sandbox', credentials });
 ```
 
+El objeto que devuelve `buildCredentials` lleva su `authVersion`, así que la config no necesita
+repetirlo: con `authVersion: 'v2'` en `buildCredentials`, `{ environment, credentials }` ya es una
+config v2. Si también pasas `authVersion` en la config, tiene que coincidir; si no, el cliente lanza
+un `TypeError`. Las credenciales que armas a mano no llevan `authVersion`, así que con v2 la config
+sigue necesitando `authVersion: 'v2'`.
+
 El PCC de las credenciales es con el que te autenticas. Trabajar en otro PCC no requiere otro
 juego de credenciales: se pasa en cada operación, como `targetPcc` en `booking.create`, `get` y
 `cancel`, o como `pcc` en las operaciones de colas.

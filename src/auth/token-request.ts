@@ -38,7 +38,7 @@ export function buildTokenRequest(
   // `resolveConfig` ya exige clientId/clientSecret cuando la versión es v3.
   return authVersion === 'v3'
     ? buildTokenRequestV3(credentials as SabreCredentials)
-    : buildTokenRequestV2(credentials);
+    : buildTokenRequestV2(credentials as SabreCredentialsV2);
 }
 
 /** Base64 de los bytes UTF-8 de `text`, solo con Web APIs (sin `Buffer`). */

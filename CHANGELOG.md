@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-04
+
 ### Changed
 
 - `buildCredentials` now returns its `authVersion` in the credentials object, and the `Sabre` and
@@ -15,6 +17,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `authVersion: 'v2'`, in the types or at runtime (#148). A config `authVersion` that does not
   match the credentials throws a `TypeError`. Hand-built credentials work as before.
 - New types: `BuiltCredentialsV3`, `BuiltCredentialsV2` and `SabreConfigV2FromCredentials`.
+
+### Deprecated
+
+- `pcc` in the `Sabre` and `SabreLegacy` config. It was a reserved field, and no client reads
+  it. It is still accepted and validated as before, and it will be removed in `0.5.0`. The PCC
+  you authenticate with goes in `credentials` (`buildCredentials` builds it); to work in another
+  PCC, pass it per operation: `targetPcc` in REST, `pcc` in the queue operations.
 
 ## [0.4.0] - 2026-11-04
 
@@ -167,6 +176,7 @@ and queues). Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 - The whole `0.2.4` API. There is no compatibility layer.
 
-[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/CarlosIvanSoto/sabre/releases/tag/v0.3.0

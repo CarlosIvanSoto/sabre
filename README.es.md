@@ -12,8 +12,9 @@ SDK de TypeScript para las APIs de Sabre.
 
 ## Estado
 
-`0.3.0` es la primera versión publicada de la reescritura. Cubre el Tier 1 y el Tier 2 del
-flujo de Air Booking por REST, y el Tier 3 (sesiones SOAP y colas).
+`0.4.0` es la versión actual de la reescritura. Cubre el Tier 1 y el Tier 2 del flujo de Air
+Booking por REST, y el Tier 3 (sesiones SOAP y colas). Sobre la `0.3.0` agrega `buildCredentials`
+y los comandos de host (`session.command`), sin cambios incompatibles.
 
 ```sh
 npm install sabre-client
@@ -46,8 +47,9 @@ El Tier 3 agrega el cliente SOAP `SabreLegacy`, con una sesión stateful y Queue
 | Sesión | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
 | Colas | Get Queue Count, Access Queue, Place Queue Message | `session.queue.count`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
 | Párrafo de cola | — (función pura) | `parseQueueParagraph`, `resolveHostDate` |
+| Comandos de host | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
-Planeado después de `0.3.0`: Get Ancillaries (solo NDC).
+Planeado después de `0.4.0`: Get Ancillaries (solo NDC).
 
 ## Requisitos
 

@@ -7,6 +7,23 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-04
+
+Two additions, with nothing removed or changed in the `0.3.0` API: a helper to build
+`credentials` and an escape hatch for host commands in the SOAP session.
+
+### Upgrading from 0.3.0
+
+- **The constructor does not change.** `credentials.username` still takes the full EPR
+  (`<user>-<PCC>-<domain>` for v3, `V1:<user>:<PCC>:<domain>` for v2). `buildCredentials` is
+  optional.
+- **Examples and scripts use one set of variables.** `SABRE_USERNAME` is now the EPR user alone,
+  not the full EPR, and `SABRE_ORGANIZATION` is gone. `SABRE_PCC`, `SABRE_DOMAIN` (`AA` by
+  default), `SABRE_PASSWORD` and `SABRE_CLIENT_ID`/`SABRE_CLIENT_SECRET` complete it; see
+  `.env.example`.
+- **DEVCENTER credentials no longer work in the examples.** `DEVCENTER` is a group, not a PCC,
+  and `buildCredentials` only takes a PCC of 3 or 4 characters.
+
 ### Added
 
 - `buildCredentials` builds the `credentials` object from the EPR user, PCC, domain (`AA` by
@@ -141,5 +158,6 @@ and queues). Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 - The whole `0.2.4` API. There is no compatibility layer.
 
-[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/CarlosIvanSoto/sabre/releases/tag/v0.3.0

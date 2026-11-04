@@ -12,8 +12,9 @@ TypeScript SDK for the Sabre APIs.
 
 ## Status
 
-`0.3.0` is the first release of the rewrite. It covers Tier 1 and Tier 2 of the Air Booking
-flow over REST, and Tier 3 (SOAP sessions and queues).
+`0.4.0` is the current release of the rewrite. It covers Tier 1 and Tier 2 of the Air Booking
+flow over REST, and Tier 3 (SOAP sessions and queues). It adds `buildCredentials` and host
+commands (`session.command`) to `0.3.0`, with no breaking changes.
 
 ```sh
 npm install sabre-client
@@ -46,8 +47,9 @@ Tier 3 adds the `SabreLegacy` SOAP client, with a stateful session and Queue Man
 | Session | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
 | Queues | Get Queue Count, Access Queue, Place Queue Message | `session.queue.count`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
 | Queue paragraph | — (pure function) | `parseQueueParagraph`, `resolveHostDate` |
+| Host commands | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
-Planned after `0.3.0`: Get Ancillaries (NDC only).
+Planned after `0.4.0`: Get Ancillaries (NDC only).
 
 ## Requirements
 
@@ -556,7 +558,7 @@ const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r)
   asynchronously, keep the value and write it after the call returns.
 
 In `SabreLegacy`, `protocol` is `'soap'`, `body` is the whole SOAP envelope, and `operation` is
-`'openSession'`, `'close'`, `'ping'` or `'queue.<method>'`. The session token
+`'openSession'`, `'close'`, `'ping'`, `'command'` or `'queue.<method>'`. The session token
 (`BinarySecurityToken`) is replaced by `[REDACTED]` wherever it appears. Nothing else is changed.
 
 > [!WARNING]

@@ -12,8 +12,9 @@ SDK de TypeScript para las APIs de Sabre.
 
 ## Estado
 
-`0.3.0` es la primera versión publicada de la reescritura. Cubre el Tier 1 y el Tier 2 del
-flujo de Air Booking por REST, y el Tier 3 (sesiones SOAP y colas).
+`0.4.0` es la versión actual de la reescritura. Cubre el Tier 1 y el Tier 2 del flujo de Air
+Booking por REST, y el Tier 3 (sesiones SOAP y colas). Sobre la `0.3.0` agrega `buildCredentials`
+y los comandos de host (`session.command`), sin cambios incompatibles.
 
 ```sh
 npm install sabre-client
@@ -46,8 +47,9 @@ El Tier 3 agrega el cliente SOAP `SabreLegacy`, con una sesión stateful y Queue
 | Sesión | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
 | Colas | Get Queue Count, Access Queue, Place Queue Message | `session.queue.count`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
 | Párrafo de cola | — (función pura) | `parseQueueParagraph`, `resolveHostDate` |
+| Comandos de host | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
-Planeado después de `0.3.0`: Get Ancillaries (solo NDC).
+Planeado después de `0.4.0`: Get Ancillaries (solo NDC).
 
 ## Requisitos
 
@@ -70,8 +72,8 @@ const sabre = new Sabre({
   credentials: {
     clientId: process.env.SABRE_CLIENT_ID!,
     clientSecret: process.env.SABRE_CLIENT_SECRET!,
-    username: process.env.SABRE_EPR_USERNAME!, // usuario EPR, p. ej. `<user>-<PCC>-AA`
-    password: process.env.SABRE_EPR_PASSWORD!,
+    username: '<user>-<PCC>-AA', // usuario EPR ya armado (ver Credenciales abajo)
+    password: process.env.SABRE_PASSWORD!,
   },
 });
 ```
@@ -85,6 +87,37 @@ const sabre = new Sabre({
 | `retry` | `{ maxRetries: 3, baseDelayMs: 500 }` | Política de reintentos del cliente; cada request puede pisarla |
 | `fetch` | `fetch` global | `fetch` propio (proxies, tests, otros runtimes) |
 | `tokenStore` | solo en memoria | Comparte el token entre procesos (ver [Reutilizar el token](#reutilizar-el-token)) |
+
+### Credenciales
+
+Hay **un solo juego de credenciales** para REST y SOAP: el mismo objeto `credentials` sirve para
+`Sabre` y para `SabreLegacy`. Trae el usuario EPR, su PCC y su domain, el password del EPR y, de
+forma opcional, el `clientId`/`clientSecret` de la app. La versión de OAuth solo cambia cómo se
+escribe el `username` del EPR: `<user>-<PCC>-<domain>` (v3) o `V1:<user>:<PCC>:<domain>` (v2).
+
+`buildCredentials` arma ese objeto a partir de las partes, así que no necesitas conocer ninguno de
+los dos formatos. No lee variables de entorno y lanza un `TypeError` si algo no es válido:
+
+```ts
+import { Sabre, SabreLegacy, buildCredentials } from 'sabre-client';
+
+const credentials = buildCredentials({
+  authVersion: 'v3', // por defecto; 'v2' → `V1:<user>:<PCC>:<domain>`
+  user: process.env.SABRE_USERNAME!, // solo el usuario EPR
+  pcc: process.env.SABRE_PCC!, // el PCC al que pertenece el EPR
+  domain: process.env.SABRE_DOMAIN || undefined, // 'AA' por defecto
+  password: process.env.SABRE_PASSWORD!,
+  clientId: process.env.SABRE_CLIENT_ID!, // obligatorio con v3; con v2, los dos o ninguno
+  clientSecret: process.env.SABRE_CLIENT_SECRET!,
+});
+
+const sabre = new Sabre({ environment: 'sandbox', credentials });
+const legacy = new SabreLegacy({ environment: 'sandbox', credentials });
+```
+
+El PCC de las credenciales es con el que te autenticas. Trabajar en otro PCC no requiere otro
+juego de credenciales: se pasa en cada operación, como `targetPcc` en `booking.create`, `get` y
+`cancel`, o como `pcc` en las operaciones de colas.
 
 ### Autenticación
 
@@ -278,7 +311,7 @@ import { SabreLegacy } from 'sabre-client';
 const legacy = new SabreLegacy({
   environment: 'production',
   authVersion: 'v2',
-  credentials: { username: 'V1:<user>:<PCC>:AA', password: process.env.SABRE_EPR_PASSWORD! },
+  credentials: { username: 'V1:<user>:<PCC>:AA', password: process.env.SABRE_PASSWORD! },
 });
 
 const counts = await legacy.withSession((session) => session.queue.count());
@@ -304,6 +337,45 @@ const counts = await legacy.withSession((session) => session.queue.count());
   `SabreSessionError`, la sesión queda inutilizable: las llamadas siguientes lanzan
   `session unusable` sin red, y `close()` resuelve sin red. El SDK no la reabre, porque el cursor
   de la cola ya se perdió. Volver a empezar es decisión tuya.
+
+### Comandos de host
+
+`session.command(command, options?)` manda un comando de host de Sabre (`SabreCommandLLSRQ` 2.0.0)
+dentro de la sesión y devuelve la pantalla como texto. **Es una vía de escape**, sin tipos ni
+garantías: el SDK no interpreta la pantalla, y un comando puede cambiar la configuración del PCC o
+emitir boletos. El SDK no tiene una lista de comandos permitidos o bloqueados.
+
+```ts
+const screen = await legacy.withSession((session) => session.command('W/PT¥*', { idempotent: true }));
+// screen.text      → 'PSGR TYPE - ON' (como lo manda Sabre, sin recortar)
+// screen.warnings  → los stl:Warning, si los hay
+// screen.messageId → eb:MessageId, para soporte de Sabre
+```
+
+- **El comando va tal cual.** En este servicio, el separador `‡` de Sabre se escribe `¥`
+  (`W/PT‡*` en Sabre Red es `W/PT¥*` aquí); el SDK no lo convierte.
+- **La pantalla no se recorta.** Las pantallas del host van alineadas por columna y pueden empezar
+  con un espacio (` 17MAR  WED…`), así que `text` es el contenido de `Response` tal cual. Si
+  necesitas recortarla, hazlo tú.
+- **Hasta 1023 caracteres, contados como Sabre:** `!`, `%`, `$`, `&`, `¥` y `§` cuentan 2. Un
+  comando más largo lanza un `TypeError` sin llamar a la red (Sabre respondería
+  `REQUEST EXCEEDED MAXIMUM LENGTH`).
+- **Sabre bloquea algunos comandos por su cuenta** (`SO`, `/@`, `¤¤`, según su whitelist), aunque
+  el SDK no tenga una lista propia.
+- **Algunos comandos cuestan más.** `JR` y `WPNI` cuentan como búsquedas "Worldfare".
+- **Las máscaras del host** se responden con los dos primeros caracteres de la máscara.
+- **Prefiere una API estructurada.** Sabre pide no usar este servicio para lo que ya tiene una:
+  si el SDK tiene una operación para eso, úsala.
+- **Sin reintentos por defecto**, porque el SDK no distingue una lectura de un cambio. Pasa
+  `{ idempotent: true }` en los comandos de solo lectura y siguen la
+  [política de reintentos](#reintentos).
+- **Un mensaje del host no es un error.** `DUTY CODE 9 REQUIRED` o `FORMAT` llegan en `text`. Un
+  SOAP fault o un `stl:Error` lanzan, como en cualquier otra llamada de la sesión.
+- Los comandos que dependen de la misma firma (`SI9` y luego `W/PT¥ON`) tienen que ir en la misma
+  sesión.
+- El log de debug (`sabre.session.command`) lleva solo el primer token del comando, cortado a 4
+  caracteres (`W/PT`, `DC`, `*IM`), nunca el comando entero ni la pantalla. La respuesta completa
+  está disponible en `onRawResponse`.
 
 ### Colas
 
@@ -493,7 +565,7 @@ const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r)
   conserva el valor y escríbelo cuando la llamada vuelva.
 
 En `SabreLegacy`, `protocol` es `'soap'`, `body` es el sobre SOAP completo, y `operation` es
-`'openSession'`, `'close'`, `'ping'` o `'queue.<método>'`. El token de la sesión
+`'openSession'`, `'close'`, `'ping'`, `'command'` o `'queue.<método>'`. El token de la sesión
 (`BinarySecurityToken`) se reemplaza por `[REDACTED]` donde aparezca. No se cambia nada más.
 
 > [!WARNING]
@@ -558,7 +630,7 @@ El SDK registra eventos estructurados (`sabre.request.start`, `sabre.request.end
 `sabre.request.retry`, `sabre.request.rawResponseHookFailed`, `sabre.auth.token.refresh`,
 `sabre.auth.token.store`, `sabre.booking.seat.priced`, `sabre.session.open`,
 `sabre.session.close`, `sabre.session.closeFailed`, `sabre.session.keepAliveFailed`,
-`sabre.queue.exitTolerated`, `sabre.queue.exitFailed`) y nunca los bodies
+`sabre.session.command`, `sabre.queue.exitTolerated`, `sabre.queue.exitFailed`) y nunca los bodies
 crudos de request o response. Los secretos, el header `Authorization` y los datos de pasajeros
 se redactan siempre antes de llegar a tu logger.
 

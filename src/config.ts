@@ -40,7 +40,11 @@ export interface SabreCredentialsV2 {
 
 interface SabreBaseConfig {
   environment: SabreEnvironment;
-  /** Campo reservado: PCC vs iPCC sigue sin resolver. */
+  /**
+   * @deprecated Desde 0.4.1; se quita en 0.5.0. Ningún cliente lo lee. El PCC con el que te
+   * autenticas va en `credentials` (ver `buildCredentials`). Para trabajar en otro PCC, se pasa en
+   * cada operación: `targetPcc` en REST, `pcc` en colas.
+   */
   pcc?: string;
   logger?: SabreLogger;
   /** Reintentos por defecto del cliente; cada request puede pisarlos. */

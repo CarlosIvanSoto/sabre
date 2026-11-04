@@ -7,6 +7,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `buildCredentials` builds the `credentials` object from the EPR user, PCC, domain (`AA` by
+  default) and password, plus the optional `clientId`/`clientSecret`. The same object works for
+  `Sabre` and `SabreLegacy`: there is one set of credentials for REST and SOAP, and the OAuth
+  version only changes the `username` format. It does not read environment variables.
+
 ### Changed
 
 - Get Seats `byPnrLocator` is now checked against Sabre (sandbox), with a booking created in

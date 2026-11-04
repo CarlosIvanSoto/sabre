@@ -70,8 +70,8 @@ const sabre = new Sabre({
   credentials: {
     clientId: process.env.SABRE_CLIENT_ID!,
     clientSecret: process.env.SABRE_CLIENT_SECRET!,
-    username: process.env.SABRE_EPR_USERNAME!, // EPR user, e.g. `<user>-<PCC>-AA`
-    password: process.env.SABRE_EPR_PASSWORD!,
+    username: '<user>-<PCC>-AA', // EPR username, already built (see Credentials below)
+    password: process.env.SABRE_PASSWORD!,
   },
 });
 ```
@@ -85,6 +85,37 @@ const sabre = new Sabre({
 | `retry` | `{ maxRetries: 3, baseDelayMs: 500 }` | Client-wide retry policy; every request can override it |
 | `fetch` | global `fetch` | Custom `fetch` (proxies, tests, other runtimes) |
 | `tokenStore` | in-memory only | Shares the token between processes (see [Token reuse](#token-reuse)) |
+
+### Credentials
+
+There is **one set of credentials** for REST and SOAP: the same `credentials` object works for
+`Sabre` and for `SabreLegacy`. It holds the EPR user, its PCC and domain, the EPR password and,
+optionally, the app's `clientId`/`clientSecret`. The OAuth version only changes how the EPR
+`username` is written: `<user>-<PCC>-<domain>` (v3) or `V1:<user>:<PCC>:<domain>` (v2).
+
+`buildCredentials` builds that object from the parts, so you don't have to know either format.
+It does not read environment variables and throws a `TypeError` on invalid input:
+
+```ts
+import { Sabre, SabreLegacy, buildCredentials } from 'sabre-client';
+
+const credentials = buildCredentials({
+  authVersion: 'v3', // default; 'v2' → `V1:<user>:<PCC>:<domain>`
+  user: process.env.SABRE_USERNAME!, // the EPR user alone
+  pcc: process.env.SABRE_PCC!, // the PCC the EPR belongs to
+  domain: process.env.SABRE_DOMAIN || undefined, // 'AA' by default
+  password: process.env.SABRE_PASSWORD!,
+  clientId: process.env.SABRE_CLIENT_ID!, // required with v3; with v2, both or neither
+  clientSecret: process.env.SABRE_CLIENT_SECRET!,
+});
+
+const sabre = new Sabre({ environment: 'sandbox', credentials });
+const legacy = new SabreLegacy({ environment: 'sandbox', credentials });
+```
+
+The PCC in the credentials is the one you authenticate with. Working in another PCC is not a
+second set of credentials: pass it per operation, as `targetPcc` in `booking.create`, `get` and
+`cancel`, or as `pcc` in the queue operations.
 
 ### Authentication
 
@@ -276,7 +307,7 @@ import { SabreLegacy } from 'sabre-client';
 const legacy = new SabreLegacy({
   environment: 'production',
   authVersion: 'v2',
-  credentials: { username: 'V1:<user>:<PCC>:AA', password: process.env.SABRE_EPR_PASSWORD! },
+  credentials: { username: 'V1:<user>:<PCC>:AA', password: process.env.SABRE_PASSWORD! },
 });
 
 const counts = await legacy.withSession((session) => session.queue.count());

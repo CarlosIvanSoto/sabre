@@ -2,6 +2,12 @@ export const VERSION = '0.3.0';
 
 export { Sabre } from './sabre.js';
 export { SabreLegacy } from './sabre-legacy.js';
+export { buildCredentials } from './auth/credentials.js';
+export type {
+  BuildCredentialsOptions,
+  BuildCredentialsOptionsV2,
+  BuildCredentialsOptionsV3,
+} from './auth/credentials.js';
 export type { OpenSessionOptions, SabreSession } from './session/session.js';
 export type {
   QueueManagement,

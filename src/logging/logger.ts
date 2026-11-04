@@ -27,6 +27,7 @@ export type SabreLogEvent =
   | 'sabre.session.close'
   | 'sabre.session.closeFailed'
   | 'sabre.session.keepAliveFailed'
+  | 'sabre.session.command'
   | 'sabre.queue.exitTolerated'
   | 'sabre.queue.exitFailed';
 

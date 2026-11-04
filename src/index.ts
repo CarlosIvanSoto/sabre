@@ -9,6 +9,7 @@ export type {
   BuildCredentialsOptionsV3,
 } from './auth/credentials.js';
 export type { OpenSessionOptions, SabreSession } from './session/session.js';
+export type { SabreCommandOptions, SabreCommandResponse } from './session/command.js';
 export type {
   QueueManagement,
   QueueProcessAction,

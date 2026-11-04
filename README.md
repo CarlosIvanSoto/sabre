@@ -335,6 +335,31 @@ const counts = await legacy.withSession((session) => session.queue.count());
   calling the network, and `close()` resolves without calling it. The SDK does not reopen the
   session, because the queue cursor is already lost. Starting over is your decision.
 
+### Host commands
+
+`session.command(command, options?)` sends a Sabre host command (`SabreCommandLLSRQ` 2.0.0)
+inside the session and returns the screen as text. **It is an escape hatch**, with no types and
+no guarantees: the SDK does not parse the screen, and a command can change the PCC configuration
+or issue tickets. There is no list of allowed or blocked commands.
+
+```ts
+const screen = await legacy.withSession((session) => session.command('W/PT¥*', { idempotent: true }));
+// screen.text      → 'PSGR TYPE - ON'
+// screen.warnings  → the stl:Warning entries, if any
+// screen.messageId → eb:MessageId, for Sabre support
+```
+
+- **The command is sent as is.** In this service Sabre's `‡` separator is written `¥`
+  (`W/PT‡*` in Sabre Red is `W/PT¥*` here); the SDK does not convert it.
+- **No retries by default**, because the SDK cannot tell a read from a change. Pass
+  `{ idempotent: true }` for read-only commands and they follow the [retry policy](#retries).
+- **A host message is not an error.** `DUTY CODE 9 REQUIRED` or `FORMAT` come back in `text`. A
+  SOAP fault or an `stl:Error` throws, like any other session call.
+- Commands that need the same sign-in (`SI9` followed by `W/PT¥ON`) must run in the same session.
+- The debug log (`sabre.session.command`) carries only the first token of the command, cut to 4
+  characters (`W/PT`, `DC`, `*IM`), never the whole command or the screen. The full response is
+  available through `onRawResponse`.
+
 ### Queues
 
 The queue operations live in `session.queue`. `pcc` is optional in every call and defaults to the
@@ -586,7 +611,7 @@ The SDK logs structured events (`sabre.request.start`, `sabre.request.end`,
 `sabre.request.retry`, `sabre.request.rawResponseHookFailed`, `sabre.auth.token.refresh`,
 `sabre.auth.token.store`, `sabre.booking.seat.priced`, `sabre.session.open`,
 `sabre.session.close`, `sabre.session.closeFailed`, `sabre.session.keepAliveFailed`,
-`sabre.queue.exitTolerated`, `sabre.queue.exitFailed`), never raw
+`sabre.session.command`, `sabre.queue.exitTolerated`, `sabre.queue.exitFailed`), never raw
 request or response bodies. Secrets, the `Authorization` header and passenger data are always
 redacted before they reach your logger.
 

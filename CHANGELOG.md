@@ -13,6 +13,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   default) and password, plus the optional `clientId`/`clientSecret`. The same object works for
   `Sabre` and `SabreLegacy`: there is one set of credentials for REST and SOAP, and the OAuth
   version only changes the `username` format. It does not read environment variables.
+- `session.command(command, options?)` sends a host command (`SabreCommandLLSRQ` 2.0.0) inside a
+  SOAP session and returns the screen as text, plus `warnings` and `messageId`. The command is sent
+  as is (`¥`, not `‡`), it is not retried unless `{ idempotent: true }`, and a host message on the
+  screen does not throw. The debug log carries only the first token of the command.
 
 ### Changed
 

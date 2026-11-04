@@ -13,6 +13,13 @@ import {
   xmlEscape,
 } from '../http/soap-transport.js';
 import { QueueManagement } from '../queue/queue-management.js';
+import {
+  commandToken,
+  parseSabreCommandResponse,
+  type SabreCommandOptions,
+  type SabreCommandResponse,
+  sabreCommandRequest,
+} from './command.js';
 import type { SessionCredentials } from './credentials.js';
 
 const OTA_NAMESPACE = 'http://www.opentravel.org/OTA/2002/11';
@@ -143,6 +150,18 @@ export class SabreSession {
    */
   async ping(options: RequestOptions = {}): Promise<void> {
     checkPingResponse(await this[sessionSend]({ ...pingRequest(), ...options }));
+  }
+
+  /**
+   * Manda un comando de host (`SabreCommandLLSRQ` 2.0.0) y devuelve la pantalla como texto, sin
+   * interpretarla. Es una vía de escape: sin tipos ni garantías, y un comando puede cambiar la
+   * configuración del PCC o emitir. El comando va tal cual; el separador de Sabre Red (`‡`) se
+   * escribe `¥`. Sin reintento salvo `{ idempotent: true }`, para comandos de solo lectura.
+   */
+  async command(command: string, options: SabreCommandOptions = {}): Promise<SabreCommandResponse> {
+    const request = sabreCommandRequest(command, options);
+    this.#transport.log.emit('debug', 'sabre.session.command', { command: commandToken(command) });
+    return parseSabreCommandResponse(await this[sessionSend](request));
   }
 
   /**

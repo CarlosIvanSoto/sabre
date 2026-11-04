@@ -48,7 +48,7 @@ const env = (name, fallback) => {
   return value;
 };
 
-const { authVersion, credentials, user, pcc } = envCredentials();
+const { credentials, user, pcc } = envCredentials();
 const { username } = credentials;
 
 const bookingPcc = process.env.SABRE_TARGET_PCC || pcc;
@@ -96,7 +96,7 @@ const recordingFetch = async (input, init) => {
   return response;
 };
 
-const sabre = new Sabre({ environment: 'sandbox', authVersion, credentials, fetch: recordingFetch, retry: { maxRetries: 0 }, tokenStore: fileTokenStore });
+const sabre = new Sabre({ environment: 'sandbox', credentials, fetch: recordingFetch, retry: { maxRetries: 0 }, tokenStore: fileTokenStore });
 
 console.log(`PCC de auth XXXX · PCC de búsqueda y reserva ${targetPcc === undefined ? 'el mismo' : 'otro (targetPcc)'}`);
 const found = await sabre.air.bargainFinderMax(search);

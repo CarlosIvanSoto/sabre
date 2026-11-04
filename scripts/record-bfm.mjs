@@ -36,7 +36,7 @@ const env = (name, fallback) => {
   return value;
 };
 
-const { authVersion, credentials, user, pcc } = envCredentials();
+const { credentials, user, pcc } = envCredentials();
 const { username } = credentials;
 
 const origin = process.env.SABRE_BFM_ORIGIN ?? 'DFW';
@@ -80,7 +80,7 @@ const recordingFetch = async (input, init) => {
   return response;
 };
 
-const sabre = new Sabre({ environment: 'sandbox', authVersion, credentials, fetch: recordingFetch, retry: { maxRetries: 0 }, tokenStore: fileTokenStore });
+const sabre = new Sabre({ environment: 'sandbox', credentials, fetch: recordingFetch, retry: { maxRetries: 0 }, tokenStore: fileTokenStore });
 
 let outcome;
 try {

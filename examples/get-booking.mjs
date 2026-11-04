@@ -58,7 +58,6 @@ const tokenStore =
 
 const sabre = new Sabre({
   environment,
-  authVersion,
   credentials,
   ...(tokenStore === undefined ? {} : { tokenStore }),
 });

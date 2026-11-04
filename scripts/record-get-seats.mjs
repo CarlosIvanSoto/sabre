@@ -42,7 +42,7 @@ const env = (name, fallback) => {
   return value;
 };
 
-const { authVersion, credentials, user, pcc } = envCredentials();
+const { credentials, user, pcc } = envCredentials();
 const { username } = credentials;
 
 const departureDays = Number(process.env.SABRE_DEPARTURE_DAYS ?? 75);
@@ -82,7 +82,6 @@ const recordingFetch = async (input, init) => {
 
 const sabre = new Sabre({
   environment,
-  authVersion,
   credentials,
   fetch: recordingFetch,
   retry: { maxRetries: 0 },

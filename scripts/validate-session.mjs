@@ -75,7 +75,6 @@ const logger = Object.fromEntries(
 
 const legacy = new SabreLegacy({
   environment,
-  authVersion,
   credentials,
   retry: { maxRetries: 0 },
   logger,

@@ -46,7 +46,7 @@ const redact = (text) =>
     .reduce((value, secret) => value.split(secret).join('XXXX'), String(text))
     .replace(/LNIATA="[^"]*"/g, 'LNIATA="XXXXXX"');
 
-const legacy = new SabreLegacy({ environment, authVersion, credentials, retry: { maxRetries: 0 } });
+const legacy = new SabreLegacy({ environment, credentials, retry: { maxRetries: 0 } });
 
 const commands = [
   { command: 'W/PT¥*', idempotent: true },

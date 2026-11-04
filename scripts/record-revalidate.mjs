@@ -33,7 +33,7 @@ const env = (name, fallback) => {
   return value;
 };
 
-const { authVersion, credentials, user, pcc } = envCredentials();
+const { credentials, user, pcc } = envCredentials();
 const { username } = credentials;
 
 const day = (offset) => {
@@ -76,7 +76,7 @@ const recordingFetch = async (input, init) => {
   return response;
 };
 
-const sabre = new Sabre({ environment: 'sandbox', authVersion, credentials, fetch: recordingFetch, retry: { maxRetries: 0 }, tokenStore: fileTokenStore });
+const sabre = new Sabre({ environment: 'sandbox', credentials, fetch: recordingFetch, retry: { maxRetries: 0 }, tokenStore: fileTokenStore });
 
 const result = await sabre.air.bargainFinderMax(search);
 const candidates = result.itineraryGroups.flatMap((group) => group.itineraries.map((itinerary) => ({ group, itinerary })));

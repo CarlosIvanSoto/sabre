@@ -53,7 +53,7 @@ if (seatOverride !== undefined && !/^[0-9]+[A-Z]$/.test(seatOverride)) {
   process.exit(2);
 }
 
-const { authVersion, credentials, user, pcc } = envCredentials();
+const { credentials, user, pcc } = envCredentials();
 const { username } = credentials;
 const agencyCustomerNumber = process.env.SABRE_AGENCY_CUSTOMER_NUMBER || undefined;
 
@@ -93,7 +93,6 @@ const recordingFetch = async (input, init) => {
 
 const sabre = new Sabre({
   environment: 'sandbox',
-  authVersion,
   credentials,
   fetch: recordingFetch,
   retry: { maxRetries: 0 },

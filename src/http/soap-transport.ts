@@ -126,14 +126,17 @@ type XmlNode = Record<string, unknown>;
  * Atributos con `@`, sin prefijos de namespace y todo como string: `"011"` y `"....261"`
  * llegan tal cual, para que cada servicio decida cómo leerlos.
  */
-const parser = new XMLParser({
+const PARSER_OPTIONS = {
   ignoreAttributes: false,
   attributeNamePrefix: '@',
   removeNSPrefix: true,
   parseTagValue: false,
   parseAttributeValue: false,
   processEntities: true,
-});
+} as const;
+const parser = new XMLParser(PARSER_OPTIONS);
+/** Igual, pero sin recortar los textos: solo para lo que depende de los espacios. */
+const untrimmedParser = new XMLParser({ ...PARSER_OPTIONS, trimValues: false });
 
 export class SoapTransport {
   readonly #config: ResolvedConfig;
@@ -415,11 +418,11 @@ function scrubToken(text: string, security: SoapSecurity): string {
   return text.split(token).join(REDACTED).split(xmlEscape(token)).join(REDACTED);
 }
 
-function parseEnvelope(text: string): { Header: unknown; Body: XmlNode } | undefined {
+function parseEnvelope(text: string, xmlParser = parser): { Header: unknown; Body: XmlNode } | undefined {
   if (text.trim() === '') return undefined;
   let parsed: unknown;
   try {
-    parsed = parser.parse(text);
+    parsed = xmlParser.parse(text);
   } catch {
     return undefined;
   }
@@ -506,6 +509,16 @@ function retryReason(error: unknown, idempotent: boolean): RetryReason | undefin
   // Sin código: un fallo de red (sin status) o una respuesta sin sobre SOAP.
   if (error.status === undefined || TRANSIENT_STATUS.has(error.status)) return 'transient';
   return undefined;
+}
+
+/**
+ * El payload del `Body` de `raw` con los textos tal cual, sin recortar espacios ni saltos de
+ * línea. Para las pantallas de host (`SabreCommandLLSRS`), que van alineadas por columna: el
+ * parser compartido recorta y desalinea la primera línea.
+ */
+export function untrimmedPayload(raw: string): Record<string, unknown> | undefined {
+  const document = parseEnvelope(raw, untrimmedParser);
+  return document === undefined ? undefined : asNode(firstElement(document.Body)[1]);
 }
 
 function firstElement(node: XmlNode): [string | undefined, unknown] {

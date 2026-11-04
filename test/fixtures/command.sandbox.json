@@ -1,0 +1,31 @@
+{
+  "recordedAt": "2026-11-04",
+  "environment": "sandbox",
+  "activate": false,
+  "steps": [
+    {
+      "command": "W/PT¥*",
+      "idempotent": true,
+      "ok": true,
+      "text": "PSGR TYPE - ON",
+      "warnings": [],
+      "response": {
+        "status": 200,
+        "attempts": 1,
+        "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>59e1df9f-9fa5-44d4-920e-33e7bf708037</eb:ConversationId><eb:Service>SabreCommandLLSRQ</eb:Service><eb:Action>SabreCommandLLSRS</eb:Action><eb:MessageData><eb:MessageId>1270958647221461040</eb:MessageId><eb:Timestamp>2026-11-04T17:58:42</eb:Timestamp><eb:RefToMessageId>mid:053382d3-9a13-4a8c-9db3-133a9d919f87</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SabreCommandLLSRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-04T17:58:42Z\">\n   <stl:SystemSpecificResults>\n    <stl:HostCommand LNIATA=\"XXXXXX\">W/PT¥*</stl:HostCommand>\n   </stl:SystemSpecificResults>\n  </stl:Success>\n </stl:ApplicationResults>\n <Response>PSGR TYPE - ON</Response>\n</SabreCommandLLSRS></soap-env:Body></soap-env:Envelope>"
+      }
+    },
+    {
+      "command": "SI9",
+      "idempotent": false,
+      "ok": true,
+      "text": "XXXX.XXXX9AWS.A..*AWS NOT SIGNED OUT",
+      "warnings": [],
+      "response": {
+        "status": 200,
+        "attempts": 1,
+        "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>59e1df9f-9fa5-44d4-920e-33e7bf708037</eb:ConversationId><eb:Service>SabreCommandLLSRQ</eb:Service><eb:Action>SabreCommandLLSRS</eb:Action><eb:MessageData><eb:MessageId>1270961647223171040</eb:MessageId><eb:Timestamp>2026-11-04T17:58:42</eb:Timestamp><eb:RefToMessageId>mid:626a8a2b-282f-4c5e-9171-5ed46e44dcc0</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SabreCommandLLSRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-04T17:58:42Z\">\n   <stl:SystemSpecificResults>\n    <stl:HostCommand LNIATA=\"XXXXXX\">SI9</stl:HostCommand>\n   </stl:SystemSpecificResults>\n  </stl:Success>\n </stl:ApplicationResults>\n <Response>XXXX.XXXX9AWS.A..*AWS NOT SIGNED OUT</Response>\n</SabreCommandLLSRS></soap-env:Body></soap-env:Envelope>"
+      }
+    }
+  ]
+}

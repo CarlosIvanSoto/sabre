@@ -15,7 +15,7 @@
 // muestra el flightDetails que se mandaría, sin enviarlo, y sí se permite en producción.
 // SABRE_GET_SEATS=1 pide el mapa de asientos por payload (solo lectura, permitido en
 // producción) y, con el preview, agrega al flightDetails un asiento libre y sin cargo por vuelo.
-import { Sabre, SabreBusinessError, SabreError } from 'sabre-client';
+import { buildCredentials, Sabre, SabreBusinessError, SabreError } from 'sabre-client';
 import { airBookingFlow, oneWaySearch } from './air-booking-flow.mjs';
 
 const env = (name, fallback) => {
@@ -59,16 +59,17 @@ const departureDays = integer('SABRE_DEPARTURE_DAYS', 30, 1, 330);
 const maxStops = integer('SABRE_MAX_STOPS', 1, 0, 3);
 
 const authVersion = process.env.SABRE_AUTH_VERSION ?? 'v3';
-const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
-const user = env('SABRE_USERNAME');
-const isEpr = user.includes('-') || user.includes(':');
-const username = isEpr ? user : authVersion === 'v3' ? `${user}-${pcc}-AA` : `V1:${user}:${pcc}:AA`;
-const credentials = {
-  clientId: authVersion === 'v3' ? env('SABRE_CLIENT_ID') : process.env.SABRE_CLIENT_ID,
-  clientSecret: authVersion === 'v3' ? env('SABRE_CLIENT_SECRET') : process.env.SABRE_CLIENT_SECRET,
-  username,
+// PCC de las credenciales: el mismo juego sirve para REST y SOAP (ver .env.example).
+const pcc = env('SABRE_PCC');
+const credentials = buildCredentials({
+  authVersion,
+  user: env('SABRE_USERNAME'),
+  pcc,
+  domain: process.env.SABRE_DOMAIN || undefined,
   password: env('SABRE_PASSWORD'),
-};
+  clientId: process.env.SABRE_CLIENT_ID || undefined,
+  clientSecret: process.env.SABRE_CLIENT_SECRET || undefined,
+});
 
 // Cuenta las peticiones de token para comprobar que el token se reutiliza en todo el flujo.
 let tokenRequests = 0;

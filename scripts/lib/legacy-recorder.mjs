@@ -3,16 +3,9 @@
 // estructura y la protección que no escribe una fixture con datos reales. Nunca lo usa la CI.
 import { writeFileSync } from 'node:fs';
 import { SabreError, SabreLegacy } from '../../dist/index.js';
+import { env, envCredentials } from './env-credentials.mjs';
 
-/** Lee una variable de entorno; sin valor, corta el script con código 2. */
-export function env(name, fallback) {
-  const value = process.env[name] ?? fallback;
-  if (value === undefined || value === '') {
-    console.error(`falta la variable de entorno ${name}`);
-    process.exit(2);
-  }
-  return value;
-}
+export { env };
 
 /** `"12"` da `12`, y `"S"`, `{ name: 'S' }`. */
 export const queueRef = (text) => (/^\d+$/.test(text) ? Number(text) : { name: text });
@@ -27,24 +20,12 @@ export function legacyEnvironment() {
     console.error(`SABRE_ENVIRONMENT debe ser sandbox o production (recibido: ${environment})`);
     process.exit(2);
   }
-  const rawUser = env('SABRE_USERNAME');
-  const user = rawUser.startsWith('V1:')
-    ? rawUser.split(':').slice(1, -2).join(':')
-    : rawUser.includes('-')
-      ? rawUser.split('-').slice(0, -2).join('-')
-      : rawUser;
-  const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
-  const domain = process.env.SABRE_DOMAIN ?? 'AA';
-  const credentials = {
-    username: `${user}-${pcc}-${domain}`,
-    password: env('SABRE_PASSWORD'),
-    clientId: env('SABRE_CLIENT_ID'),
-    clientSecret: env('SABRE_CLIENT_SECRET'),
-  };
+  // Siempre v3: las fixtures de colas se graban con SessionCreateRQ 2.0.0.
+  const { credentials, secrets: credentialSecrets } = envCredentials({ authVersion: 'v3' });
   const queuePccEnv = process.env.SABRE_QUEUE_PCC;
   const queuePcc = queuePccEnv === 'target' ? env('SABRE_TARGET_PCC') : queuePccEnv;
   const queuePccLabel = queuePccEnv === 'target' ? 'SABRE_TARGET_PCC' : queuePcc === undefined ? 'el de la sesión' : 'SABRE_QUEUE_PCC';
-  const secrets = [credentials.username, `V1:${user}:${pcc}:${domain}`, user, pcc, queuePcc, credentials.password, credentials.clientId, credentials.clientSecret];
+  const secrets = [...credentialSecrets, queuePcc];
   return { environment, credentials, queuePcc, queuePccLabel, secrets };
 }
 

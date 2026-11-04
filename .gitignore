@@ -7,3 +7,4 @@ coverage/
 .env.*
 .sabre-pilot-pnr.json
 .sabre-sandbox-pnr.json
+!.env.example

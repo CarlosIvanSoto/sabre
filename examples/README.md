@@ -30,10 +30,11 @@ Variables de entorno:
 
 | Variable | Requerida | Descripción |
 | - | - | - |
-| `SABRE_USERNAME` | sí | Usuario EPR completo, o solo el ID de usuario: se arma `<user>-<PCC>-AA` (v3) o `V1:<user>:<PCC>:AA` (v2) |
+| `SABRE_USERNAME` | sí | Usuario EPR, solo el usuario. `buildCredentials` arma `<user>-<PCC>-<domain>` (v3) o `V1:<user>:<PCC>:<domain>` (v2) |
+| `SABRE_PCC` | sí | PCC de las credenciales (el *group* del EPR) |
+| `SABRE_DOMAIN` | no | Domain del EPR. `AA` por defecto |
 | `SABRE_PASSWORD` | sí | Contraseña EPR |
-| `SABRE_PCC` | sí | PCC (o `SABRE_ORGANIZATION`) |
-| `SABRE_CLIENT_ID`, `SABRE_CLIENT_SECRET` | con v3 | Client ID/Secret de la app |
+| `SABRE_CLIENT_ID`, `SABRE_CLIENT_SECRET` | con v3 | Client ID/Secret de la app. Van juntos |
 | `SABRE_ENVIRONMENT` | no | `sandbox` (default) o `production` |
 | `SABRE_AUTH_VERSION` | no | `v3` (default) o `v2` |
 | `SABRE_ORIGIN`, `SABRE_DESTINATION` | no | `DFW` → `LAX` por defecto |
@@ -133,7 +134,7 @@ Type In PNR" activa en el Travel Journal Record (TJR). Sin ella, Create falla co
 `UNABLE_TO_ADD_TRAVELER_PASSENGER_TYPE_NOT_ENABLED`. Si el PCC de tus credenciales no la tiene,
 usa otro que sí con `SABRE_TARGET_PCC`:
 
-- la auth sigue con `SABRE_PCC` o `SABRE_ORGANIZATION`;
+- la auth sigue con `SABRE_PCC`, el PCC de las credenciales;
 - el POS de la búsqueda, el `targetPcc` de Create, Get y Cancel, y el `ticketingPcc` de
   `futureTicketingPolicy` usan `SABRE_TARGET_PCC`;
 - el lock guarda ese PCC, así que retomar la cancelación también lo usa.

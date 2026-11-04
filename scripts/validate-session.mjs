@@ -16,10 +16,10 @@
 // Solo toca la sesión: ninguna operación de cola. Ocupa uno de los 50 cupos del PCC mientras está
 // abierta. Sin reintentos genéricos (`maxRetries: 0`), para ver la primera respuesta de Sabre.
 //
-// Variables: SABRE_USERNAME (el usuario EPR solo, o ya en formato `user-PCC-domain` o
-// `V1:user:PCC:domain`), SABRE_PASSWORD, SABRE_PCC o SABRE_ORGANIZATION, SABRE_CLIENT_ID y
-// SABRE_CLIENT_SECRET (solo `v3` y `expire`), SABRE_DOMAIN (`AA` por defecto), SABRE_ENVIRONMENT
-// (sandbox por defecto) y SABRE_EXPIRE_MINUTES.
+// Variables: el juego único de credenciales de scripts/lib/env-credentials.mjs (SABRE_USERNAME
+// solo el usuario, SABRE_PCC, SABRE_DOMAIN, SABRE_PASSWORD; SABRE_CLIENT_ID y
+// SABRE_CLIENT_SECRET solo en `v3` y `expire`), más SABRE_ENVIRONMENT (sandbox por defecto) y
+// SABRE_EXPIRE_MINUTES.
 //
 // Se graban solo las respuestas, nunca los requests (llevan el password y el clientSecret). El
 // SDK ya tapa el BinarySecurityToken como `[REDACTED]`. Además se reemplazan por `XXXX` el
@@ -28,6 +28,7 @@
 import { writeFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { SabreError, SabreLegacy, SabreSessionError } from '../dist/index.js';
+import { envCredentials } from './lib/env-credentials.mjs';
 
 const scenario = process.argv[2];
 if (scenario !== 'v3' && scenario !== 'v2' && scenario !== 'expire') {
@@ -40,32 +41,13 @@ if (environment !== 'sandbox' && environment !== 'production') {
   process.exit(2);
 }
 
-const env = (name, fallback) => {
-  const value = process.env[name] ?? fallback;
-  if (value === undefined || value === '') {
-    console.error(`falta la variable de entorno ${name}`);
-    process.exit(2);
-  }
-  return value;
-};
-
-// El usuario EPR solo, aunque la variable venga ya en uno de los dos formatos.
-const rawUser = env('SABRE_USERNAME');
-const user = rawUser.startsWith('V1:')
-  ? rawUser.split(':').slice(1, -2).join(':')
-  : rawUser.includes('-')
-    ? rawUser.split('-').slice(0, -2).join('-')
-    : rawUser;
-const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
-const domain = process.env.SABRE_DOMAIN ?? 'AA';
-const password = env('SABRE_PASSWORD');
-const authVersion = scenario === 'v2' ? 'v2' : 'v3';
-const clientId = authVersion === 'v3' ? env('SABRE_CLIENT_ID') : undefined;
-const clientSecret = authVersion === 'v3' ? env('SABRE_CLIENT_SECRET') : undefined;
-const username = authVersion === 'v3' ? `${user}-${pcc}-${domain}` : `V1:${user}:${pcc}:${domain}`;
+// `v2` sin clientId/clientSecret, para que la sesión sea la 1.0.0.
+const { authVersion, credentials, domain, secrets: credentialSecrets } = envCredentials(
+  scenario === 'v2' ? { authVersion: 'v2', app: false } : { authVersion: 'v3' },
+);
 const expireMinutes = Number(process.env.SABRE_EXPIRE_MINUTES ?? 16);
 
-const secrets = [username, `${user}-${pcc}-${domain}`, `V1:${user}:${pcc}:${domain}`, user, pcc, password, clientId, clientSecret]
+const secrets = credentialSecrets
   .filter((value) => typeof value === 'string' && value.length >= 3)
   .sort((a, b) => b.length - a.length);
 const redact = (text) => secrets.reduce((value, secret) => value.split(secret).join('XXXX'), String(text));
@@ -94,7 +76,7 @@ const logger = Object.fromEntries(
 const legacy = new SabreLegacy({
   environment,
   authVersion,
-  credentials: { username, password, ...(clientId !== undefined && { clientId, clientSecret }) },
+  credentials,
   retry: { maxRetries: 0 },
   logger,
 });
@@ -193,7 +175,7 @@ const fixture = {
 };
 
 const text = `${JSON.stringify(fixture, null, 2)}\n`;
-const leaks = [password, clientId, clientSecret, user, pcc].filter((s) => typeof s === 'string' && s.length >= 3 && text.includes(s));
+const leaks = credentialSecrets.filter((s) => typeof s === 'string' && s.length >= 3 && text.includes(s));
 if (leaks.length > 0 || /IceSess|Shared\/IDL/.test(text)) {
   console.error('⚠️ la fixture todavía trae un secreto o un token de sesión: no se escribe.');
   process.exit(1);

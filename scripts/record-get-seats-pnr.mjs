@@ -32,6 +32,7 @@ import {
 } from '../dist/index.js';
 import { futureTicketing } from '../examples/booking-lifecycle.mjs';
 import { fileTokenStore } from './file-token-store.mjs';
+import { envCredentials } from './lib/env-credentials.mjs';
 
 const env = (name, fallback) => {
   const value = process.env[name] ?? fallback;
@@ -52,17 +53,8 @@ if (seatOverride !== undefined && !/^[0-9]+[A-Z]$/.test(seatOverride)) {
   process.exit(2);
 }
 
-const authVersion = process.env.SABRE_AUTH_VERSION ?? 'v3';
-const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
-const user = env('SABRE_USERNAME');
-const isEpr = user.includes('-') || user.includes(':');
-const username = isEpr ? user : authVersion === 'v3' ? `${user}-${pcc}-AA` : `V1:${user}:${pcc}:AA`;
-const credentials = {
-  clientId: authVersion === 'v3' ? env('SABRE_CLIENT_ID') : process.env.SABRE_CLIENT_ID,
-  clientSecret: authVersion === 'v3' ? env('SABRE_CLIENT_SECRET') : process.env.SABRE_CLIENT_SECRET,
-  username,
-  password: env('SABRE_PASSWORD'),
-};
+const { authVersion, credentials, user, pcc } = envCredentials();
+const { username } = credentials;
 const agencyCustomerNumber = process.env.SABRE_AGENCY_CUSTOMER_NUMBER || undefined;
 
 const day = (offset) => `${new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)}T10:00:00`;

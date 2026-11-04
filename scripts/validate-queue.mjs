@@ -20,8 +20,8 @@
 // Object.getOwnPropertySymbols: el SDK no deja mandar `I` ni `QXI` cuando cree que la sesión está
 // afuera. Es un truco del script, no API pública (aprobado por el usuario el 2026-11-01).
 //
-// Variables: las de scripts/validate-session.mjs (SABRE_USERNAME, SABRE_PASSWORD, SABRE_PCC o
-// SABRE_ORGANIZATION, SABRE_CLIENT_ID, SABRE_CLIENT_SECRET, SABRE_DOMAIN, SABRE_ENVIRONMENT), más
+// Variables: el juego único de credenciales de scripts/lib/env-credentials.mjs (SABRE_USERNAME,
+// SABRE_PCC, SABRE_DOMAIN, SABRE_PASSWORD, SABRE_CLIENT_ID, SABRE_CLIENT_SECRET), SABRE_ENVIRONMENT, más
 // SABRE_QUEUE, SABRE_EMPTY_QUEUE (un número o un nombre de cola), SABRE_QUEUE_LIMIT y
 // SABRE_QUEUE_PCC (el PCC de las colas; por defecto, el de la sesión). Con SABRE_QUEUE_PCC=target se
 // usa SABRE_TARGET_PCC.

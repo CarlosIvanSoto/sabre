@@ -8,7 +8,7 @@
 //
 // La salida trae los datos del pasajero tal como los guardó Sabre: solo va a la consola.
 import { readFile } from 'node:fs/promises';
-import { Sabre, SabreError } from 'sabre-client';
+import { buildCredentials, Sabre, SabreError } from 'sabre-client';
 
 const LOCK_FILE = new URL('../.sabre-pilot-pnr.json', import.meta.url);
 
@@ -42,22 +42,24 @@ if (environment !== 'sandbox' && environment !== 'production') {
 }
 
 const authVersion = process.env.SABRE_AUTH_VERSION ?? 'v3';
-const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
-const user = env('SABRE_USERNAME');
-const isEpr = user.includes('-') || user.includes(':');
-const username = isEpr ? user : authVersion === 'v3' ? `${user}-${pcc}-AA` : `V1:${user}:${pcc}:AA`;
+// PCC de las credenciales: el mismo juego sirve para REST y SOAP (ver .env.example).
+const pcc = env('SABRE_PCC');
+const credentials = buildCredentials({
+  authVersion,
+  user: env('SABRE_USERNAME'),
+  pcc,
+  domain: process.env.SABRE_DOMAIN || undefined,
+  password: env('SABRE_PASSWORD'),
+  clientId: process.env.SABRE_CLIENT_ID || undefined,
+  clientSecret: process.env.SABRE_CLIENT_SECRET || undefined,
+});
 const tokenStore =
   process.env.SABRE_TOKEN_STORE === 'file' ? (await import('../scripts/file-token-store.mjs')).fileTokenStore : undefined;
 
 const sabre = new Sabre({
   environment,
   authVersion,
-  credentials: {
-    clientId: authVersion === 'v3' ? env('SABRE_CLIENT_ID') : process.env.SABRE_CLIENT_ID,
-    clientSecret: authVersion === 'v3' ? env('SABRE_CLIENT_SECRET') : process.env.SABRE_CLIENT_SECRET,
-    username,
-    password: env('SABRE_PASSWORD'),
-  },
+  credentials,
   ...(tokenStore === undefined ? {} : { tokenStore }),
 });
 

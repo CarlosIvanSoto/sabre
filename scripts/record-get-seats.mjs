@@ -20,6 +20,7 @@
 import { writeFileSync } from 'node:fs';
 import { buildRevalidateItineraryRequest, buildSeatAvailabilityRequest, Sabre, SabreError } from '../dist/index.js';
 import { fileTokenStore } from './file-token-store.mjs';
+import { envCredentials } from './lib/env-credentials.mjs';
 
 const mode = process.argv[2] ?? 'direct';
 if (mode !== 'direct' && mode !== 'connection') {
@@ -41,17 +42,8 @@ const env = (name, fallback) => {
   return value;
 };
 
-const authVersion = process.env.SABRE_AUTH_VERSION ?? 'v3';
-const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
-const user = env('SABRE_USERNAME');
-const isEpr = user.includes('-') || user.includes(':');
-const username = isEpr ? user : authVersion === 'v3' ? `${user}-${pcc}-AA` : `V1:${user}:${pcc}:AA`;
-const credentials = {
-  clientId: authVersion === 'v3' ? env('SABRE_CLIENT_ID') : process.env.SABRE_CLIENT_ID,
-  clientSecret: authVersion === 'v3' ? env('SABRE_CLIENT_SECRET') : process.env.SABRE_CLIENT_SECRET,
-  username,
-  password: env('SABRE_PASSWORD'),
-};
+const { authVersion, credentials, user, pcc } = envCredentials();
+const { username } = credentials;
 
 const departureDays = Number(process.env.SABRE_DEPARTURE_DAYS ?? 75);
 const departure = new Date(Date.now() + departureDays * 86_400_000).toISOString().slice(0, 10);

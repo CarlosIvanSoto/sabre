@@ -11,7 +11,7 @@
 // la cancelación del localizador que quedó ahí.
 import { readFile, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
-import { Sabre, SabreError } from 'sabre-client';
+import { buildCredentials, Sabre, SabreError } from 'sabre-client';
 import { oneWaySearch, SYNTHETIC_TRAVELER } from './air-booking-flow.mjs';
 import {
   bookingLifecycle,
@@ -111,7 +111,8 @@ const authVersion = process.env.SABRE_AUTH_VERSION ?? 'v3';
 // `pcc` solo sirve para autenticar. Todo lo demás (POS de la búsqueda, contexto de Create, Get y
 // Cancel, y PCC de emisión) usa `bookingPcc`: un PCC con los permisos activos, por ejemplo el TJR
 // "Store Passenger Type In PNR". Sin SABRE_TARGET_PCC es el mismo de la auth.
-const pcc = env('SABRE_PCC', process.env.SABRE_ORGANIZATION);
+// PCC de las credenciales: el mismo juego sirve para REST y SOAP (ver .env.example).
+const pcc = env('SABRE_PCC');
 const targetPccEnv = process.env.SABRE_TARGET_PCC;
 if (targetPccEnv !== undefined && targetPccEnv !== '' && !/^[A-Z0-9]{3,4}$/.test(targetPccEnv)) {
   fail(`SABRE_TARGET_PCC debe tener 3 o 4 letras mayúsculas o dígitos (recibido: ${targetPccEnv})`);
@@ -123,15 +124,15 @@ if (agencyCustomerNumber !== undefined && !/^[0-9A-Z]{6}([1-9A-Z*]|[0-9A-Z]{4})?
   fail('SABRE_AGENCY_CUSTOMER_NUMBER debe ser un número DK de 6, 7 o 10 caracteres (mayúsculas y dígitos)');
 }
 const targetPcc = bookingPcc === pcc ? undefined : bookingPcc;
-const user = env('SABRE_USERNAME');
-const isEpr = user.includes('-') || user.includes(':');
-const username = isEpr ? user : authVersion === 'v3' ? `${user}-${pcc}-AA` : `V1:${user}:${pcc}:AA`;
-const credentials = {
-  clientId: authVersion === 'v3' ? env('SABRE_CLIENT_ID') : process.env.SABRE_CLIENT_ID,
-  clientSecret: authVersion === 'v3' ? env('SABRE_CLIENT_SECRET') : process.env.SABRE_CLIENT_SECRET,
-  username,
+const credentials = buildCredentials({
+  authVersion,
+  user: env('SABRE_USERNAME'),
+  pcc,
+  domain: process.env.SABRE_DOMAIN || undefined,
   password: env('SABRE_PASSWORD'),
-};
+  clientId: process.env.SABRE_CLIENT_ID || undefined,
+  clientSecret: process.env.SABRE_CLIENT_SECRET || undefined,
+});
 const tokenStore =
   process.env.SABRE_TOKEN_STORE === 'file' ? (await import('../scripts/file-token-store.mjs')).fileTokenStore : undefined;
 // El SDK ya redacta el contexto antes de llamar al logger.

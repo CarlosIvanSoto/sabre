@@ -12,16 +12,30 @@ TypeScript SDK for the Sabre APIs.
 
 ## Status
 
-`0.4.0` is the current release of the rewrite. It covers Tier 1 and Tier 2 of the Air Booking
-flow over REST, and Tier 3 (SOAP sessions and queues). It adds `buildCredentials` and host
-commands (`session.command`) to `0.3.0`, with no breaking changes.
+`0.5.0` is published under the `next` dist-tag while it is tested; `latest` stays on `0.4.1`.
+It covers Tier 1 and Tier 2 of the Air Booking flow over REST, Tier 3 (SOAP sessions and queues)
+and Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `list` and
+`onRawRequest`. It has three breaking changes (see [Upgrading from 0.4](#upgrading-from-04)).
 
 ```sh
-npm install sabre-client
+npm install sabre-client@next   # 0.5.0
+npm install sabre-client        # 0.4.1
 ```
 
 The package is still `0.x`: a minor version may include breaking changes, and the
 [CHANGELOG](./CHANGELOG.md) marks them.
+
+### Upgrading from 0.4
+
+- **`pcc` is no longer in the config.** Passing it to `new Sabre` or `new SabreLegacy` is a type
+  error, and in JavaScript it is ignored. The PCC you authenticate with goes in `credentials`
+  (see [Credentials](#credentials)); another PCC goes per operation, as `targetPcc` in REST or
+  `pcc` in the queue operations.
+- **`QueueRef` can be a `string`.** An alphabetic queue like `'S'` is `'S'`, and `count` and
+  `place` return it that way instead of `{ name: 'S' }`. Code that does
+  `typeof q === 'number' ? … : q.name` must handle the `string` case.
+- **A `QueueStep` that is not done has a `kind`.** Check `step.kind === 'pnr'` before reading
+  `step.item`; `kind: 'message'` carries a message of the `S` queue.
 
 Tier 1 covers the core Air Booking flow over REST:
 
@@ -50,7 +64,7 @@ Tier 3 adds the `SabreLegacy` SOAP client, with a stateful session and Queue Man
 | PNR history | `TravelItineraryHistoryLLSRQ` 2.4.0 | `session.reservation.history` |
 | Host commands | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
-Planned after `0.4.0`: Get Ancillaries (NDC only).
+Planned after `0.5.0`: Get Ancillaries (NDC only).
 
 ## Requirements
 

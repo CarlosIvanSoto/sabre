@@ -7,6 +7,25 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-06
+
+Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `list`, `onRawRequest`
+and more of the queue fake in `sabre-client/testing`. It has three breaking changes, marked
+**BREAKING** below. It is published first under the `next` dist-tag (`npm install
+sabre-client@next`), and `latest` stays on `0.4.1` until it is tested.
+
+### Upgrading from 0.4
+
+- **`pcc` is no longer in the config.** Passing it to `new Sabre` or `new SabreLegacy` is a type
+  error, and in JavaScript it is ignored. It was never read: the PCC you authenticate with goes in
+  `credentials` (`buildCredentials`), and another PCC goes per operation, as `targetPcc` in REST
+  or `pcc` in the queue operations.
+- **`QueueRef` can be a `string`.** An alphabetic queue like `'S'` is `'S'`, and `count` and
+  `place` return it that way instead of `{ name: 'S' }`. Code that does
+  `typeof q === 'number' ? … : q.name` must handle the `string` case.
+- **A `QueueStep` that is not done has a `kind`.** Check `step.kind === 'pnr'` before reading
+  `step.item`; `kind: 'message'` carries a message of the `S` queue.
+
 ### Added
 
 - The fake of `sabre-client/testing` answers `queue.activity` and `reservation.history`.
@@ -302,7 +321,8 @@ and queues). Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 - The whole `0.2.4` API. There is no compatibility layer.
 
-[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/CarlosIvanSoto/sabre/releases/tag/v0.3.0

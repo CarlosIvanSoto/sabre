@@ -12,16 +12,30 @@ SDK de TypeScript para las APIs de Sabre.
 
 ## Estado
 
-`0.4.0` es la versión actual de la reescritura. Cubre el Tier 1 y el Tier 2 del flujo de Air
-Booking por REST, y el Tier 3 (sesiones SOAP y colas). Sobre la `0.3.0` agrega `buildCredentials`
-y los comandos de host (`session.command`), sin cambios incompatibles.
+La `0.5.0` está publicada con el dist-tag `next` mientras se prueba; `latest` sigue en la `0.4.1`.
+Cubre el Tier 1 y el Tier 2 del flujo de Air Booking por REST, el Tier 3 (sesiones SOAP y colas) y
+el Tier 4: actividad de colas, historial del PNR, la cola de mensajes `S`, `selection` en `list` y
+`onRawRequest`. Trae tres cambios incompatibles (ver [Actualizar desde la 0.4](#actualizar-desde-la-04)).
 
 ```sh
-npm install sabre-client
+npm install sabre-client@next   # 0.5.0
+npm install sabre-client        # 0.4.1
 ```
 
 El paquete sigue en `0.x`: una versión minor puede traer cambios incompatibles, y el
 [CHANGELOG](./CHANGELOG.md) los marca.
+
+### Actualizar desde la 0.4
+
+- **`pcc` ya no está en la config.** Pasarlo a `new Sabre` o a `new SabreLegacy` da un error de
+  tipos, y en JavaScript se ignora. El PCC con el que te autenticas va en `credentials` (ver
+  [Credenciales](#credenciales)); otro PCC se pasa en cada operación, como `targetPcc` en REST o
+  `pcc` en las operaciones de colas.
+- **`QueueRef` puede ser un `string`.** Una cola alfabética como `'S'` es `'S'`, y `count` y
+  `place` la devuelven así en lugar de `{ name: 'S' }`. El código que hace
+  `typeof q === 'number' ? … : q.name` tiene que manejar el caso `string`.
+- **Un `QueueStep` que no terminó tiene `kind`.** Revisa `step.kind === 'pnr'` antes de leer
+  `step.item`; `kind: 'message'` trae un mensaje de la cola `S`.
 
 El Tier 1 cubre el flujo básico de Air Booking por REST:
 
@@ -50,7 +64,7 @@ El Tier 3 agrega el cliente SOAP `SabreLegacy`, con una sesión stateful y Queue
 | Historial del PNR | `TravelItineraryHistoryLLSRQ` 2.4.0 | `session.reservation.history` |
 | Comandos de host | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
-Planeado después de `0.4.0`: Get Ancillaries (solo NDC).
+Planeado después de `0.5.0`: Get Ancillaries (solo NDC).
 
 ## Requisitos
 

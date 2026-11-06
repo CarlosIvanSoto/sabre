@@ -596,6 +596,32 @@ fake.openSessions; // 0: the session was closed
 
 `examples/queue-review.mjs` is a full example, and its test runs it against the fake.
 
+#### Anonymizing recorded responses
+
+`createAnonymizer` applies the rule the SDK's fixtures were recorded with, so you can store
+Sabre's responses (for example from `onRawResponse`) without passenger data:
+
+```ts
+import { createAnonymizer } from 'sabre-client/testing';
+
+const anonymizer = createAnonymizer({ secrets: [pcc, username] });
+const safe = anonymizer.anonymize(raw.body); // a whole SOAP envelope
+anonymizer.maskParagraph(item.paragraph); // host-format lines
+if (anonymizer.leaks(safe).length > 0) throw new Error('real data left');
+```
+
+- Each locator gets an alias (`AAAAAA`, `AAAAAB`…), the same one everywhere it appears, also in
+  later texts passed to the same anonymizer. `PassengerName` becomes `PASAJERO/UNO`, `Group`
+  becomes `GRUPO`, `AgentSine` becomes `AAA` (except `SABRE`), `PseudoCityCode` becomes `XXXX`,
+  `LNIATA` becomes `XXXXXX`, and each `secret` becomes `XXXX`.
+- In host-format lines (`<Text>`, or `maskLine` and `maskParagraph`), only the lines of a
+  whitelist stay as they are (`isSafeHostLine`: empty lines, PIC notices like `011  SEE REMARKS`,
+  section titles, the end of the queue). In the others, letters become `X` and digits `9`. The
+  signature line keeps its shape, and its locator only if it is already an alias.
+- `leaks(text)` lists the real data still in `text` (`'secreto'`, `'localizador'`, `'nombre'`,
+  `'línea del PNR'`, `'token'`): use it before writing a file.
+- Use one anonymizer per recording. It is a rule, not a guarantee: check what you store.
+
 ## Error handling
 
 Every error thrown by the SDK extends `SabreError`:

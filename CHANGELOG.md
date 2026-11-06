@@ -9,6 +9,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `createAnonymizer({ secrets? })` and `isSafeHostLine(line)` in `sabre-client/testing`: the
+  anonymization the SDK's queue fixtures are recorded with, so consumers do not have to copy it.
+  The anonymizer has `anonymize(text)` for a whole envelope, `maskLine` and `maskParagraph` for
+  host-format lines, `aliasOf(locator)` and `leaks(text)`, which lists the real data left. The
+  recording scripts now use it, and the output on the existing fixtures did not change. New types
+  `Anonymizer`, `AnonymizerOptions` and `AnonymizerLeak` (#165).
+
 - `onRawRequest`, next to `onRawResponse`, in every REST and `SabreLegacy` operation: what the SDK
   sent over the network (`operation`, `protocol`, `method`, full `url`, `headers` without
   `Authorization`, `body` and `attempts`). In SOAP the `BinarySecurityToken` of the envelope is

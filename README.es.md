@@ -363,6 +363,7 @@ const screen = await legacy.withSession((session) => session.command('W/PT¥*', 
 // screen.text      → 'PSGR TYPE - ON' (como lo manda Sabre, sin recortar)
 // screen.warnings  → los stl:Warning, si los hay
 // screen.messageId → eb:MessageId, para soporte de Sabre
+// screen.respondedAt → eb:Timestamp en UTC, p. ej. '2026-11-06T17:34:16Z'
 ```
 
 - **El comando va tal cual.** En este servicio, el separador `‡` de Sabre se escribe `¥`
@@ -411,6 +412,10 @@ type QueueStep =
   | { done: false; item: QueueItem; warnings: SabreWarning[] }
   | { done: true; reason: 'end-of-display' | 'empty'; message: string; warnings: SabreWarning[] };
 ```
+
+- **Cada resultado de colas trae `respondedAt`**: el `eb:Timestamp` de Sabre, en ISO 8601 UTC
+  (`'2026-11-06T17:34:16Z'`). A diferencia de `countedAt` y `placedAt`, que llegan como los manda
+  el host (sin año y en hora local del PCC), trae año y zona. Solo falta si Sabre no lo manda.
 
 - **El fin de cola es un resultado, no un error.** `END OF DISPLAY FOR REQUESTED DATA` da
   `{ done: true, reason: 'end-of-display' }`, y una cola vacía (`QUEUE SELECTED WAS EMPTY`) da

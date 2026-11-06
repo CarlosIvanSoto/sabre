@@ -107,6 +107,7 @@ describe('queue.count: respuesta', () => {
   it('lee el sample de la documentación, con Count rellenado con puntos', async () => {
     const { session } = await openWith(counted(DOC_SAMPLE));
     expect(await session.queue.count()).toEqual({
+      respondedAt: '2026-10-31T12:00:00Z',
       queues: [
         { queue: { name: 'S' }, count: 261 },
         { queue: 9, count: 3 },
@@ -126,6 +127,7 @@ describe('queue.count: respuesta', () => {
   it('lee la forma de la respuesta real, con Count sin relleno', async () => {
     const { session } = await openWith(counted());
     expect(await session.queue.count()).toEqual({
+      respondedAt: '2026-10-31T12:00:00Z',
       queues: [
         { queue: { name: 'S' }, count: 6 },
         { queue: 305, count: 1 },
@@ -144,7 +146,7 @@ describe('queue.count: respuesta', () => {
 
   it('sin QueueInfo ni Totals devuelve listas vacías y totales en undefined', async () => {
     const { session } = await openWith(counted(countRS(`<stl:ApplicationResults status="Complete">${success}</stl:ApplicationResults>`)));
-    expect(await session.queue.count()).toEqual({ queues: [], totals: {}, warnings: [] });
+    expect(await session.queue.count()).toEqual({ queues: [], totals: {}, warnings: [] , respondedAt: '2026-10-31T12:00:00Z' });
   });
 
   it('los stl:Warning no lanzan: van en warnings', async () => {

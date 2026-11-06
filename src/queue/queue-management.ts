@@ -158,7 +158,7 @@ export class QueueManagement {
       return parseQueueList(await this.#context.send(send));
     } catch (error) {
       const end = queueEndError(error, send.service);
-      if (end !== undefined) return emptyList([...end.error.warnings]);
+      if (end !== undefined) return emptyList([...end.error.warnings], [], end.error.raw);
       throw error;
     }
   }
@@ -350,7 +350,7 @@ export class QueueManagement {
       const end = queueEndError(error, request.service);
       if (end !== undefined) {
         this.#state = 'outside';
-        return endStep([...end.error.warnings], end.reason) as T;
+        return endStep([...end.error.warnings], end.reason, end.error.raw) as T;
       }
       this.#onError(error);
       throw error;

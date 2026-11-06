@@ -362,6 +362,7 @@ const screen = await legacy.withSession((session) => session.command('W/PT¥*', 
 // screen.text      → 'PSGR TYPE - ON' (as Sabre sends it, not trimmed)
 // screen.warnings  → the stl:Warning entries, if any
 // screen.messageId → eb:MessageId, for Sabre support
+// screen.respondedAt → eb:Timestamp in UTC, e.g. '2026-11-06T17:34:16Z'
 ```
 
 - **The command is sent as is.** In this service Sabre's `‡` separator is written `¥`
@@ -407,6 +408,10 @@ type QueueStep =
   | { done: false; item: QueueItem; warnings: SabreWarning[] }
   | { done: true; reason: 'end-of-display' | 'empty'; message: string; warnings: SabreWarning[] };
 ```
+
+- **Every queue result carries `respondedAt`**: Sabre's `eb:Timestamp`, in ISO 8601 UTC
+  (`'2026-11-06T17:34:16Z'`). Unlike `countedAt` and `placedAt`, which come as the host sends them
+  (no year, PCC local time), it has a year and a zone. It is missing only if Sabre does not send it.
 
 - **The end of the queue is a result, not an error.** `END OF DISPLAY FOR REQUESTED DATA` gives
   `{ done: true, reason: 'end-of-display' }`, and an empty queue (`QUEUE SELECTED WAS EMPTY`)

@@ -4,7 +4,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { RequestOptions } from '../air/bargain-finder-max.js';
 import { SabreBusinessError, SabreGatewayError, type SabreWarning } from '../errors/index.js';
-import { asArray, type SoapResponse, textOf, xmlEscape } from '../http/soap-transport.js';
+import { asArray, respondedAtField, type SoapResponse, textOf, xmlEscape } from '../http/soap-transport.js';
 import type { SessionRequest } from '../session/session.js';
 import { type QueueRef, queueRefAttribute } from './queue-ref.js';
 
@@ -90,8 +90,8 @@ export interface QueueItem {
  * vacía, y deja la sesión fuera de la cola.
  */
 export type QueueStep =
-  | { done: false; item: QueueItem; warnings: SabreWarning[] }
-  | { done: true; reason: QueueEndReason; message: string; warnings: SabreWarning[] };
+  | { done: false; item: QueueItem; warnings: SabreWarning[]; respondedAt?: string }
+  | { done: true; reason: QueueEndReason; message: string; warnings: SabreWarning[]; respondedAt?: string };
 
 /** Qué acción de navegación se manda en `Navigation@Action`. */
 type NavigationAction = 'I' | 'QR' | 'QXI';
@@ -222,8 +222,9 @@ export function isOffQueueError(error: unknown): error is SabreBusinessError {
   return error instanceof SabreBusinessError && [error, ...error.errors].some((result) => resultHasText(result, OFF_QUEUE));
 }
 
-export function endStep(warnings: SabreWarning[], reason: QueueEndReason = 'end-of-display'): QueueStep {
-  return { done: true, reason, message: reason === 'empty' ? QUEUE_EMPTY : END_OF_DISPLAY, warnings };
+/** El fin de cola. `raw` es el sobre del que sale `respondedAt`: la respuesta o el `stl:Error`. */
+export function endStep(warnings: SabreWarning[], reason: QueueEndReason = 'end-of-display', raw?: unknown): QueueStep {
+  return { done: true, reason, message: reason === 'empty' ? QUEUE_EMPTY : END_OF_DISPLAY, warnings, ...respondedAtField(raw) };
 }
 
 /**
@@ -235,7 +236,7 @@ export function parseQueueStep(response: SoapResponse): QueueStep {
   const { warnings } = response;
   const paragraph = paragraphLines(response.raw);
   const firstLine = paragraph.find((line) => line.trim() !== '');
-  if (isEndOfDisplay(firstLine) || warnings.some(isEndOfDisplayResult)) return endStep(warnings);
+  if (isEndOfDisplay(firstLine) || warnings.some(isEndOfDisplayResult)) return endStep(warnings, 'end-of-display', response.raw);
 
   const fields = lineFields(response.payload.Line);
   if (fields === undefined) {
@@ -247,7 +248,7 @@ export function parseQueueStep(response: SoapResponse): QueueStep {
     });
   }
   const item: QueueItem = { ...fields, paragraph };
-  return { done: false, item, warnings };
+  return { done: false, item, warnings, ...respondedAtField(response.raw) };
 }
 
 /** Los campos de un `Line`, o `undefined` si no trae `UniqueID`. */

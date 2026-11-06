@@ -19,6 +19,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   time (`buildCredentials(options: BuildCredentialsOptions)`), with no `authVersion` in the
   config: new `SabreConfigFromCredentials` and `SabreCredentialsAnyVersion` types. The version is
   taken from the credentials at runtime (Q-084, #159).
+- Full `Booking` types for Get Booking and Create Booking, generated from the v1.33 spec: 128
+  types with the `Booking` prefix (`BookingFlight`, `BookingFare`, `BookingTraveler`…), all
+  exported. `booking.flights[0].flightStatusCode` now reads without a cast. Enums stay open
+  (`| (string & {})`), and `Booking` keeps an index signature for fields Sabre adds later. The
+  TSDoc notes what Q-091 found: `fares[].hasValidPricing: false` means the purchase deadline
+  (`TAW`) has passed, the `TAW` comes in `fares[].creationDetails`, and `updatedDeparture*` is an
+  operational delay, not a schedule change (#158).
+- `respondedAt` in the SOAP results: `session.command()` and the queue operations (`count`,
+  `list`, `access`, `ignore`, `remove` and `place`). It is Sabre's `eb:Timestamp`, in ISO 8601
+  UTC (`'2026-11-06T17:34:16Z'`), with a year and a zone, unlike `countedAt` and `placedAt`. An
+  end of queue that Sabre sends as an `stl:Error` also carries it (#157).
 
 ## [0.4.1] - 2026-11-04
 

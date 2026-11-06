@@ -81,6 +81,7 @@ describe('queue.list: respuesta', () => {
   it('lee los Line del design en locators y entries', async () => {
     const { session } = await openWith(ok(DESIGN_LIST));
     expect(await session.queue.list({ queue: 200 })).toEqual({
+      respondedAt: '2026-10-31T12:00:00Z',
       locators: ['ABC123', 'DEF456'],
       entries: [
         {

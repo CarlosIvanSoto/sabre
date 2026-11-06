@@ -34,7 +34,7 @@
 // La anonimización y la protección contra fugas están en scripts/lib/legacy-recorder.mjs: el
 // párrafo es el PNR entero, así que se enmascara por estructura. Si queda un dato real, no se
 // escribe la fixture. La consola solo muestra los alias.
-import { createRecorder, env, legacyClient, legacyEnvironment, queueRef, sessionSendOf } from './lib/legacy-recorder.mjs';
+import { createRecorder, env, legacyClient, legacyEnvironment, queueRef, rejectMessageQueue, sessionSendOf } from './lib/legacy-recorder.mjs';
 
 const scenario = process.argv[2];
 if (!['walk', 'empty', 'count', 'messages'].includes(scenario)) {
@@ -45,6 +45,7 @@ const { environment, credentials, queuePcc, queuePccLabel, secrets } = legacyEnv
 const pccRequest = queuePcc === undefined ? {} : { pcc: queuePcc };
 const queueText = scenario === 'messages' ? 'S' : scenario === 'empty' ? env('SABRE_EMPTY_QUEUE') : env('SABRE_QUEUE');
 const queue = queueRef(queueText);
+if (scenario === 'walk' || scenario === 'empty') rejectMessageQueue(queue, scenario === 'empty' ? 'SABRE_EMPTY_QUEUE' : 'SABRE_QUEUE');
 const limit = Number(process.env.SABRE_QUEUE_LIMIT ?? 10);
 if (!Number.isInteger(limit) || limit < 1) {
   console.error('SABRE_QUEUE_LIMIT debe ser un entero ≥ 1');

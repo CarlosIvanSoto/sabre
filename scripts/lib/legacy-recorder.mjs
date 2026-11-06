@@ -8,6 +8,13 @@ import { env, envCredentials } from './env-credentials.mjs';
 export { env };
 
 /** `"12"` da `12`, `"S"` da `'S'` (cola alfabética) y `"HOTELS"`, `{ name: 'HOTELS' }` (ADR-028). */
+/** Corta el script si la cola es la `S`: sus pasos son mensajes, no PNR (ADR-028). */
+export function rejectMessageQueue(queue, variable) {
+  if (queue !== 'S') return;
+  console.error(`${variable}=S es la cola de mensajes: no tiene PNR (para grabarla, usa validate-queue.mjs messages)`);
+  process.exit(2);
+}
+
 export const queueRef = (text) => (/^\d+$/.test(text) ? Number(text) : /^[A-Z]{1,2}$/.test(text) ? text : { name: text });
 
 /**
@@ -139,14 +146,16 @@ export function createRecorder(secretValues) {
     }
   }
 
-  /** Resumen de un `QueueStep` con el alias del localizador. */
+  /** Resumen de un `QueueStep` con el alias del localizador. Un mensaje de la `S` da solo cuántas líneas trae. */
   const stepSummary = (value) =>
     value === undefined
       ? undefined
       : 'done' in value && value.done
         ? { done: true, reason: value.reason, message: value.message, warnings: value.warnings.length }
-        : 'done' in value
-          ? { done: false, locator: aliasOf(value.item.locator), warnings: value.warnings.length }
+        : 'done' in value && value.kind === 'message'
+          ? { done: false, kind: 'message', lines: value.message.text.length, warnings: value.warnings.length }
+          : 'done' in value
+            ? { done: false, locator: aliasOf(value.item.locator), warnings: value.warnings.length }
           : { placements: value.placements.length, warnings: value.warnings.length };
 
   /**

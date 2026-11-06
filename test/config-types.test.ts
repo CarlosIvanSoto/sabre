@@ -67,4 +67,15 @@ describe('tipos de SabreConfig con buildCredentials', () => {
       new Sabre({ environment: 'sandbox', authVersion: 'v2', credentials });
     };
   });
+
+  it('#147: la config ya no acepta pcc', () => {
+    const credentials = buildCredentials({ ...parts, ...app });
+
+    const _ = () => {
+      // @ts-expect-error pcc se quitó en la 0.5.0: va en credentials o en cada operación
+      new Sabre({ environment: 'sandbox', credentials, pcc: 'H8GI' });
+      // @ts-expect-error pcc se quitó en la 0.5.0: va en credentials o en cada operación
+      new SabreLegacy({ environment: 'sandbox', credentials, pcc: 'H8GI' });
+    };
+  });
 });

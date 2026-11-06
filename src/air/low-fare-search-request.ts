@@ -17,7 +17,7 @@ export interface LowFareSearchRequestorId {
 }
 
 export interface LowFareSearchSource {
-  /** PCC desde el que se busca. El SDK no lo inyecta desde `config.pcc`. */
+  /** PCC desde el que se busca. El SDK no lo inyecta. */
   PseudoCityCode: string;
   RequestorID: LowFareSearchRequestorId;
   [key: string]: unknown;

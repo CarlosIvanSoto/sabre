@@ -89,11 +89,6 @@ const sabre = new Sabre({
 | `fetch` | `fetch` global | `fetch` propio (proxies, tests, otros runtimes) |
 | `tokenStore` | solo en memoria | Comparte el token entre procesos (ver [Reutilizar el token](#reutilizar-el-token)) |
 
-> **`pcc` está deprecado** desde la `0.4.1` y se quita en la `0.5.0`. Era un campo reservado, y
-> ningún cliente lo lee. El PCC con el que te autenticas va en `credentials` (ver
-> [Credenciales](#credenciales) y `buildCredentials`). Para trabajar en otro PCC, pásalo en cada
-> operación: `targetPcc` en REST y `pcc` en las operaciones de colas.
-
 ### Credenciales
 
 Hay **un solo juego de credenciales** para REST y SOAP: el mismo objeto `credentials` sirve para

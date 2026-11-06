@@ -41,7 +41,9 @@ const NAMES = ['UNO', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO',
 /** Líneas de un PNR en formato de host que quedan tal cual: no traen datos del pasajero. */
 const SAFE_LINES = [
   /^\s*$/,
-  /^\s*\d{3}\s{2,}[A-Z][A-Z0-9 ,.\/-]*$/, // aviso PIC: 011  SEE REMARKS
+  // Aviso PIC: 011  SEE REMARKS. Sin dígitos después del número: una línea de `list`
+  // (`100  ABC123  PLT  MAM  01JUN26  1948`) también empieza con 3 dígitos y trae el sine.
+  /^\s*\d{3}\s{2,}[A-Z][A-Z ,.\/-]*$/,
   /^\s*END OF DISPLAY FOR REQUESTED DATA\s*$/,
   /^\s*(TKT\/TIME LIMIT|PHONES|REMARKS|ADDRESS|INVOICED|GENERAL FACTS|[A-Z0-9]{2} FACTS|NO ITIN)\s*$/,
   /^\s*PASSENGER EMAIL DATA EXISTS\s+\*PE TO DISPLAY ALL\s*$/,
@@ -68,7 +70,9 @@ export function createRecorder(secretValues) {
   const aliasOf = (locator) => {
     if (!locatorAliases.has(locator)) {
       const n = locatorAliases.size;
-      locatorAliases.set(locator, `AAAA${String.fromCharCode(65 + Math.floor(n / 26))}${String.fromCharCode(65 + (n % 26))}`);
+      // Base 26 en cuatro letras: `AAAAAA`, `AAAAAB`… y sigue en letras después del 676 (`AAABAA`).
+      const letters = [17576, 676, 26, 1].map((size) => String.fromCharCode(65 + (Math.floor(n / size) % 26))).join('');
+      locatorAliases.set(locator, `AA${letters}`);
     }
     return locatorAliases.get(locator);
   };
@@ -199,7 +203,13 @@ export function createRecorder(secretValues) {
    */
   const transformBodies = (transform) => transforms.push(transform);
 
-  return { aliasOf, anonymize, step, stepSummary, results, options, logger, writeFixture, rawBodies, transformBodies };
+  /**
+   * Una línea del PNR en formato de host, enmascarada como dentro de `<Text>`, para copiarla a
+   * `results` o `findings`. Llamarla después de dar alias a los localizadores.
+   */
+  const maskLine = (line) => redactSecrets(anonymizeLine(line));
+
+  return { aliasOf, anonymize, maskLine, step, stepSummary, results, options, logger, writeFixture, rawBodies, transformBodies };
 }
 
 /** Un `SabreLegacy` sin reintentos genéricos, para ver la primera respuesta de Sabre. */

@@ -42,6 +42,15 @@ export type {
 export type { QueueListEntry, QueueListOptions, QueueListRequest, QueueListResponse } from './queue/queue-list.js';
 export type { QueueRef } from './queue/queue-ref.js';
 export type { QueueCount, QueueCountOptions, QueueCountRequest, QueueCountResponse } from './queue/queue-count.js';
+export type { SessionReservation } from './reservation/session-reservation.js';
+export type {
+  ReservationHistoryAccounting,
+  ReservationHistoryFlightSegment,
+  ReservationHistoryOptions,
+  ReservationHistoryResponse,
+  ReservationHistoryText,
+  ReservationHistoryTransaction,
+} from './reservation/reservation-history.js';
 export type {
   QueueActivity,
   QueueActivityCounters,

@@ -47,6 +47,7 @@ Tier 3 adds the `SabreLegacy` SOAP client, with a stateful session and Queue Man
 | Session | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
 | Queues | Get Queue Count, Get Queue Activity, Access Queue, Place Queue Message | `session.queue.count`, `activity`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
 | Queue paragraph | — (pure function) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
+| PNR history | `TravelItineraryHistoryLLSRQ` 2.4.0 | `session.reservation.history` |
 | Host commands | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
 Planned after `0.4.0`: Get Ancillaries (NDC only).
@@ -386,6 +387,34 @@ const screen = await legacy.withSession((session) => session.command('W/PT¥*', 
 - The debug log (`sabre.session.command`) carries only the first token of the command, cut to 4
   characters (`W/PT`, `DC`, `*IM`), never the whole command or the screen. The full response is
   available through `onRawResponse`.
+
+### PNR history
+
+`session.reservation.history(locator, options?)` reads the PNR history (Get Itinerary History,
+`TravelItineraryHistoryLLSRQ` 2.4.0, the host's `*H`), one entry per transaction:
+
+```ts
+const { transactions } = await legacy.withSession((session) => session.reservation.history('ABC123'));
+// transactions[0] → { rph, createdAt: '2026-11-04T17:15', agent, agentDutyCode, pcc, aaaPcc,
+//                     receivedFrom, flightSegments, generalInfo, remarks, accounting }
+```
+
+- **Who, when and from where**: `createdAt` (with a year, no time zone), the agent's sine and duty
+  code, the signing `pcc`, the AAA's `aaaPcc` and `receivedFrom`.
+- **What changed, with its `action`**: `flightSegments` with their status at that moment
+  (`AS` added, `XS` cancelled; dates without a year, as the host sends them), and SSR, ticketing,
+  phones, names and emails as text in `generalInfo` (`A4S`, `A7`, `A9`, `AN`, `APE`…). Sabre does
+  not publish the list of `action` values. Seats, cars, hotels, rail, insurance and invoices are
+  not typed: they stay in the raw response (`onRawResponse`).
+- **It carries passenger data** (names, phones, emails). The SDK never logs it.
+- **It does not record queue placements**, neither the system's nor a manual `place` (CERT): for that, use
+  `queue.list`/`access` or the `QUEUE_PLACE` remarks of Get Booking.
+- **Call it outside a queue walk.** Inside a queue, Sabre rejects the history of another PNR with
+  `NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY`, a `SabreBusinessError` (CERT). The PNR in
+  the AAA does not change, `queue.state` stays `'inside'`, and the walk goes on with `ignore`.
+- It is a read: it is retried. A `locator` that is not 6 uppercase alphanumeric characters throws a
+  `TypeError` without calling the network. A PNR that does not exist throws a `SabreBusinessError`
+  (`service: 'itineraryHistory'`).
 
 ### Queues
 

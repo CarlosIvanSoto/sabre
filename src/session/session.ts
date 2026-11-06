@@ -13,6 +13,7 @@ import {
   xmlEscape,
 } from '../http/soap-transport.js';
 import { QueueManagement } from '../queue/queue-management.js';
+import { SessionReservation } from '../reservation/session-reservation.js';
 import {
   commandToken,
   parseSabreCommandResponse,
@@ -96,6 +97,8 @@ export const KEEP_ALIVE_IDLE_MS = 13 * 60_000;
 export class SabreSession {
   /** Queue Management: contar, recorrer y colocar en colas, dentro de esta sesión. */
   readonly queue: QueueManagement;
+  /** La reserva: el historial de un PNR, dentro de esta sesión. */
+  readonly reservation: SessionReservation;
   readonly #transport: SoapTransport;
   readonly #pcc: string;
   readonly #conversationId: string;
@@ -133,6 +136,7 @@ export class SabreSession {
       pcc: internal.pcc,
       log: internal.transport.log,
     });
+    this.reservation = new SessionReservation({ send: (request) => this[sessionSend](request) });
     if (internal.keepAlive) this.#scheduleKeepAlive(KEEP_ALIVE_IDLE_MS);
   }
 

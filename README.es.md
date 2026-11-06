@@ -47,6 +47,7 @@ El Tier 3 agrega el cliente SOAP `SabreLegacy`, con una sesión stateful y Queue
 | Sesión | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
 | Colas | Get Queue Count, Get Queue Activity, Access Queue, Place Queue Message | `session.queue.count`, `activity`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
 | Párrafo de cola | — (función pura) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
+| Historial del PNR | `TravelItineraryHistoryLLSRQ` 2.4.0 | `session.reservation.history` |
 | Comandos de host | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
 Planeado después de `0.4.0`: Get Ancillaries (solo NDC).
@@ -390,6 +391,34 @@ const screen = await legacy.withSession((session) => session.command('W/PT¥*', 
 - El log de debug (`sabre.session.command`) lleva solo el primer token del comando, cortado a 4
   caracteres (`W/PT`, `DC`, `*IM`), nunca el comando entero ni la pantalla. La respuesta completa
   está disponible en `onRawResponse`.
+
+### Historial del PNR
+
+`session.reservation.history(locator, options?)` lee el historial del PNR (Get Itinerary History,
+`TravelItineraryHistoryLLSRQ` 2.4.0, el `*H` del host), una entrada por transacción:
+
+```ts
+const { transactions } = await legacy.withSession((session) => session.reservation.history('ABC123'));
+// transactions[0] → { rph, createdAt: '2026-11-04T17:15', agent, agentDutyCode, pcc, aaaPcc,
+//                     receivedFrom, flightSegments, generalInfo, remarks, accounting }
+```
+
+- **Quién, cuándo y desde dónde**: `createdAt` (con año, sin zona horaria), el sine y el duty code
+  del agente, el `pcc` de la firma, el `aaaPcc` del AAA y `receivedFrom`.
+- **Qué cambió, con su `action`**: `flightSegments` con su estado en ese momento (`AS` alta, `XS`
+  baja; fechas sin año, como las manda el host), y SSR, ticketing, teléfonos, nombres y emails como
+  texto en `generalInfo` (`A4S`, `A7`, `A9`, `AN`, `APE`…). Sabre no publica la lista de valores de
+  `action`. Asientos, autos, hoteles, tren, seguros y facturas no se tipan: quedan en la respuesta
+  cruda (`onRawResponse`).
+- **Trae datos del pasajero** (nombres, teléfonos, emails). El SDK nunca los manda al log.
+- **No registra las colocaciones en cola**, ni las del sistema ni un `place` manual (CERT): para eso están
+  `queue.list`/`access` o los remarks `QUEUE_PLACE` de Get Booking.
+- **Llámalo fuera de un recorrido de cola.** Dentro de una cola, Sabre rechaza el historial de otro
+  PNR con `NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY`, un `SabreBusinessError` (CERT). El
+  PNR del AAA no cambia, `queue.state` sigue en `'inside'` y el recorrido sigue con `ignore`.
+- Es una lectura: se reintenta. Un `locator` que no es de 6 caracteres alfanuméricos en mayúscula
+  lanza un `TypeError` sin llamar a la red. Un PNR que no existe lanza un `SabreBusinessError`
+  (`service: 'itineraryHistory'`).
 
 ### Colas
 

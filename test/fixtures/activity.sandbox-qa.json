@@ -1,0 +1,318 @@
+{
+  "recordedAt": "2026-11-06",
+  "environment": "sandbox",
+  "scenario": "qa",
+  "place": false,
+  "results": [
+    {
+      "step": "QueueAnalysisLLSRQ sin SI9",
+      "ok": true,
+      "payload": "QueueAnalysisRS"
+    },
+    {
+      "step": "QA sin SI9",
+      "ok": true,
+      "lines": 15,
+      "warnings": 0
+    },
+    {
+      "step": "SI9",
+      "ok": true,
+      "lines": 1,
+      "warnings": 0
+    },
+    {
+      "step": "QueueAnalysisLLSRQ con SI9",
+      "ok": true,
+      "payload": "QueueAnalysisRS"
+    },
+    {
+      "step": "QA con SI9",
+      "ok": true,
+      "lines": 15,
+      "warnings": 0
+    },
+    {
+      "step": "close",
+      "ok": true
+    }
+  ],
+  "findings": {
+    "q098": {
+      "xmlWithoutSi9": true,
+      "hostWithoutSi9": true,
+      "xmlWithSi9": true,
+      "hostWithSi9": true
+    },
+    "queueInfoDateTime": [
+      {
+        "value": "11-06T11:33",
+        "hasYear": false
+      },
+      {
+        "value": "11-06T11:34",
+        "hasYear": false
+      }
+    ],
+    "counters": [
+      "Ended",
+      "Ignored",
+      "LeftMessageToContact",
+      "Moved",
+      "NumMessages",
+      "Removed",
+      "Transferred",
+      "UnableToReach"
+    ]
+  },
+  "events": [
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 212,
+        "messageId": "1325881632394960770",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.open",
+      "context": {
+        "version": "2.0.0",
+        "pseudoCityCode": "XXXX"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAnalysis",
+        "action": "QueueAnalysisLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAnalysis",
+        "action": "QueueAnalysisLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 283,
+        "messageId": "1325405632396671040",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.session.command",
+      "context": {
+        "command": "QA/H"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 142,
+        "messageId": "1325888632398890770",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.session.command",
+      "context": {
+        "command": "SI9"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 231,
+        "messageId": "1325896632400480770",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAnalysis",
+        "action": "QueueAnalysisLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAnalysis",
+        "action": "QueueAnalysisLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 132,
+        "messageId": "1325366632402641460",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.session.command",
+      "context": {
+        "command": "QA/H"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 188,
+        "messageId": "1325462632404101040",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionClose",
+        "action": "SessionCloseRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionClose",
+        "action": "SessionCloseRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 66,
+        "messageId": "1325480632405891040",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.close",
+      "context": {
+        "pseudoCityCode": "XXXX"
+      }
+    }
+  ],
+  "responses": [
+    {
+      "operation": "openSession",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>9b049b12-ff0f-49f1-9f51-dc2e4a14f52f</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCreateRS</eb:Action><eb:MessageData><eb:MessageId>1325881632394960770</eb:MessageId><eb:Timestamp>2026-11-06T17:33:59</eb:Timestamp><eb:RefToMessageId>mid:63b5ac41-4c29-44b9-8d62-d0f7f9c722a2</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCreateRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"2.0.0\" status=\"Approved\">\t<ConversationId>9b049b12-ff0f-49f1-9f51-dc2e4a14f52f</ConversationId></SessionCreateRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "probe.queueAnalysis",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>9b049b12-ff0f-49f1-9f51-dc2e4a14f52f</eb:ConversationId><eb:Service>QueueAnalysisLLSRQ</eb:Service><eb:Action>QueueAnalysisLLSRS</eb:Action><eb:MessageData><eb:MessageId>1325405632396671040</eb:MessageId><eb:Timestamp>2026-11-06T17:33:59</eb:Timestamp><eb:RefToMessageId>mid:a61922b6-25cc-49bd-a5a4-cd63cf8c2781</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueAnalysisRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T17:33:59Z\"/>\n </stl:ApplicationResults>\n <QueueInfo DateTime=\"11-06T11:33\" PseudoCityCode=\"XXXX\">\n  <QueueIdentifier Number=\"S\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"0\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"1\"/>\n   <Removed Count=\"0\"/>\n   <Transferred Count=\"0\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"1\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"19\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"1\"/>\n   <Removed Count=\"0\"/>\n   <Transferred Count=\"0\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"9\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"27\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"0\"/>\n   <Removed Count=\"0\"/>\n   <Transferred Count=\"7\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"50\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"30\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"5\"/>\n   <Removed Count=\"1\"/>\n   <Transferred Count=\"1\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"60\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"0\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"0\"/>\n   <Removed Count=\"1\"/>\n   <Transferred Count=\"1\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"70\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"0\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"0\"/>\n   <Removed Count=\"1\"/>\n   <Transferred Count=\"0\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"100\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"1\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"0\"/>\n   <Removed Count=\"1\"/>\n   <Transferred Count=\"0\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n </QueueInfo>\n <Totals>\n  <Ended Count=\"0\"/>\n  <Ignored Count=\"77\"/>\n  <LeftMessageToContact Count=\"0\"/>\n  <Moved Count=\"0\"/>\n  <NumMessages Count=\"7\"/>\n  <Removed Count=\"4\"/>\n  <Transferred Count=\"9\"/>\n  <UnableToReach Count=\"0\"/>\n </Totals>\n</QueueAnalysisRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "command",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>9b049b12-ff0f-49f1-9f51-dc2e4a14f52f</eb:ConversationId><eb:Service>SabreCommandLLSRQ</eb:Service><eb:Action>SabreCommandLLSRS</eb:Action><eb:MessageData><eb:MessageId>1325888632398890770</eb:MessageId><eb:Timestamp>2026-11-06T17:33:59</eb:Timestamp><eb:RefToMessageId>mid:32de4669-6a1f-4173-b785-be4bf5ac2e58</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SabreCommandLLSRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T17:33:59Z\">\n   <stl:SystemSpecificResults>\n    <stl:HostCommand LNIATA=\"XXXXXX\">QA/XXXX</stl:HostCommand>\n   </stl:SystemSpecificResults>\n  </stl:Success>\n </stl:ApplicationResults>\n <Response>     STATUS OF QUEUES AS OF 1133 ON 06NOV FOR XXXX\n      ON Q REMOVD   LMTC    UTR  XFERD  MOVED     ET     IG\n  S      1      0      0      0      0      0      0      0\n  1      1      0      0      0      0      0      0     19\n  9      0      0      0      0      7      0      0     27\n 50      5      1      0      0      1      0      0     30\n 60      0      1      0      0      1      0      0      0\n 70      0      1      0      0      0      0      0      0\n100      0      1      0      0      0      0      0      1\n \n----------------------------TOTALS----------------------------\n      ON Q REMOVD   LMTC    UTR  XFERD  MOVED     ET     IG\n \n         7      4      0      0      9      0      0     77\n</Response>\n</SabreCommandLLSRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "command",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>9b049b12-ff0f-49f1-9f51-dc2e4a14f52f</eb:ConversationId><eb:Service>SabreCommandLLSRQ</eb:Service><eb:Action>SabreCommandLLSRS</eb:Action><eb:MessageData><eb:MessageId>1325896632400480770</eb:MessageId><eb:Timestamp>2026-11-06T17:34:00</eb:Timestamp><eb:RefToMessageId>mid:afa106e3-79a1-40f9-ac15-3ec80288a2a0</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SabreCommandLLSRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T17:34:00Z\">\n   <stl:SystemSpecificResults>\n    <stl:HostCommand LNIATA=\"XXXXXX\">SI9</stl:HostCommand>\n   </stl:SystemSpecificResults>\n  </stl:Success>\n </stl:ApplicationResults>\n <Response>XXXX.XXXX9AWS.A..*AWS NOT SIGNED OUT</Response>\n</SabreCommandLLSRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "probe.queueAnalysis",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>9b049b12-ff0f-49f1-9f51-dc2e4a14f52f</eb:ConversationId><eb:Service>QueueAnalysisLLSRQ</eb:Service><eb:Action>QueueAnalysisLLSRS</eb:Action><eb:MessageData><eb:MessageId>1325366632402641460</eb:MessageId><eb:Timestamp>2026-11-06T17:34:00</eb:Timestamp><eb:RefToMessageId>mid:809de3fb-9c8b-4043-a970-86265f805229</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueAnalysisRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T17:34:00Z\"/>\n </stl:ApplicationResults>\n <QueueInfo DateTime=\"11-06T11:34\" PseudoCityCode=\"XXXX\">\n  <QueueIdentifier Number=\"S\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"0\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"1\"/>\n   <Removed Count=\"0\"/>\n   <Transferred Count=\"0\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"1\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"19\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"1\"/>\n   <Removed Count=\"0\"/>\n   <Transferred Count=\"0\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"9\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"27\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"0\"/>\n   <Removed Count=\"0\"/>\n   <Transferred Count=\"7\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"50\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"30\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"5\"/>\n   <Removed Count=\"1\"/>\n   <Transferred Count=\"1\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"60\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"0\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"0\"/>\n   <Removed Count=\"1\"/>\n   <Transferred Count=\"1\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"70\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"0\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"0\"/>\n   <Removed Count=\"1\"/>\n   <Transferred Count=\"0\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n  <QueueIdentifier Number=\"100\">\n   <Ended Count=\"0\"/>\n   <Ignored Count=\"1\"/>\n   <LeftMessageToContact Count=\"0\"/>\n   <Moved Count=\"0\"/>\n   <NumMessages Count=\"0\"/>\n   <Removed Count=\"1\"/>\n   <Transferred Count=\"0\"/>\n   <UnableToReach Count=\"0\"/>\n  </QueueIdentifier>\n </QueueInfo>\n <Totals>\n  <Ended Count=\"0\"/>\n  <Ignored Count=\"77\"/>\n  <LeftMessageToContact Count=\"0\"/>\n  <Moved Count=\"0\"/>\n  <NumMessages Count=\"7\"/>\n  <Removed Count=\"4\"/>\n  <Transferred Count=\"9\"/>\n  <UnableToReach Count=\"0\"/>\n </Totals>\n</QueueAnalysisRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "command",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>9b049b12-ff0f-49f1-9f51-dc2e4a14f52f</eb:ConversationId><eb:Service>SabreCommandLLSRQ</eb:Service><eb:Action>SabreCommandLLSRS</eb:Action><eb:MessageData><eb:MessageId>1325462632404101040</eb:MessageId><eb:Timestamp>2026-11-06T17:34:00</eb:Timestamp><eb:RefToMessageId>mid:e110d30d-eef7-446c-b070-22b86d53e87b</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SabreCommandLLSRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T17:34:00Z\">\n   <stl:SystemSpecificResults>\n    <stl:HostCommand LNIATA=\"XXXXXX\">QA/XXXX</stl:HostCommand>\n   </stl:SystemSpecificResults>\n  </stl:Success>\n </stl:ApplicationResults>\n <Response>     STATUS OF QUEUES AS OF 1134 ON 06NOV FOR XXXX\n      ON Q REMOVD   LMTC    UTR  XFERD  MOVED     ET     IG\n  S      1      0      0      0      0      0      0      0\n  1      1      0      0      0      0      0      0     19\n  9      0      0      0      0      7      0      0     27\n 50      5      1      0      0      1      0      0     30\n 60      0      1      0      0      1      0      0      0\n 70      0      1      0      0      0      0      0      0\n100      0      1      0      0      0      0      0      1\n \n----------------------------TOTALS----------------------------\n      ON Q REMOVD   LMTC    UTR  XFERD  MOVED     ET     IG\n \n         7      4      0      0      9      0      0     77\n</Response>\n</SabreCommandLLSRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "close",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>9b049b12-ff0f-49f1-9f51-dc2e4a14f52f</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCloseRS</eb:Action><eb:MessageData><eb:MessageId>1325480632405891040</eb:MessageId><eb:Timestamp>2026-11-06T17:34:00</eb:Timestamp><eb:RefToMessageId>mid:b87a47a0-445e-4272-90b6-fae8b38f7c31</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCloseRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"1\" status=\"Approved\"/></soap-env:Body></soap-env:Envelope>"
+    }
+  ]
+}

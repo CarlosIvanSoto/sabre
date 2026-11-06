@@ -142,6 +142,7 @@ describe('queue.access: respuesta', () => {
   it('lee el ítem del design: Line completo y el párrafo tal cual, con sangría y líneas vacías', async () => {
     const { session } = await openWith(ok(DESIGN_ITEM));
     expect(await session.queue.access({ queue: 12 })).toEqual({
+      respondedAt: '2026-10-31T12:00:00Z',
       done: false,
       item: {
         locator: 'ABC123',
@@ -168,6 +169,7 @@ describe('queue.access: respuesta', () => {
     const { session } = await openWith(ok(REAL_ITEM()));
     const step = await session.queue.access({ queue: 12 });
     expect(step).toEqual({
+      respondedAt: '2026-10-31T12:00:00Z',
       done: false,
       item: {
         locator: 'QWERTY',
@@ -191,6 +193,7 @@ describe('queue.access: respuesta', () => {
   it('una cola vacía al entrar devuelve { done: true } y la sesión sigue afuera', async () => {
     const { session } = await openWith(ok(END_IN_PARAGRAPH));
     expect(await session.queue.access({ queue: 12 })).toEqual({
+      respondedAt: '2026-10-31T12:00:00Z',
       done: true,
       reason: 'end-of-display',
       message: END,

@@ -174,6 +174,7 @@ describe('queue.place dentro de una cola', () => {
     const { session } = await inside(ok(REAL_INSIDE('ZXCVBN')));
     const step = await session.queue.place({ to: [{ queue: 100, instructionCode: 11 }] });
     expect(step).toEqual({
+      respondedAt: '2026-10-31T12:00:00Z',
       done: false,
       item: {
         locator: 'ZXCVBN',
@@ -243,6 +244,7 @@ describe('queue.place fuera de una cola', () => {
   it('con el sample de la documentación devuelve el texto, sin placements', async () => {
     const { session } = await openWith(ok(DOC_SAMPLE));
     expect(await session.queue.place({ to: [{ queue: 400, instructionCode: 11 }], locators: ['ABC123'] })).toEqual({
+      respondedAt: '2026-10-31T12:00:00Z',
       placements: [],
       text: ['OK 1030 NMIUTF'],
       warnings: [],

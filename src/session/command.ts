@@ -4,7 +4,7 @@
 // script de configuración de agencia del 2026-11-03.
 import type { RequestOptions } from '../air/bargain-finder-max.js';
 import { SabreGatewayError, type SabreWarning } from '../errors/index.js';
-import { type SoapResponse, textOf, untrimmedPayload, xmlEscape } from '../http/soap-transport.js';
+import { respondedAtField, type SoapResponse, textOf, untrimmedPayload, xmlEscape } from '../http/soap-transport.js';
 import type { SessionRequest } from './session.js';
 
 export const SABRE_COMMAND_SERVICE = 'sabreCommand';
@@ -35,6 +35,11 @@ export interface SabreCommandResponse {
   warnings: SabreWarning[];
   /** `eb:MessageId` de la respuesta, el dato que pide soporte de Sabre. */
   messageId: string | undefined;
+  /**
+   * `eb:Timestamp` de la respuesta de Sabre, en ISO 8601 UTC (`"2026-11-06T17:34:16Z"`). A
+   * diferencia de las fechas del host, trae año y zona. Falta si Sabre no lo manda.
+   */
+  respondedAt?: string;
 }
 
 function fail(message: string): never {
@@ -102,5 +107,6 @@ export function parseSabreCommandResponse(response: SoapResponse): SabreCommandR
     text: textOf((untrimmedPayload(response.raw) ?? response.payload).Response) ?? '',
     warnings: response.warnings,
     messageId: response.messageId,
+    ...respondedAtField(response.raw),
   };
 }

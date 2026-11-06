@@ -602,6 +602,32 @@ fake.openSessions; // 0: la sesión se cerró
 
 `examples/queue-review.mjs` es un ejemplo completo, y su test lo corre contra el fake.
 
+#### Anonimizar respuestas grabadas
+
+`createAnonymizer` aplica la regla con la que se grabaron las fixtures del SDK, para guardar las
+respuestas de Sabre (por ejemplo, las de `onRawResponse`) sin datos de pasajeros:
+
+```ts
+import { createAnonymizer } from 'sabre-client/testing';
+
+const anonymizer = createAnonymizer({ secrets: [pcc, username] });
+const safe = anonymizer.anonymize(raw.body); // un sobre SOAP entero
+anonymizer.maskParagraph(item.paragraph); // líneas en formato de host
+if (anonymizer.leaks(safe).length > 0) throw new Error('quedan datos reales');
+```
+
+- Cada localizador recibe un alias (`AAAAAA`, `AAAAAB`…), el mismo en todos los lugares donde
+  aparece, también en los textos que pasen después por el mismo anonimizador. `PassengerName` pasa
+  a `PASAJERO/UNO`, `Group` a `GRUPO`, `AgentSine` a `AAA` (salvo `SABRE`), `PseudoCityCode` a
+  `XXXX`, `LNIATA` a `XXXXXX` y cada `secret` a `XXXX`.
+- En las líneas en formato de host (`<Text>`, o `maskLine` y `maskParagraph`), solo quedan tal cual
+  las de una lista blanca (`isSafeHostLine`: líneas vacías, avisos PIC como `011  SEE REMARKS`,
+  títulos de sección, el fin de cola). En las demás, las letras pasan a `X` y los dígitos a `9`. La
+  línea de firma conserva su forma, y su localizador solo si ya es un alias.
+- `leaks(text)` lista los datos reales que siguen en `text` (`'secreto'`, `'localizador'`,
+  `'nombre'`, `'línea del PNR'`, `'token'`): úsalo antes de escribir un archivo.
+- Usa un anonimizador por grabación. Es una regla, no una garantía: revisa lo que guardas.
+
 ## Manejo de errores
 
 Todos los errores que lanza el SDK extienden `SabreError`:

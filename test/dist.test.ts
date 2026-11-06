@@ -48,4 +48,10 @@ describe.skipIf(dist === undefined || testing === undefined)('build ESM de sabre
     expect(result).toEqual({ visited: 1, ended: 'end-of-display' });
     expect(Object.keys(testing!.queueFixtures)).toContain('walk');
   });
+
+  it('dist/testing.js exporta la anonimización, y el bundle principal no', () => {
+    expect(testing!.createAnonymizer().anonymize('<UniqueID ID="QWERTY"/>')).toBe('<UniqueID ID="AAAAAA"/>');
+    expect(testing!.isSafeHostLine('REMARKS')).toBe(true);
+    expect(dist).not.toHaveProperty('createAnonymizer');
+  });
 });

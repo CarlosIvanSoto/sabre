@@ -4,8 +4,10 @@
 export { createQueueFake } from './queue-fake.js';
 export type {
   QueueFake,
+  QueueFakeActivity,
   QueueFakeCall,
   QueueFakeCommand,
+  QueueFakeHistoryTransaction,
   QueueFakeItem,
   QueueFakeOptions,
   QueueFakePnr,

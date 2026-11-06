@@ -9,6 +9,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The fake of `sabre-client/testing` answers `queue.activity` and `reservation.history`.
+  `numMessages` follows the fake's queues, and the other counters are seeded with the new
+  `activity` option (0 by default); the fake's actions do not change them, since no one has tested
+  which counter Sabre raises. The history of each PNR is seeded with `histories`; without it, a
+  known PNR returns a synthetic creation transaction. Inside a queue, the history of another PNR
+  is rejected with `NAK6`, as in CERT. New types `QueueFakeActivity` and
+  `QueueFakeHistoryTransaction`, and `QueueFakeCall` gets `locator` and the `'activity'` and
+  `'history'` commands. New example `examples/queue-health.mjs`, tested against the fake (#167).
+
 - `queueFakePnrs(fixture)` in `sabre-client/testing`: the PNRs of a recording (`queueFixtures.*`)
   as `QueueFakePnr[]`, ready for `createQueueFake`. The ones from `list` come first, in order, with
   `placedAt`, `placedBy` and `primaryPassenger` from their `Line`, and each one gets the paragraph

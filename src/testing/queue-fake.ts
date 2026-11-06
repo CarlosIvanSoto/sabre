@@ -8,7 +8,14 @@
 import { XMLParser } from 'fast-xml-parser';
 import { END_OF_DISPLAY, OFF_QUEUE, QUEUE_EMPTY } from '../queue/queue-access.js';
 import { signatureLocator } from '../queue/queue-place.js';
+import type { QueueActivityCounters } from '../queue/queue-activity.js';
 import { MAX_QUEUE_NUMBER, MESSAGE_QUEUE, MIN_QUEUE_NUMBER, type QueueRef, toQueueRef } from '../queue/queue-ref.js';
+import type {
+  ReservationHistoryAccounting,
+  ReservationHistoryFlightSegment,
+  ReservationHistoryText,
+  ReservationHistoryTransaction,
+} from '../reservation/reservation-history.js';
 
 /** Un PNR del fake, con los campos que Sabre manda en `Line`. */
 export interface QueueFakePnr {
@@ -28,6 +35,26 @@ export interface QueueFakePnr {
   primaryPassenger?: string;
 }
 
+/**
+ * Los contadores de `queue.activity` que se siembran para una cola. `numMessages` no va: sale
+ * siempre de lo que hay en la cola del fake.
+ */
+export type QueueFakeActivity = Partial<Omit<QueueActivityCounters, 'numMessages'>>;
+
+/**
+ * Una transacción del historial de un PNR, como la devuelve `reservation.history`. Las listas que
+ * falten van vacías.
+ */
+export type QueueFakeHistoryTransaction = Omit<
+  ReservationHistoryTransaction,
+  'flightSegments' | 'generalInfo' | 'remarks' | 'accounting'
+> & {
+  flightSegments?: readonly ReservationHistoryFlightSegment[];
+  generalInfo?: readonly ReservationHistoryText[];
+  remarks?: readonly ReservationHistoryText[];
+  accounting?: readonly ReservationHistoryAccounting[];
+};
+
 /** Un PNR: sus campos, o solo el párrafo. Con solo el párrafo, el localizador sale de la línea de firma. */
 export type QueueFakeItem = QueueFakePnr | readonly string[];
 
@@ -46,6 +73,19 @@ export interface QueueFakeOptions {
   queues?: Readonly<Record<string, readonly QueueFakeItem[]>>;
   /** PNR que no están en ninguna cola, para colocarlos con `place({ locators })`. */
   pnrs?: readonly QueueFakeItem[];
+  /**
+   * Los contadores de `queue.activity` por cola, con las mismas claves que `queues`. `numMessages`
+   * sale del estado del fake, como en `count` (sin el PNR en pantalla). Los demás valen lo que se
+   * siembre aquí, o 0. Las acciones del fake (`ignore`, `remove`, `place`) **no** los cambian:
+   * nadie probó qué contador sube con cada una (Q-097).
+   */
+  activity?: Readonly<Record<string, QueueFakeActivity>>;
+  /**
+   * El historial de cada PNR para `reservation.history`, por localizador. Un PNR que el fake
+   * conoce y no está aquí devuelve una transacción sintética (la creación). Un localizador que
+   * el fake no conoce da un error de host marcado como no simulado.
+   */
+  histories?: Readonly<Record<string, readonly QueueFakeHistoryTransaction[]>>;
   /** Reloj de las fechas de `count` y de `place`. Por defecto, `new Date()`. Las fechas van en UTC. */
   now?: () => Date;
 }
@@ -61,12 +101,16 @@ export type QueueFakeCommand =
   | 'ignore'
   | 'remove'
   | 'exit'
-  | 'place';
+  | 'place'
+  | 'activity'
+  | 'history';
 
 export interface QueueFakeCall {
   command: QueueFakeCommand;
   /** La cola de `access` y `list`. */
   queue?: QueueRef;
+  /** El localizador de `history`. */
+  locator?: string;
 }
 
 export interface QueueFake {
@@ -293,6 +337,103 @@ function requestedKey(identifier: XmlNode | undefined): string | undefined {
   return name === undefined ? undefined : `${NAME_PREFIX}${name}`;
 }
 
+const ACTIVITY_COUNTERS: ReadonlyArray<[keyof QueueFakeActivity, string]> = [
+  ['ended', 'Ended'],
+  ['ignored', 'Ignored'],
+  ['moved', 'Moved'],
+  ['removed', 'Removed'],
+  ['transferred', 'Transferred'],
+  ['leftMessageToContact', 'LeftMessageToContact'],
+  ['unableToReach', 'UnableToReach'],
+];
+
+function toActivity(value: unknown, label: string): QueueFakeActivity {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) fail(`${label} debe ser un objeto de contadores`);
+  const known = new Set<string>(ACTIVITY_COUNTERS.map(([key]) => key));
+  const result: QueueFakeActivity = {};
+  for (const [key, count] of Object.entries(value)) {
+    if (key === 'numMessages') fail(`${label}.numMessages sale de la cola del fake: no se siembra`);
+    if (!known.has(key)) fail(`${label}.${key} no es un contador de queue.activity`);
+    if (!Number.isInteger(count) || (count as number) < 0) fail(`${label}.${key} debe ser un entero de 0 en adelante`);
+    result[key as keyof QueueFakeActivity] = count as number;
+  }
+  return result;
+}
+
+function toHistory(value: unknown, label: string): QueueFakeHistoryTransaction[] {
+  if (!Array.isArray(value)) fail(`${label} debe ser una lista de transacciones`);
+  return value.map((transaction: unknown, index) => {
+    const at = `${label}[${index}]`;
+    if (typeof transaction !== 'object' || transaction === null) fail(`${at} debe ser un objeto`);
+    const t = transaction as QueueFakeHistoryTransaction;
+    // Sin Action, el SDK no entiende la respuesta: se frena acá, con el lugar exacto.
+    for (const [list, name] of [
+      [t.flightSegments, 'flightSegments'],
+      [t.generalInfo, 'generalInfo'],
+      [t.remarks, 'remarks'],
+    ] as const) {
+      if (list === undefined) continue;
+      if (!Array.isArray(list)) fail(`${at}.${name} debe ser una lista`);
+      list.forEach((entry: { action?: unknown }, position: number) => {
+        if (typeof entry?.action !== 'string' || entry.action.trim() === '') fail(`${at}.${name}[${position}].action debe ser un string no vacío`);
+      });
+    }
+    if (t.accounting !== undefined && !Array.isArray(t.accounting)) fail(`${at}.accounting debe ser una lista`);
+    return t;
+  });
+}
+
+const attrs = (pairs: ReadonlyArray<[string, string | number | undefined]>): string =>
+  pairs.map(([name, value]) => (value === undefined ? '' : ` ${name}="${escape(String(value))}"`)).join('');
+
+/** Las líneas de un texto del historial, una por `Text`. */
+const historyText = (text: string): string =>
+  text.split('\n').map((line) => `<Text>${escape(line)}</Text>`).join('');
+
+/** Una transacción como `HistoricalInfo`, en el orden de las respuestas de CERT. */
+function historicalInfo(t: QueueFakeHistoryTransaction): string {
+  const segments = (t.flightSegments ?? []).map((segment) =>
+    [
+      `<Item><FlightSegment${attrs([
+        ['Action', segment.action],
+        ['ArrivalDateTime', segment.arrivalDateTime],
+        ['DepartureDateTime', segment.departureDateTime],
+        ['FlightNumber', segment.flightNumber],
+        ['NumberInParty', segment.numberInParty],
+        ['ResBookDesigCode', segment.bookingClass],
+        ['Status', segment.status],
+      ])}>`,
+      segment.destination === undefined ? '' : `<DestinationLocation${attrs([['LocationCode', segment.destination]])}/>`,
+      segment.marketingAirline === undefined ? '' : `<MarketingAirline${attrs([['Code', segment.marketingAirline]])}/>`,
+      segment.origin === undefined ? '' : `<OriginLocation${attrs([['LocationCode', segment.origin]])}/>`,
+      segment.supplierRef === undefined ? '' : `<SupplierRef${attrs([['ID', segment.supplierRef]])}/>`,
+      '</FlightSegment></Item>',
+    ].join(''),
+  );
+  return [
+    `<HistoricalInfo${attrs([['RPH', t.rph]])}>`,
+    ...(t.generalInfo ?? []).map((entry) => `<GeneralInfo${attrs([['Action', entry.action]])}>${historyText(entry.text)}</GeneralInfo>`),
+    segments.length === 0 ? '' : `<ItineraryInfo><ReservationItems>${segments.join('')}</ReservationItems></ItineraryInfo>`,
+    (t.remarks ?? []).length === 0
+      ? ''
+      : `<RemarkInfo>${(t.remarks ?? []).map((entry) => `<Remark${attrs([['Action', entry.action]])}>${historyText(entry.text)}</Remark>`).join('')}</RemarkInfo>`,
+    ...(t.accounting ?? []).map((entry) => `<AccountingInfo${attrs([['Action', entry.action], ['Type', entry.type], ['LinkCode', entry.linkCode]])}/>`),
+    `<ItineraryRef><Source${attrs([
+      ['AAA_PseudoCityCode', t.aaaPcc],
+      ['CreateDateTime', t.createdAt],
+      ['CreationAgent', t.agent],
+      ['CreationAgentDutyCode', t.agentDutyCode],
+      ['CreationAgentFunctionCode', t.agentFunctionCode],
+      ['PseudoCityCode', t.pcc],
+      ['ReceivedFrom', t.receivedFrom],
+    ])}/></ItineraryRef>`,
+    '</HistoricalInfo>',
+  ].join('');
+}
+
+/** Lo que Sabre responde al historial de otro PNR con la sesión dentro de una cola (CERT, Q-102). */
+const NOT_ALLOWED_INSIDE_QUEUE = 'NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY';
+
 export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
   if (typeof options !== 'object' || options === null) fail('options debe ser un objeto');
   const now = options.now ?? (() => new Date());
@@ -333,6 +474,18 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     );
   }
   for (const [index, item] of (options.pnrs ?? []).entries()) register(item, `pnrs[${index}]`);
+
+  const activity = new Map<string, QueueFakeActivity>();
+  for (const [optionName, counters] of Object.entries(options.activity ?? {})) {
+    const key = optionKey(optionName);
+    validateKey(key);
+    activity.set(key, toActivity(counters, `activity['${key}']`));
+  }
+  const histories = new Map<string, QueueFakeHistoryTransaction[]>();
+  for (const [locator, transactions] of Object.entries(options.histories ?? {})) {
+    if (!LOCATOR.test(locator)) fail(`histories['${locator}']: la clave debe ser un localizador de 6 caracteres alfanuméricos en mayúscula`);
+    histories.set(locator, toHistory(transactions, `histories['${locator}']`));
+  }
 
   const queue = (key: string): Entry[] => {
     let entries = queues.get(key);
@@ -400,6 +553,10 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     return accessRS(`${results('Complete', success)}${lineXml(entry)}<Paragraph>${textLines(pnr.paragraph)}</Paragraph>`);
   };
 
+  /** Cuántos hay en una cola para `count` y `activity`: sin el PNR en pantalla (producción, #96). */
+  const waiting = (session: Session, key: string, entries: readonly Entry[]): number =>
+    entries.length - (session.inside?.key === key && entries[session.inside.index] !== undefined ? 1 : 0);
+
   const count = (session: Session, rq: XmlNode): string => {
     const pcc = attr(node(node(rq.QueueInfo)?.QueueIdentifier), 'PseudoCityCode') ?? '';
     let pnrsTotal = 0;
@@ -407,8 +564,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     const identifiers: string[] = [];
     for (const [key, entries] of queues) {
       // Con un PNR en pantalla, su cola no lo cuenta (producción, #96).
-      const open = session.inside?.key === key && entries[session.inside.index] !== undefined ? 1 : 0;
-      const total = entries.length - open;
+      const total = waiting(session, key, entries);
       if (total <= 0) continue;
       identifiers.push(`<QueueIdentifier Count="${total}" ${keyAttribute(key)}/>`);
       // Las alfabéticas (la S) son de mensajes; las numéricas y las con nombre, de PNR.
@@ -531,6 +687,50 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     return placeRS(`${results('Complete', success)}${placements.join('')}`);
   };
 
+  // --- Get Queue Activity y Get Itinerary History ------------------------------------------
+
+  const analyze = (session: Session, rq: XmlNode): string => {
+    calls.push({ command: 'activity' });
+    const pcc = attr(node(node(rq.QueueInfo)?.QueueIdentifier), 'PseudoCityCode') ?? '';
+    const totals: Record<string, number> = { NumMessages: 0 };
+    for (const [, element] of ACTIVITY_COUNTERS) totals[element] = 0;
+    const identifiers: string[] = [];
+    // Las colas del fake y las sembradas, una vez cada una. Como Sabre, se listan también colas
+    // vacías con contadores, y no las que están en cero.
+    for (const key of new Set([...queues.keys(), ...activity.keys()])) {
+      const seeded = activity.get(key) ?? {};
+      const counters: Record<string, number> = { NumMessages: waiting(session, key, queues.get(key) ?? []) };
+      for (const [name, element] of ACTIVITY_COUNTERS) counters[element] = seeded[name] ?? 0;
+      if (Object.values(counters).every((value) => value === 0)) continue;
+      for (const [element, value] of Object.entries(counters)) totals[element] = (totals[element] ?? 0) + value;
+      identifiers.push(
+        `<QueueIdentifier ${keyAttribute(key)}>${Object.entries(counters).map(([element, value]) => `<${element} Count="${value}"/>`).join('')}</QueueIdentifier>`,
+      );
+    }
+    const totalsXml = Object.entries(totals).map(([element, value]) => `<${element} Count="${value}"/>`).join('');
+    return `<QueueAnalysisRS xmlns="${SWS_NAMESPACE}" xmlns:stl="${STL_NAMESPACE}" Version="2.0.0">${results('Complete', success)}<QueueInfo DateTime="${shortDate(now())}" PseudoCityCode="${escape(pcc)}">${identifiers.join('')}</QueueInfo><Totals>${totalsXml}</Totals></QueueAnalysisRS>`;
+  };
+
+  const history = (session: Session, rq: XmlNode): string => {
+    const locator = attr(rq.UniqueID, 'ID') ?? '';
+    calls.push({ command: 'history', locator });
+    const historyRS = (inner: string): string =>
+      `<TravelItineraryHistoryRS xmlns="${SWS_NAMESPACE}" xmlns:stl="${STL_NAMESPACE}" Version="2.4.0">${inner}</TravelItineraryHistoryRS>`;
+    const historyError = (message: string): string => historyRS(results('NotProcessed', hostResult('Error', message)));
+
+    // Dentro de una cola, Sabre rechaza el historial de otro PNR (CERT, Q-102). Que acepte el del
+    // PNR en pantalla es un supuesto del fake.
+    const inside = session.inside;
+    const current = inside === undefined ? undefined : queue(inside.key)[inside.index];
+    if (current !== undefined && current.locator !== locator) return historyError(NOT_ALLOWED_INSIDE_QUEUE);
+
+    const seeded = histories.get(locator);
+    if (seeded !== undefined) return historyRS(`${results('Complete', success)}${seeded.map(historicalInfo).join('')}`);
+    if (!pnrs.has(locator)) return historyError(`sabre-client/testing: el PNR ${locator} no está en el fake (qué responde Sabre no está simulado)`);
+    const created: QueueFakeHistoryTransaction = { rph: 1, createdAt: longDate(now()), agent: 'AAA', pcc: 'XXXX', receivedFrom: 'SABRE-CLIENT/TESTING' };
+    return historyRS(`${results('Complete', success)}${historicalInfo(created)}`);
+  };
+
   // --- Despacho --------------------------------------------------------------------------
 
   const handle = (raw: string): Reply => {
@@ -591,6 +791,10 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
         return reply('QueueAccessLLSRS', session, token, access(session, rq));
       case 'QueuePlaceLLSRQ':
         return reply('QueuePlaceLLSRS', session, token, place(session, rq));
+      case 'QueueAnalysisLLSRQ':
+        return reply('QueueAnalysisLLSRS', session, token, analyze(session, rq));
+      case 'TravelItineraryHistoryLLSRQ':
+        return reply('TravelItineraryHistoryLLSRS', session, token, history(session, rq));
       default:
         return {
           status: 500,

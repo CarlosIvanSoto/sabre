@@ -586,6 +586,15 @@ fake.openSessions; // 0: the session was closed
 - `queues['S']` is the message queue: each item is a message's text (`string[]`), not a PNR.
   `access` shows it without `Line`, as Sabre does, and `fake.messages()` lists the ones left.
   That `remove` takes a message out is an assumption of the fake, not tested against Sabre.
+- `queue.activity`: `numMessages` comes from the fake's queues (without the PNR on screen, as in
+  `count`). The other seven counters are 0 unless you seed them with
+  `activity: { '9': { ignored: 27 } }`. The fake's actions do **not** change them: no one has
+  tested which counter Sabre raises for each action.
+- `reservation.history`: `histories: { AAAAAA: [transactions] }` sets what each PNR returns, in
+  the shape of `ReservationHistoryTransaction` (missing lists come back empty). A PNR the fake
+  knows without a seeded history returns one synthetic transaction (its creation), and an unknown
+  locator gives a host error marked as not simulated. Inside a queue, the history of another PNR
+  is rejected with `NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY`, as in CERT.
 - It answers like production: empty queues, the end of the queue, `place` moving the PNR, the
   required PIC, and an expired session with `fake.expireSessions()`. `fake.calls` lists what the
   SDK asked for.

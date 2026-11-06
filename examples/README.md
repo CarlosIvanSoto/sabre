@@ -181,3 +181,24 @@ await reviewQueue(legacy, { queue: 12, reviewQueue: 50, instructionCode: 11 });
 fake.locators(12); // lo que quedó en la cola
 fake.openSessions; // 0 si se cerró la sesión
 ```
+
+## Salud de una cola (Tier 4)
+
+`queue-health.mjs` lee los contadores de una cola con `session.queue.activity` (la pantalla `QA`)
+y, por cada PNR de la cola, su última transacción con `session.reservation.history` (el `*H`).
+Marca la cola como sin atender si tiene PNR y no se sacó ninguno (`removed` en 0). La regla es de
+ejemplo: ninguna fuente dice desde cuándo cuentan los contadores, así que conviene comparar dos
+lecturas.
+
+Como `queue-review.mjs`, no tiene un script para correrlo contra Sabre.
+`test/examples-queue-health.test.ts` lo corre contra el fake de `sabre-client/testing`, con los
+contadores y los historiales sembrados:
+
+```js
+const fake = createQueueFake({
+  queues: { '9': [paragraph1, paragraph2] },
+  activity: { '9': { ignored: 27 } },
+  histories: { AAAAAA: [{ createdAt: '2026-11-05T09:10', agent: 'BK' }] },
+});
+await queueHealth(new SabreLegacy({ ...config, fetch: fake.fetch }), { queue: 9 });
+```

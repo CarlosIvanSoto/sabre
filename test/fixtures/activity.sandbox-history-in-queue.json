@@ -1,0 +1,383 @@
+{
+  "recordedAt": "2026-11-06",
+  "environment": "sandbox",
+  "scenario": "history-in-queue",
+  "place": false,
+  "results": [
+    {
+      "step": "list",
+      "ok": true,
+      "locators": [
+        "AAAAAB",
+        "AAAAAC",
+        "AAAAAD",
+        "AAAAAE"
+      ]
+    },
+    {
+      "step": "access",
+      "ok": true,
+      "done": false,
+      "locator": "AAAAAB",
+      "warnings": 0
+    },
+    {
+      "step": "*R antes",
+      "ok": true,
+      "lines": 10,
+      "warnings": 0
+    },
+    {
+      "step": "reservation.history",
+      "ok": false,
+      "error": {
+        "name": "SabreBusinessError",
+        "message": "itineraryHistory: NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY (ERR.SWS.HOST.ERROR_IN_RESPONSE)",
+        "code": "ERR.SWS.HOST.ERROR_IN_RESPONSE",
+        "retryable": false
+      }
+    },
+    {
+      "step": "*R después",
+      "ok": true,
+      "lines": 10,
+      "warnings": 0
+    },
+    {
+      "step": "ignore",
+      "ok": true,
+      "done": false,
+      "locator": "AAAAAC",
+      "warnings": 0
+    },
+    {
+      "step": "exit",
+      "ok": true
+    },
+    {
+      "step": "close",
+      "ok": true
+    }
+  ],
+  "findings": {
+    "q102": {
+      "historyPnrIsP1": false,
+      "aaaBefore": "P1",
+      "aaaAfter": "P1",
+      "aaaUnchanged": true,
+      "ignoreReachedListedNext": true,
+      "stateAfterIgnore": "inside"
+    }
+  },
+  "events": [
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 219,
+        "messageId": "1774669806363561040",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.open",
+      "context": {
+        "version": "2.0.0",
+        "pseudoCityCode": "XXXX"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 244,
+        "messageId": "1774803806365481460",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 184,
+        "messageId": "1774674806367471040",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.session.command",
+      "context": {
+        "command": "*R"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 625,
+        "messageId": "1774907806369310770",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "itineraryHistory",
+        "action": "TravelItineraryHistoryLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "warn",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "itineraryHistory",
+        "action": "TravelItineraryHistoryLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 305,
+        "messageId": "1774823806375621460",
+        "error": {
+          "name": "SabreBusinessError",
+          "retryable": false,
+          "service": "itineraryHistory",
+          "code": "ERR.SWS.HOST.ERROR_IN_RESPONSE",
+          "warnings": [],
+          "errors": [],
+          "message": "itineraryHistory: NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY (ERR.SWS.HOST.ERROR_IN_RESPONSE)"
+        }
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.session.command",
+      "context": {
+        "command": "*R"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 248,
+        "messageId": "1774833806378681460",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 192,
+        "messageId": "1774710806381181040",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queueAccess",
+        "action": "QueueAccessLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 147,
+        "messageId": "1774714806383101040",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionClose",
+        "action": "SessionCloseRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionClose",
+        "action": "SessionCloseRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 64,
+        "messageId": "1774938806384580770",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.close",
+      "context": {
+        "pseudoCityCode": "XXXX"
+      }
+    }
+  ],
+  "responses": [
+    {
+      "operation": "openSession",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>67fc81c7-5457-4229-8fd1-14d05a533de6</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCreateRS</eb:Action><eb:MessageData><eb:MessageId>1774669806363561040</eb:MessageId><eb:Timestamp>2026-11-06T22:23:56</eb:Timestamp><eb:RefToMessageId>mid:b43da2fa-a259-4e1d-afed-adaba3f5bfae</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCreateRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"2.0.0\" status=\"Approved\">\t<ConversationId>67fc81c7-5457-4229-8fd1-14d05a533de6</ConversationId></SessionCreateRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.list",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>67fc81c7-5457-4229-8fd1-14d05a533de6</eb:ConversationId><eb:Service>QueueAccessLLSRQ</eb:Service><eb:Action>QueueAccessLLSRS</eb:Action><eb:MessageData><eb:MessageId>1774803806365481460</eb:MessageId><eb:Timestamp>2026-11-06T22:23:56</eb:Timestamp><eb:RefToMessageId>mid:f9090f17-9bdd-4c4f-80d0-7a77076d42da</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueAccessRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.1.1\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:23:56Z\"/>\n </stl:ApplicationResults>\n <Line Number=\"1\">\n  <DateTime>2026-11-04T21:51</DateTime>\n  <POS>\n   <Source AgentSine=\"AAA\" PseudoCityCode=\"XXXX\"/>\n  </POS>\n  <UniqueID ID=\"AAAAAB\"/>\n </Line>\n <Line Number=\"2\">\n  <DateTime>2026-11-04T21:52</DateTime>\n  <POS>\n   <Source AgentSine=\"AAA\" PseudoCityCode=\"XXXX\"/>\n  </POS>\n  <UniqueID ID=\"AAAAAC\"/>\n </Line>\n <Line Number=\"3\">\n  <DateTime>2026-11-04T21:52</DateTime>\n  <POS>\n   <Source AgentSine=\"AAA\" PseudoCityCode=\"XXXX\"/>\n  </POS>\n  <UniqueID ID=\"AAAAAD\"/>\n </Line>\n <Line Number=\"4\">\n  <DateTime>2026-11-04T21:52</DateTime>\n  <POS>\n   <Source AgentSine=\"AAA\" PseudoCityCode=\"XXXX\"/>\n  </POS>\n  <UniqueID ID=\"AAAAAE\"/>\n </Line>\n <Paragraph>\n  <Text>XXXXX XXXX XXX X9XX  XXXXX 999 XX 99XXX XX 9999</Text>\n  <Text>XXX XXX XXXXXXX    XXXXXX XX     XXXX      XXXX    XXXXX</Text>\n  <Text>9  XXXXXX        X9XX  XXX     99XXX99   9999</Text>\n  <Text>9  XXXXXX        X9XX  XXX     99XXX99   9999</Text>\n  <Text>9  XXXXXX        X9XX  XXX     99XXX99   9999</Text>\n  <Text>9  XXXXXX        X9XX  XXX     99XXX99   9999</Text>\n  <Text>XXX XX XXXX</Text>\n </Paragraph>\n</QueueAccessRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.access",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>67fc81c7-5457-4229-8fd1-14d05a533de6</eb:ConversationId><eb:Service>QueueAccessLLSRQ</eb:Service><eb:Action>QueueAccessLLSRS</eb:Action><eb:MessageData><eb:MessageId>1774674806367471040</eb:MessageId><eb:Timestamp>2026-11-06T22:23:56</eb:Timestamp><eb:RefToMessageId>mid:78962849-45a6-4098-bfa5-3974a4da7595</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueAccessRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.1.1\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:23:56Z\"/>\n </stl:ApplicationResults>\n <Line>\n  <DateTime>2026-11-04T17:01</DateTime>\n  <POS>\n   <Source AgentSine=\"AAA\" PseudoCityCode=\"XXXX\"/>\n  </POS>\n  <UniqueID ID=\"AAAAAB\"/>\n </Line>\n <Paragraph>\n  <Text>003  UNTICKETED PREPAID TICKET</Text>\n  <Text>9.9XXXX/XXXXXXXXX</Text>\n  <Text>NO ITIN</Text>\n  <Text>TKT/TIME LIMIT</Text>\n  <Text>9.XXX/</Text>\n  <Text>PHONES</Text>\n  <Text>9.XXX9999999999</Text>\n  <Text>PASSENGER EMAIL DATA EXISTS  *PE TO DISPLAY ALL</Text>\n  <Text>XXXXX XXXXX XXXXXX XXXXXX - XXXXXX</Text>\n  <Text>RECEIVED FROM - XXXXXX XXXXXXX</Text>\n  <Text>X9XX.X9XX*XXX 9999/99XXX99 AAAAAB H</Text>\n </Paragraph>\n</QueueAccessRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "command",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"9.9\" encoding=\"XXX-9\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"9.9\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"XXX\"/></eb:From><eb:To><eb:PartyId eb:type=\"XXX\"/></eb:To><eb:CPAId>X9XX</eb:CPAId><eb:ConversationId>99XX99X9-9999-9999-9XX9-99X99X999XX9</eb:ConversationId><eb:Service>XXXXXXXXXXXXXXXXX</eb:Service><eb:Action>XXXXXXXXXXXXXXXXX</eb:Action><eb:MessageData><eb:MessageId>9999999999999999999</eb:MessageId><eb:Timestamp>9999-99-99X99:99:99</eb:Timestamp><eb:RefToMessageId>XXX:9X999XX9-XXX9-9999-X99X-X99XX9X9X999</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"XXXXXX\" EncodingType=\"XXXX:XXXX99XXXXXX\">[XXXXXXXX]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SabreCommandLLSRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:23:57Z\">\n   <stl:SystemSpecificResults>\n    <stl:HostCommand LNIATA=\"XXXXXX\">*X</stl:HostCommand>\n   </stl:SystemSpecificResults>\n  </stl:Success>\n </stl:ApplicationResults>\n <Response> 9.9XXXX/XXXXXXXXX\nXX XXXX\nXXX/XXXX XXXXX\n  9.XXX/\nXXXXXX\n  9.XXX9999999999\nXXXXXXXXX XXXXX XXXX XXXXXX  *XX XX XXXXXXX XXX\nXXXXX XXXXX XXXXXX XXXXXX - XXXXXX\nXXXXXXXX XXXX - XXXXXX XXXXXXX\nX9XX.X9XX*XXX 9999/99XXX99 XXXXXX X</Response>\n</SabreCommandLLSRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "reservation.history",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"9.9\" encoding=\"XXX-9\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"9.9\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"XXX\"/></eb:From><eb:To><eb:PartyId eb:type=\"XXX\"/></eb:To><eb:CPAId>X9XX</eb:CPAId><eb:ConversationId>99XX99X9-9999-9999-9XX9-99X99X999XX9</eb:ConversationId><eb:Service>XXXXXXXXXXXXXXXXXXXXXXXXXXX</eb:Service><eb:Action>XXXXXXXXXXXXXXXXXXXXXXXXXXX</eb:Action><eb:MessageData><eb:MessageId>9999999999999999999</eb:MessageId><eb:Timestamp>9999-99-99X99:99:99</eb:Timestamp><eb:RefToMessageId>XXX:9X99XX99-X9XX-999X-X999-XXXXX9X9XXX9</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"XXXXXX\" EncodingType=\"XXXX:XXXX99XXXXXX\">[XXXXXXXX]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><TravelItineraryHistoryRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.4.0\">\n <stl:ApplicationResults status=\"NotProcessed\">\n  <stl:Error type=\"XXXXXXXXXXXXX\" timeStamp=\"2026-11-06T22:23:57Z\">\n   <stl:SystemSpecificResults>\n    <stl:Message>XXX9 -XXX XXXXXXX- XXXXXX XX XXXXXX XXXXX XXXXXXXX     </stl:Message>\n    <stl:ShortText>XXX.XXX.XXXX.XXXXX_XX_XXXXXXXX</stl:ShortText>\n   </stl:SystemSpecificResults>\n  </stl:Error>\n </stl:ApplicationResults>\n</TravelItineraryHistoryRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "command",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"9.9\" encoding=\"XXX-9\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"9.9\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"XXX\"/></eb:From><eb:To><eb:PartyId eb:type=\"XXX\"/></eb:To><eb:CPAId>X9XX</eb:CPAId><eb:ConversationId>99XX99X9-9999-9999-9XX9-99X99X999XX9</eb:ConversationId><eb:Service>XXXXXXXXXXXXXXXXX</eb:Service><eb:Action>XXXXXXXXXXXXXXXXX</eb:Action><eb:MessageData><eb:MessageId>9999999999999999999</eb:MessageId><eb:Timestamp>9999-99-99X99:99:99</eb:Timestamp><eb:RefToMessageId>XXX:X99X9999-9XXX-9999-X9X9-X999X99999X9</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"XXXXXX\" EncodingType=\"XXXX:XXXX99XXXXXX\">[XXXXXXXX]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SabreCommandLLSRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:23:58Z\">\n   <stl:SystemSpecificResults>\n    <stl:HostCommand LNIATA=\"XXXXXX\">*X</stl:HostCommand>\n   </stl:SystemSpecificResults>\n  </stl:Success>\n </stl:ApplicationResults>\n <Response> 9.9XXXX/XXXXXXXXX\nXX XXXX\nXXX/XXXX XXXXX\n  9.XXX/\nXXXXXX\n  9.XXX9999999999\nXXXXXXXXX XXXXX XXXX XXXXXX  *XX XX XXXXXXX XXX\nXXXXX XXXXX XXXXXX XXXXXX - XXXXXX\nXXXXXXXX XXXX - XXXXXX XXXXXXX\nX9XX.X9XX*XXX 9999/99XXX99 XXXXXX X</Response>\n</SabreCommandLLSRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.ignore",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>67fc81c7-5457-4229-8fd1-14d05a533de6</eb:ConversationId><eb:Service>QueueAccessLLSRQ</eb:Service><eb:Action>QueueAccessLLSRS</eb:Action><eb:MessageData><eb:MessageId>1774710806381181040</eb:MessageId><eb:Timestamp>2026-11-06T22:23:58</eb:Timestamp><eb:RefToMessageId>mid:c5580bc7-9893-4d9e-a39b-c5e33f56dd71</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueAccessRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.1.1\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:23:58Z\"/>\n </stl:ApplicationResults>\n <Line>\n  <DateTime>2026-11-04T17:02</DateTime>\n  <POS>\n   <Source AgentSine=\"AAA\" PseudoCityCode=\"XXXX\"/>\n  </POS>\n  <UniqueID ID=\"AAAAAC\"/>\n </Line>\n <Paragraph>\n  <Text>004  COMPUTE RATE</Text>\n  <Text>9.9XXXX/XXXXXXXXX</Text>\n  <Text>NO ITIN</Text>\n  <Text>TKT/TIME LIMIT</Text>\n  <Text>9.XXX/</Text>\n  <Text>PHONES</Text>\n  <Text>9.XXX9999999999</Text>\n  <Text>PASSENGER EMAIL DATA EXISTS  *PE TO DISPLAY ALL</Text>\n  <Text>XXXXX XXXXX XXXXXX XXXXXX - XXXXXX</Text>\n  <Text>RECEIVED FROM - XXXXXX XXXXXXX</Text>\n  <Text>X9XX.X9XX*XXX 9999/99XXX99 AAAAAC H</Text>\n </Paragraph>\n</QueueAccessRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.exit",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>67fc81c7-5457-4229-8fd1-14d05a533de6</eb:ConversationId><eb:Service>QueueAccessLLSRQ</eb:Service><eb:Action>QueueAccessLLSRS</eb:Action><eb:MessageData><eb:MessageId>1774714806383101040</eb:MessageId><eb:Timestamp>2026-11-06T22:23:58</eb:Timestamp><eb:RefToMessageId>mid:90b78843-5c19-4fe3-a659-73750e8073d1</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueueAccessRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.1.1\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:23:58Z\"/>\n </stl:ApplicationResults>\n <Paragraph>\n  <Text>XXX X9XX XXXXX 999</Text>\n </Paragraph>\n</QueueAccessRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "close",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>67fc81c7-5457-4229-8fd1-14d05a533de6</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCloseRS</eb:Action><eb:MessageData><eb:MessageId>1774938806384580770</eb:MessageId><eb:Timestamp>2026-11-06T22:23:58</eb:Timestamp><eb:RefToMessageId>mid:d8efd304-c032-4736-9dc5-7c1bcdd8c5c3</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCloseRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"1\" status=\"Approved\"/></soap-env:Body></soap-env:Envelope>"
+    }
+  ]
+}

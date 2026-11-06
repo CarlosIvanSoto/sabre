@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SabreBusinessError, SabreGatewayError, SabreWarning } from '../src/index.js';
 import { reservationHistoryPayload } from '../src/reservation/reservation-history.js';
 import cert from './fixtures/activity.sandbox-history.json';
+import inQueue from './fixtures/activity.sandbox-history-in-queue.json';
 import { mockFetch } from './helpers.js';
 import { entry, legacyClient, rejection, SESSION_TOKEN, sentBody, sentTag, sessionOpened, soap, success, xml } from './soap-helpers.js';
 
@@ -179,5 +180,28 @@ describe('reservation.history: respuestas', () => {
     expect(error).toBeInstanceOf(SabreGatewayError);
     expect((error as Error).message).toMatch(/^itineraryHistory: respuesta no reconocida/);
     expect((error as SabreGatewayError).raw).toContain('<TravelItineraryHistoryRS');
+  });
+});
+
+describe('reservation.history dentro de una cola (CERT, 2026-11-06, Q-102)', () => {
+  const one = (operation: string) => {
+    const response = (inQueue as Fixture).responses.find((r) => r.operation === operation);
+    if (response === undefined) throw new Error(`la fixture no tiene ${operation}`);
+    return xml(response.status, response.body);
+  };
+
+  it('Sabre lo rechaza con NAK6, la sesión sigue en la cola y ignore pasa al PNR siguiente', async () => {
+    const fetch = mockFetch(one('openSession'), one('queue.access'), one('reservation.history'), one('queue.ignore'));
+    const session = await legacyClient(fetch).client.openSession();
+    const first = await session.queue.access({ queue: 50 });
+
+    const error = await rejection(session.reservation.history('ABC123'));
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect(error).toMatchObject({ service: 'itineraryHistory', retryable: false });
+    expect(session.queue.state).toBe('inside');
+
+    const next = await session.queue.ignore();
+    expect(first).toMatchObject({ done: false, kind: 'pnr', item: { locator: 'AAAAAB' } });
+    expect(next).toMatchObject({ done: false, kind: 'pnr', item: { locator: 'AAAAAC' } });
   });
 });

@@ -411,10 +411,11 @@ const { transactions } = await legacy.withSession((session) => session.reservati
   `action`. Asientos, autos, hoteles, tren, seguros y facturas no se tipan: quedan en la respuesta
   cruda (`onRawResponse`).
 - **Trae datos del pasajero** (nombres, teléfonos, emails). El SDK nunca los manda al log.
-- **No registra las colocaciones en cola que hace el sistema** (CERT): para eso están
+- **No registra las colocaciones en cola**, ni las del sistema ni un `place` manual (CERT): para eso están
   `queue.list`/`access` o los remarks `QUEUE_PLACE` de Get Booking.
-- **Llámalo fuera de un recorrido de cola.** No cambia `queue.state`, pero todavía no se sabe si
-  cambia el PNR del AAA cuando la sesión está dentro de una cola.
+- **Llámalo fuera de un recorrido de cola.** Dentro de una cola, Sabre rechaza el historial de otro
+  PNR con `NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY`, un `SabreBusinessError` (CERT). El
+  PNR del AAA no cambia, `queue.state` sigue en `'inside'` y el recorrido sigue con `ignore`.
 - Es una lectura: se reintenta. Un `locator` que no es de 6 caracteres alfanuméricos en mayúscula
   lanza un `TypeError` sin llamar a la red. Un PNR que no existe lanza un `SabreBusinessError`
   (`service: 'itineraryHistory'`).

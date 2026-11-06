@@ -29,11 +29,13 @@ export class SessionReservation {
    * y SSR, ticketing, teléfonos, nombres y emails como texto en `generalInfo`. Lo que no se tipa
    * queda en la respuesta cruda (`onRawResponse`). **Trae datos del pasajero.**
    *
-   * El historial no registra las colocaciones en cola que hace el sistema (CERT, 2026-11-06): para
-   * eso están `queue.list`/`access` o los remarks `QUEUE_PLACE` de Get Booking.
+   * El historial no registra las colocaciones en cola, ni las del sistema ni un `place` manual
+   * (CERT, 2026-11-06, Q-097): para eso están `queue.list`/`access` o los remarks `QUEUE_PLACE` de
+   * Get Booking.
    *
-   * No cambia `queue.state`, pero no hay evidencia de que sea seguro llamarlo dentro de un
-   * recorrido de cola: no se sabe si cambia el PNR del AAA (Q-102). Hasta probarlo, conviene
+   * **Dentro de una cola, Sabre lo rechaza** para otro PNR (CERT, 2026-11-06, Q-102): lanza
+   * `SabreBusinessError` con `NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY`. El PNR del AAA
+   * no cambia, `queue.state` sigue en `'inside'` y el recorrido sigue con `ignore`. Conviene
    * llamarlo fuera de una cola.
    *
    * Es una lectura: se reintenta ante fallos transitorios. Un `locator` que no es de 6 caracteres

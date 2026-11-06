@@ -1,0 +1,304 @@
+{
+  "recordedAt": "2026-11-06",
+  "environment": "sandbox",
+  "scenario": "history",
+  "place": true,
+  "results": [
+    {
+      "step": "place",
+      "ok": true,
+      "placements": 1
+    },
+    {
+      "step": "TravelItineraryHistoryLLSRQ con UniqueID",
+      "ok": true,
+      "payload": "TravelItineraryHistoryRS"
+    },
+    {
+      "step": "*PNR",
+      "ok": true,
+      "lines": 13,
+      "warnings": 0
+    },
+    {
+      "step": "*H",
+      "ok": true,
+      "lines": 15,
+      "warnings": 0
+    },
+    {
+      "step": "TravelItineraryHistoryLLSRQ sin UniqueID",
+      "ok": true,
+      "payload": "TravelItineraryHistoryRS"
+    },
+    {
+      "step": "close",
+      "ok": true
+    }
+  ],
+  "findings": {
+    "sourcePccAttributes": [
+      "AAA_PseudoCityCode"
+    ],
+    "createDateTime": [
+      "con año"
+    ],
+    "actions": [
+      "A4S",
+      "A7",
+      "A9",
+      "ADT",
+      "AN",
+      "APE",
+      "AS"
+    ],
+    "queueMentions": {
+      "xml": false,
+      "host": false,
+      "hostLines": []
+    }
+  },
+  "events": [
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 174,
+        "messageId": "1775523806639961460",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.open",
+      "context": {
+        "version": "2.0.0",
+        "pseudoCityCode": "XXXX"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "queuePlace",
+        "action": "QueuePlaceLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "queuePlace",
+        "action": "QueuePlaceLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 1309,
+        "messageId": "1775526806641751460",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "itineraryHistory",
+        "action": "TravelItineraryHistoryLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "itineraryHistory",
+        "action": "TravelItineraryHistoryLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 371,
+        "messageId": "1775425806654161040",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.session.command",
+      "context": {
+        "command": "*SRH"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 431,
+        "messageId": "1775557806657971460",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.session.command",
+      "context": {
+        "command": "*H"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sabreCommand",
+        "action": "SabreCommandLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 393,
+        "messageId": "1775564806662221460",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "itineraryHistory",
+        "action": "TravelItineraryHistoryLLSRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "itineraryHistory",
+        "action": "TravelItineraryHistoryLLSRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 364,
+        "messageId": "1775574806666261460",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionClose",
+        "action": "SessionCloseRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionClose",
+        "action": "SessionCloseRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 84,
+        "messageId": "1775579806669811460",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.close",
+      "context": {
+        "pseudoCityCode": "XXXX"
+      }
+    }
+  ],
+  "responses": [
+    {
+      "operation": "openSession",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>c4a79f72-56a0-4318-9d69-240ad9d84abe</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCreateRS</eb:Action><eb:MessageData><eb:MessageId>1775523806639961460</eb:MessageId><eb:Timestamp>2026-11-06T22:24:24</eb:Timestamp><eb:RefToMessageId>mid:c3774890-2173-41ab-b6db-25748c32a235</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCreateRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"2.0.0\" status=\"Approved\">\t<ConversationId>c4a79f72-56a0-4318-9d69-240ad9d84abe</ConversationId></SessionCreateRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "queue.place",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>c4a79f72-56a0-4318-9d69-240ad9d84abe</eb:ConversationId><eb:Service>QueuePlaceLLSRQ</eb:Service><eb:Action>QueuePlaceLLSRS</eb:Action><eb:MessageData><eb:MessageId>1775526806641751460</eb:MessageId><eb:Timestamp>2026-11-06T22:24:25</eb:Timestamp><eb:RefToMessageId>mid:7bd3b8a1-2476-49a2-8f0f-3507f8d0ad5b</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><QueuePlaceRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.4\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:24:25Z\"/>\n </stl:ApplicationResults>\n <QueueInfo DateTime=\"11-06T16:24\">\n  <QueueIdentifier Number=\"0401\" PseudoCityCode=\"XXXX\"/>\n  <UniqueID ID=\"AAAAAA\"/>\n </QueueInfo>\n <Text>XXXXX XXXXXXXXX XXXXXXXXX</Text>\n</QueuePlaceRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "probe.itineraryHistory",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"9.9\" encoding=\"XXX-9\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"9.9\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"XXX\"/></eb:From><eb:To><eb:PartyId eb:type=\"XXX\"/></eb:To><eb:CPAId>X9XX</eb:CPAId><eb:ConversationId>X9X99X99-99X9-9999-9X99-999XX9X99XXX</eb:ConversationId><eb:Service>XXXXXXXXXXXXXXXXXXXXXXXXXXX</eb:Service><eb:Action>XXXXXXXXXXXXXXXXXXXXXXXXXXX</eb:Action><eb:MessageData><eb:MessageId>9999999999999999999</eb:MessageId><eb:Timestamp>9999-99-99X99:99:99</eb:Timestamp><eb:RefToMessageId>XXX:XX9X999X-9999-9999-XX9X-9999X999X9X9</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"XXXXXX\" EncodingType=\"XXXX:XXXX99XXXXXX\">[XXXXXXXX]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><TravelItineraryHistoryRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.4.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:24:25Z\"/>\n </stl:ApplicationResults>\n <HistoricalInfo RPH=\"9\">\n  <GeneralInfo Action=\"A4S\">\n   <Text>XXX XXXX 9X XX99 XX XXXX XXXXXX XX XX XXX XX 9999 99XXX XXX</Text>\n  </GeneralInfo>\n  <ItineraryRef>\n   <Source AAA_PseudoCityCode=\"XXX\" CreateDateTime=\"2026-11-04T17:15\" CreationAgent=\"XX\" CreationAgentDutyCode=\"X\" CreationAgentFunctionCode=\"X\" PseudoCityCode=\"XXXX\" ReceivedFrom=\"XXXXXXX999999 9X99X999-999 XXX\"/>\n  </ItineraryRef>\n </HistoricalInfo>\n <HistoricalInfo RPH=\"9\">\n  <GeneralInfo Action=\"A9\">\n   <Text>XXX9999999999</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"A9\">\n   <Text>XXX9999999999-X-9.9</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"AN\">\n   <Text>9XXXXXXXXX/XXXX</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"A7\">\n   <Text>XXX/</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"APE\">\n   <Text>XXXXX@XXXXXXX.XXX</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"APE\">\n   <Text>XXXXX@XXXXXXX.XXX</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"ADT\">\n   <Text>XXXX</Text>\n  </GeneralInfo>\n  <ItineraryInfo>\n   <ReservationItems>\n    <Item RPH=\"9\">\n     <FlightSegment Action=\"AS\" ArrivalDateTime=\"12-19T14:34\" DepartureDateTime=\"12-19T13:10\" FlightNumber=\"9999\" NumberInParty=\"99\" ResBookDesigCode=\"X\" Status=\"XXXX\" eTicket=\"XXXX\">\n      <DestinationLocation LocationCode=\"XXX\"/>\n      <MarketingAirline Code=\"XX\" FlightNumber=\"9999\"/>\n      <OriginLocation LocationCode=\"XXX\"/>\n      <SupplierRef ID=\"XXXX\"/>\n     </FlightSegment>\n    </Item>\n   </ReservationItems>\n  </ItineraryInfo>\n  <ItineraryRef>\n   <Source AAA_PseudoCityCode=\"X9XX\" CreateDateTime=\"2026-11-04T16:26\" CreationAgent=\"XX\" CreationAgentDutyCode=\"*\" CreationAgentFunctionCode=\"X\" PseudoCityCode=\"XXXX\" ReceivedFrom=\"XXXXXX XXXXXXX\"/>\n  </ItineraryRef>\n </HistoricalInfo>\n</TravelItineraryHistoryRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "command",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"9.9\" encoding=\"XXX-9\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"9.9\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"XXX\"/></eb:From><eb:To><eb:PartyId eb:type=\"XXX\"/></eb:To><eb:CPAId>X9XX</eb:CPAId><eb:ConversationId>X9X99X99-99X9-9999-9X99-999XX9X99XXX</eb:ConversationId><eb:Service>XXXXXXXXXXXXXXXXX</eb:Service><eb:Action>XXXXXXXXXXXXXXXXX</eb:Action><eb:MessageData><eb:MessageId>9999999999999999999</eb:MessageId><eb:Timestamp>9999-99-99X99:99:99</eb:Timestamp><eb:RefToMessageId>XXX:X99XX999-9999-999X-X999-99X99X9X9999</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"XXXXXX\" EncodingType=\"XXXX:XXXX99XXXXXX\">[XXXXXXXX]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SabreCommandLLSRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:24:26Z\">\n   <stl:SystemSpecificResults>\n    <stl:HostCommand LNIATA=\"XXXXXX\">*XXXXXX</stl:HostCommand>\n   </stl:SystemSpecificResults>\n  </stl:Success>\n </stl:ApplicationResults>\n <Response> 9.9XXXXXXXXX/XXXX\n 9 XX9999X 99XXX X XXXXXX XX9   999X  999X /XXXX*XXXXXX /X\nXXX/XXXX XXXXX\n  9.XXX/\nXXXXXX\n  9.XXX9999999999\n  9.XXX9999999999-X-9.9\nXXXXXXXXX XXXXX XXXX XXXXXX  *XX XX XXXXXXX XXX\nXXXXX XXXXX XXXXXX XXXXXX - XXXXXX\nXX XXXXX\n  9.XXX XXXX 9X XX99 XX XXXX XXXXXX XX XX XXX XX 9999 99XXX XXX\nXXXXXXXX XXXX - XXXXXX XXXXXXX\nX9XX.X9XX*XXX 9999/99XXX99 XXXXXX X X</Response>\n</SabreCommandLLSRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "command",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"9.9\" encoding=\"XXX-9\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"9.9\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"XXX\"/></eb:From><eb:To><eb:PartyId eb:type=\"XXX\"/></eb:To><eb:CPAId>X9XX</eb:CPAId><eb:ConversationId>X9X99X99-99X9-9999-9X99-999XX9X99XXX</eb:ConversationId><eb:Service>XXXXXXXXXXXXXXXXX</eb:Service><eb:Action>XXXXXXXXXXXXXXXXX</eb:Action><eb:MessageData><eb:MessageId>9999999999999999999</eb:MessageId><eb:Timestamp>9999-99-99X99:99:99</eb:Timestamp><eb:RefToMessageId>XXX:9999X999-999X-9999-99X9-9X9XX99999XX</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"XXXXXX\" EncodingType=\"XXXX:XXXX99XXXXXX\">[XXXXXXXX]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SabreCommandLLSRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.0.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:24:26Z\">\n   <stl:SystemSpecificResults>\n    <stl:HostCommand LNIATA=\"XXXXXX\">*X</stl:HostCommand>\n   </stl:SystemSpecificResults>\n  </stl:Success>\n </stl:ApplicationResults>\n <Response>X9X  XXX XXXX 9X XX99 XX XXXX XXXXXX XX XX XXX XX 9999 99XXX XX\n     X\nX-   XXXXXXX999999 9X99X999-999 XXX\nXXX XXXXXXX 9999/99XXX99\nX9   XXX9999999999\nX9   XXX9999999999-X-9.9\nXX   9XXXXXXXXX/XXXX\nXX   XX9999X 99XXX XXXXXX XX/XX9   999X  999X /XXXX           \n                                                   XXX/X\nX9   XXX/\nXXX  XXXX@XXXXXXX.XXX\nXXX  XXXX@XXXXXXX.XXX   -XXXXXXXXX/XXXX\nXXX  XXX   -XXXXXXXXX/XXXX\nX-   XXXXXX XXXXXXX\nX9XX X9XX*XXX 9999/99XXX99</Response>\n</SabreCommandLLSRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "probe.itineraryHistory",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"9.9\" encoding=\"XXX-9\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"9.9\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"XXX\"/></eb:From><eb:To><eb:PartyId eb:type=\"XXX\"/></eb:To><eb:CPAId>X9XX</eb:CPAId><eb:ConversationId>X9X99X99-99X9-9999-9X99-999XX9X99XXX</eb:ConversationId><eb:Service>XXXXXXXXXXXXXXXXXXXXXXXXXXX</eb:Service><eb:Action>XXXXXXXXXXXXXXXXXXXXXXXXXXX</eb:Action><eb:MessageData><eb:MessageId>9999999999999999999</eb:MessageId><eb:Timestamp>9999-99-99X99:99:99</eb:Timestamp><eb:RefToMessageId>XXX:999X9X99-X999-9X9X-99X9-X9999999XX9X</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"XXXXXX\" EncodingType=\"XXXX:XXXX99XXXXXX\">[XXXXXXXX]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><TravelItineraryHistoryRS xmlns=\"http://webservices.sabre.com/sabreXML/2011/10\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:stl=\"http://services.sabre.com/STL/v01\" Version=\"2.4.0\">\n <stl:ApplicationResults status=\"Complete\">\n  <stl:Success timeStamp=\"2026-11-06T22:24:26Z\"/>\n </stl:ApplicationResults>\n <HistoricalInfo RPH=\"9\">\n  <GeneralInfo Action=\"A4S\">\n   <Text>XXX XXXX 9X XX99 XX XXXX XXXXXX XX XX XXX XX 9999 99XXX XXX</Text>\n  </GeneralInfo>\n  <ItineraryRef>\n   <Source AAA_PseudoCityCode=\"XXX\" CreateDateTime=\"2026-11-04T17:15\" CreationAgent=\"XX\" CreationAgentDutyCode=\"X\" CreationAgentFunctionCode=\"X\" PseudoCityCode=\"XXXX\" ReceivedFrom=\"XXXXXXX999999 9X99X999-999 XXX\"/>\n  </ItineraryRef>\n </HistoricalInfo>\n <HistoricalInfo RPH=\"9\">\n  <GeneralInfo Action=\"A9\">\n   <Text>XXX9999999999</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"A9\">\n   <Text>XXX9999999999-X-9.9</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"AN\">\n   <Text>9XXXXXXXXX/XXXX</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"A7\">\n   <Text>XXX/</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"APE\">\n   <Text>XXXXX@XXXXXXX.XXX</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"APE\">\n   <Text>XXXXX@XXXXXXX.XXX</Text>\n  </GeneralInfo>\n  <GeneralInfo Action=\"ADT\">\n   <Text>XXXX</Text>\n  </GeneralInfo>\n  <ItineraryInfo>\n   <ReservationItems>\n    <Item RPH=\"9\">\n     <FlightSegment Action=\"AS\" ArrivalDateTime=\"12-19T14:34\" DepartureDateTime=\"12-19T13:10\" FlightNumber=\"9999\" NumberInParty=\"99\" ResBookDesigCode=\"X\" Status=\"XXXX\" eTicket=\"XXXX\">\n      <DestinationLocation LocationCode=\"XXX\"/>\n      <MarketingAirline Code=\"XX\" FlightNumber=\"9999\"/>\n      <OriginLocation LocationCode=\"XXX\"/>\n      <SupplierRef ID=\"XXXX\"/>\n     </FlightSegment>\n    </Item>\n   </ReservationItems>\n  </ItineraryInfo>\n  <ItineraryRef>\n   <Source AAA_PseudoCityCode=\"X9XX\" CreateDateTime=\"2026-11-04T16:26\" CreationAgent=\"XX\" CreationAgentDutyCode=\"*\" CreationAgentFunctionCode=\"X\" PseudoCityCode=\"XXXX\" ReceivedFrom=\"XXXXXX XXXXXXX\"/>\n  </ItineraryRef>\n </HistoricalInfo>\n</TravelItineraryHistoryRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "close",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>c4a79f72-56a0-4318-9d69-240ad9d84abe</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCloseRS</eb:Action><eb:MessageData><eb:MessageId>1775579806669811460</eb:MessageId><eb:Timestamp>2026-11-06T22:24:27</eb:Timestamp><eb:RefToMessageId>mid:7a4341c8-c45a-4444-8c5f-c289a029924c</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCloseRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"1\" status=\"Approved\"/></soap-env:Body></soap-env:Envelope>"
+    }
+  ]
+}

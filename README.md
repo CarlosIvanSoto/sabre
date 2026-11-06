@@ -407,10 +407,11 @@ const { transactions } = await legacy.withSession((session) => session.reservati
   not publish the list of `action` values. Seats, cars, hotels, rail, insurance and invoices are
   not typed: they stay in the raw response (`onRawResponse`).
 - **It carries passenger data** (names, phones, emails). The SDK never logs it.
-- **It does not record the queue placements made by the system** (CERT): for that, use
+- **It does not record queue placements**, neither the system's nor a manual `place` (CERT): for that, use
   `queue.list`/`access` or the `QUEUE_PLACE` remarks of Get Booking.
-- **Call it outside a queue walk.** It does not change `queue.state`, but it is not yet known
-  whether it changes the PNR in the AAA while the session is inside a queue.
+- **Call it outside a queue walk.** Inside a queue, Sabre rejects the history of another PNR with
+  `NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY`, a `SabreBusinessError` (CERT). The PNR in
+  the AAA does not change, `queue.state` stays `'inside'`, and the walk goes on with `ignore`.
 - It is a read: it is retried. A `locator` that is not 6 uppercase alphanumeric characters throws a
   `TypeError` without calling the network. A PNR that does not exist throws a `SabreBusinessError`
   (`service: 'itineraryHistory'`).

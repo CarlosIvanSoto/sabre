@@ -9,6 +9,7 @@
 //   SABRE_HISTORY_PNR=ABC123 node --env-file=.env scripts/validate-activity.mjs history
 //   SABRE_HISTORY_PNR=ABC123 SABRE_HISTORY_PLACE_QUEUE=401 \
 //     node --env-file=.env scripts/validate-activity.mjs history
+//   SABRE_HISTORY_PNR=ABC123 SABRE_QUEUE=50 node --env-file=.env scripts/validate-activity.mjs history-in-queue
 //
 // `qa` (sandbox o producción, solo lectura), en una sesión:
 //  1. `QueueAnalysisLLSRQ` 2.0.0 crudo, sin `SI9` (Q-098: ¿hace falta duty code 9?).
@@ -30,6 +31,16 @@
 //  `AAAPseudoCityCode`), el formato de `CreateDateTime`, los valores de `@Action` y si el historial
 //  menciona la cola.
 //
+// `history-in-queue` (solo sandbox, Q-102), en una sesión: ¿`session.reservation.history` dentro
+// de un recorrido cambia el PNR del AAA? Solo lectura (access, `*R`, `I` y `QXI`; el `I` suma a
+// `Ignored`):
+//  1. `access` a SABRE_QUEUE: el PNR P1 queda en el AAA. `list` antes, para saber el siguiente (P2).
+//  2. `*R`: qué PNR muestra el AAA (por la línea de firma).
+//  3. `session.reservation.history(SABRE_HISTORY_PNR)`, un PNR distinto de P1.
+//  4. `*R` otra vez: ¿sigue P1?
+//  5. `ignore`: ¿llega a P2 y `state` sigue en `inside`?
+//  6. `exit`.
+//
 // Las pruebas crudas usan el método interno de la sesión (`sessionSend`), como validate-queue.mjs:
 // es un truco de los scripts, no API pública (aprobado por el usuario el 2026-11-01).
 //
@@ -44,17 +55,19 @@
 import { createRecorder, env, legacyClient, legacyEnvironment, queueRef, sessionSendOf } from './lib/legacy-recorder.mjs';
 
 const scenario = process.argv[2];
-if (scenario !== 'qa' && scenario !== 'history') {
-  console.error(`escenario desconocido: ${scenario ?? '(ninguno)'} (usa qa o history)`);
+if (scenario !== 'qa' && scenario !== 'history' && scenario !== 'history-in-queue') {
+  console.error(`escenario desconocido: ${scenario ?? '(ninguno)'} (usa qa, history o history-in-queue)`);
   process.exit(2);
 }
 const { environment, credentials, queuePcc, secrets } = legacyEnvironment();
-if (scenario === 'history' && environment !== 'sandbox') {
-  console.error('history solo corre en sandbox: lee un PNR de prueba de CERT');
+const historyScenario = scenario === 'history' || scenario === 'history-in-queue';
+if (historyScenario && environment !== 'sandbox') {
+  console.error(`${scenario} solo corre en sandbox: lee un PNR de prueba de CERT`);
   process.exit(2);
 }
 const pcc = queuePcc ?? env('SABRE_PCC');
-const historyPnr = scenario === 'history' ? env('SABRE_HISTORY_PNR').toUpperCase() : undefined;
+const historyPnr = historyScenario ? env('SABRE_HISTORY_PNR').toUpperCase() : undefined;
+const walkQueue = scenario === 'history-in-queue' ? queueRef(env('SABRE_QUEUE')) : undefined;
 if (historyPnr !== undefined && !/^[A-Z0-9]{6}$/.test(historyPnr)) {
   console.error('SABRE_HISTORY_PNR debe ser un localizador de 6 caracteres');
   process.exit(2);
@@ -63,7 +76,7 @@ const placeQueue = scenario === 'history' && process.env.SABRE_HISTORY_PLACE_QUE
 const instructionCode = Number(process.env.SABRE_INSTRUCTION_CODE ?? 11);
 
 const recorder = createRecorder([...secrets, pcc]);
-const { aliasOf, step, results, options, logger } = recorder;
+const { aliasOf, step, stepSummary, results, options, logger } = recorder;
 if (historyPnr !== undefined) aliasOf(historyPnr);
 const legacy = legacyClient(environment, credentials, logger);
 
@@ -117,6 +130,30 @@ try {
     const dateTimes = xml.flatMap((body) => [...body.matchAll(/<(?:\w+:)?QueueInfo\b[^>]*\bDateTime="([^"]*)"/g)].map((m) => m[1]));
     findings.queueInfoDateTime = dateTimes.map((value) => ({ value, hasYear: /^\d{4}-/.test(value) }));
     findings.counters = [...new Set(xml.flatMap((body) => [...body.matchAll(/<(?:\w+:)?(\w+) Count="/g)].map((m) => m[1])))].sort();
+  } else if (scenario === 'history-in-queue') {
+    // El localizador del PNR en el AAA, de la línea de firma de `*R` (`… HHMM/DDMMMYY ABC123 H`).
+    const aaaLocator = (name) => /\d{4}\/\d{2}[A-Z]{3}\d{2}\s+([A-Z0-9]{6})\s+H\s*$/m.exec(screens.get(name) ?? '')?.[1];
+    const listed = await step('list', () => session.queue.list({ queue: walkQueue }, options), (r) => ({ locators: r.locators.map(aliasOf) }));
+    const first = await step('access', () => session.queue.access({ queue: walkQueue }, options), stepSummary);
+    const p1 = first !== undefined && !first.done && first.kind === 'pnr' ? first.item.locator : undefined;
+    await commandStep('*R antes', '*R');
+    await step('reservation.history', () => session.reservation.history(historyPnr, options), (r) => ({ transactions: r.transactions.length }));
+    await commandStep('*R después', '*R');
+    const next = session.queue.state === 'inside' ? await step('ignore', () => session.queue.ignore(options), stepSummary) : undefined;
+    if (session.queue.state !== 'outside') await step('exit', () => session.queue.exit(options));
+
+    const p2 = next !== undefined && !next.done && next.kind === 'pnr' ? next.item.locator : undefined;
+    const before = aaaLocator('*R antes');
+    const after = aaaLocator('*R después');
+    for (const locator of [p1, p2, before, after]) if (locator !== undefined) aliasOf(locator);
+    findings.q102 = {
+      historyPnrIsP1: p1 === historyPnr,
+      aaaBefore: before === undefined ? 'sin firma' : before === p1 ? 'P1' : aliasOf(before),
+      aaaAfter: after === undefined ? 'sin firma' : after === p1 ? 'P1' : after === historyPnr ? 'el PNR del historial' : aliasOf(after),
+      aaaUnchanged: before !== undefined && before === after,
+      ignoreReachedListedNext: p2 !== undefined && p2 === listed?.locators[1],
+      stateAfterIgnore: next === undefined ? 'sin ignore' : next.done ? 'outside (fin de cola)' : 'inside',
+    };
   } else {
     if (placeQueue !== undefined) {
       await step('place', () => session.queue.place({ to: [{ queue: placeQueue, instructionCode }], locators: [historyPnr] }, options), (r) => ({ placements: r.placements.length }));
@@ -154,6 +191,7 @@ function anonymizeHistory(body) {
     .replace(/(\s)([\w:]+)="([^"]*)"/g, (all, space, name, value) => (HISTORY_KEEP_ATTRIBUTES.test(name) ? all : `${space}${name}="${maskValue(value)}"`))
     .replace(/>([^<]+)</g, (all, text) => `>${text.split('\n').map((line) => (keepLine(line) ? line : maskValue(line))).join('\n')}<`);
 }
-if (scenario === 'history') recorder.transformBodies(anonymizeHistory);
+if (historyScenario) recorder.transformBodies(anonymizeHistory);
 
-recorder.writeFixture(`activity.${environment}-${scenario}`, { environment, scenario, place: placeQueue !== undefined }, findings);
+// Con place, otra fixture: la de F0.1 (`activity.sandbox-history.json`) la usan los tests.
+recorder.writeFixture(`activity.${environment}-${scenario}${placeQueue === undefined ? '' : '-place'}`, { environment, scenario, place: placeQueue !== undefined }, findings);

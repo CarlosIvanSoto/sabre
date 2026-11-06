@@ -15,7 +15,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with its `action`: `flightSegments` with their status, and SSR, ticketing, phones, names and
   emails as text in `generalInfo`, plus `remarks` and `accounting`. What is not typed stays in the
   raw response. It reads both `AAA_PseudoCityCode` (CERT) and `AAAPseudoCityCode` (the sample).
-  New `SessionReservation` and `ReservationHistory*` types (#164).
+  Inside a queue, Sabre rejects the history of another PNR (`NAK6 -NOT ALLOWED- FINISH OR IGNORE
+  OTHER ACTIVITY`, a `SabreBusinessError`) and the walk goes on. The history does not record queue
+  placements. New `SessionReservation` and `ReservationHistory*` types (#164).
 
 - `session.queue.activity({ pcc? })` (Get Queue Activity, `QueueAnalysisLLSRQ` 2.0.0, the host's
   `QA`): per queue, the eight counters (`numMessages`, `ended`, `ignored`, `moved`, `removed`,

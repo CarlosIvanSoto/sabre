@@ -35,6 +35,7 @@ import {
 } from './queue-count.js';
 import {
   emptyList,
+  LIST_SELECTION_FUNCTIONS,
   parseQueueList,
   type QueueListOptions,
   type QueueListRequest,
@@ -171,18 +172,29 @@ export class QueueManagement {
    * `primaryPassenger: true`, cada entrada trae también el pasajero principal. Una cola vacía da
    * una lista vacía.
    *
+   * No pagina: Sabre devuelve la cola entera en una respuesta, también con más de 1000 PNR. Con
+   * `selection`, solo los PNR que cumplen el filtro; Sabre acepta solo `QD` o `AK` en la lista.
+   *
    * No cambia `state`. Es una lectura: se reintenta ante fallos transitorios. Lanza `TypeError`
-   * sin red si `queue` o `pcc` no son válidos, o si `primaryPassenger` no es un boolean.
+   * sin red si `queue` o `pcc` no son válidos, si `primaryPassenger` no es un boolean, o si
+   * `selection` no es válida o trae un código que no es `QD` ni `AK`.
    */
   async list(request: QueueListRequest, options: QueueListOptions = {}): Promise<QueueListResponse> {
-    if (typeof request !== 'object' || request === null) fail('queue.list recibe { queue, pcc?, primaryPassenger? }');
+    if (typeof request !== 'object' || request === null) fail('queue.list recibe { queue, pcc?, primaryPassenger?, selection? }');
     validateQueueRef(request.queue, 'queue');
     // Sabre no lista la cola de mensajes de ninguna forma: INVALID ENTRY con Number="S" (ADR-028).
     if (isMessageQueue(request.queue)) fail("la cola 'S' es la de mensajes del PCC: no tiene PNR y Sabre no la lista");
     const pcc = this.#pcc(request.pcc, 'pcc');
     const { primaryPassenger = false } = request;
     if (typeof primaryPassenger !== 'boolean') fail('primaryPassenger debe ser un boolean');
-    const send = queueListRequest(queueListPayload(request.queue, pcc, primaryPassenger), options);
+    const selection = validateSelection(request.selection);
+    selection.forEach((filter, index) => {
+      // Sabre: VALID SELECTION CODE FOR QUEUE LIST ARE QD OR AK (producción, #155).
+      if (!LIST_SELECTION_FUNCTIONS.includes(filter.function)) {
+        fail(`selection[${index}].function en list solo puede ser ${LIST_SELECTION_FUNCTIONS.join(' o ')}: Sabre no acepta otro código en la lista`);
+      }
+    });
+    const send = queueListRequest(queueListPayload(request.queue, pcc, primaryPassenger, selection), options);
     try {
       return parseQueueList(await this.#context.send(send));
     } catch (error) {

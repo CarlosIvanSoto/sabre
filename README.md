@@ -444,7 +444,7 @@ is no evidence yet of what Sabre does with the message.
 | - | - | - |
 | `count({ pcc? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, warnings }` |
 | `activity({ pcc? })` | `QueueAnalysisLLSRQ` | `{ queues: [{ queue, numMessages, ended, ignored, … }], totals, analyzedAt, warnings }` |
-| `list({ queue, pcc?, primaryPassenger? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, without entering the queue |
+| `list({ queue, pcc?, primaryPassenger?, selection? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, without entering the queue |
 | `access({ queue, pcc?, selection? })` | `QueueAccessLLSRQ` | `QueueStep` |
 | `ignore()` | `QueueAccessLLSRQ` (`I`) | `QueueStep` |
 | `remove({ from? })` | `QueueAccessLLSRQ` (`QR`) | `QueueStep` |
@@ -461,6 +461,12 @@ type QueueStep =
 > **Migrating from 0.4.x**: a step that is not done now has a `kind`. Check `step.kind === 'pnr'`
 > before reading `step.item`. Only the `S` queue returns `kind: 'message'`.
 
+- **`list` returns the whole queue in one response**: there is no paging, even with more than 1000
+  PNRs (1221 in about 279 KB, in production). `selection` narrows it, but in the list Sabre only
+  accepts `QD` (date placed on the queue, e.g. `{ function: 'QD', criteria: '05NOV' }`) or `AK`
+  (the agent who placed it, PCC plus sine, e.g. `'PCC1AAT'`; not tested in the list yet).
+  Any other code throws a `TypeError` without calling Sabre. The `placedAt` of a list entry is
+  when the PNR was placed on the queue, the date `QD` filters on.
 - **`activity`** returns, per queue, the eight counters of the host's `QA` screen: `numMessages`
   (on the queue now), `ended`, `ignored`, `moved`, `removed`, `transferred`,
   `leftMessageToContact` and `unableToReach`, plus `totals` for the PCC. Sabre also lists empty
@@ -490,7 +496,9 @@ type QueueStep =
   Production rejects a `place` without it, although the design says it is optional.
 - **`QueueItem`** has `locator`, the `placedAt` and `placedBy` of `Line`, `primaryPassenger` and
   `group` when Sabre sends them, and `paragraph`: the PNR in host format, line by line and
-  untouched. `placedAt` is the text that arrived, with or without the year. `resolveHostDate`
+  untouched. `placedAt` is the text that arrived, with or without the year. Inside a queue it is
+  the PNR's last change, not when it was placed on the queue: that one is the `placedAt` of
+  `list`, and the two differ for the same PNR. `resolveHostDate`
   turns it into a full date.
 - `count` inside a queue does not count the PNR on screen.
 
@@ -582,7 +590,7 @@ fake.openSessions; // 0: the session was closed
   required PIC, and an expired session with `fake.expireSessions()`. `fake.calls` lists what the
   SDK asked for.
 - **Not simulated**: PCCs (the queues are the same for any `pcc`) and `selection`, which gets an
-  error instead of the whole queue.
+  error instead of the whole queue, in `access` and in `list`.
 - `queueFixtures` holds the anonymized responses recorded in production (`walk`, `emptyQueue`,
   `place`, …), as `{ operation, status, body }`.
 

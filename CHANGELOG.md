@@ -9,6 +9,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `session.reservation.history(locator)` (Get Itinerary History, `TravelItineraryHistoryLLSRQ`
+  2.4.0, the host's `*H`): the PNR history, one entry per transaction, with who signed it, when
+  (`createdAt`, with a year) and from which PCC (`pcc`, `aaaPcc`), `receivedFrom`, and what changed
+  with its `action`: `flightSegments` with their status, and SSR, ticketing, phones, names and
+  emails as text in `generalInfo`, plus `remarks` and `accounting`. What is not typed stays in the
+  raw response. It reads both `AAA_PseudoCityCode` (CERT) and `AAAPseudoCityCode` (the sample).
+  New `SessionReservation` and `ReservationHistory*` types (#164).
+
 - `session.queue.activity({ pcc? })` (Get Queue Activity, `QueueAnalysisLLSRQ` 2.0.0, the host's
   `QA`): per queue, the eight counters (`numMessages`, `ended`, `ignored`, `moved`, `removed`,
   `transferred`, `leftMessageToContact`, `unableToReach`), the `totals` for the PCC and

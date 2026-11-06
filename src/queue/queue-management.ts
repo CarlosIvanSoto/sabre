@@ -43,6 +43,13 @@ import {
   queueListRequest,
 } from './queue-list.js';
 import {
+  parseQueueActivityResponse,
+  type QueueActivityOptions,
+  type QueueActivityRequest,
+  type QueueActivityResponse,
+  queueActivityRequest,
+} from './queue-activity.js';
+import {
   isInstructionCode,
   type QueuePlaceTarget,
   MAX_PLACE_LOCATORS,
@@ -139,6 +146,24 @@ export class QueueManagement {
     const pcc = this.#pcc(request.pcc, 'pcc');
     const response = await this.#context.send(queueCountRequest(pcc, options));
     return parseQueueCountResponse(response);
+  }
+
+  /**
+   * Get Queue Activity (`QueueAnalysisLLSRQ` 2.0.0, el `QA` del host): por cada cola del PCC, los
+   * ocho contadores de actividad (`numMessages`, `ended`, `ignored`, `moved`, `removed`,
+   * `transferred`, `leftMessageToContact` y `unableToReach`), más los totales. Cada `queue` se puede
+   * pasar tal cual a las demás operaciones de cola. Ninguna fuente dice desde cuándo cuentan
+   * (Q-097): el SDK los devuelve sin interpretar.
+   *
+   * Se puede llamar dentro o fuera de una cola, y no cambia `state`. Es una lectura: se reintenta
+   * ante fallos transitorios. No pide duty code 9 (CERT y producción, Q-098). Un PCC que no tiene 3
+   * o 4 caracteres alfanuméricos lanza `TypeError` sin red.
+   */
+  async activity(request: QueueActivityRequest = {}, options: QueueActivityOptions = {}): Promise<QueueActivityResponse> {
+    if (typeof request !== 'object' || request === null) fail('queue.activity recibe { pcc? }');
+    const pcc = this.#pcc(request.pcc, 'pcc');
+    const response = await this.#context.send(queueActivityRequest(pcc, options));
+    return parseQueueActivityResponse(response);
   }
 
   /**

@@ -9,6 +9,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `session.queue.activity({ pcc? })` (Get Queue Activity, `QueueAnalysisLLSRQ` 2.0.0, the host's
+  `QA`): per queue, the eight counters (`numMessages`, `ended`, `ignored`, `moved`, `removed`,
+  `transferred`, `leftMessageToContact`, `unableToReach`), the `totals` for the PCC and
+  `analyzedAt`. The queue comes as in `count` (`'S'` for the message queue). It is a read, retried
+  like `count`, and it does not need duty code 9. New types `QueueActivity`,
+  `QueueActivityCounters`, `QueueActivityRequest`, `QueueActivityResponse` and
+  `QueueActivityOptions` (#161).
+
 - `parseQueuePlaceRemark(text)`: splits the `text` of a `QUEUE_PLACE` remark from Get Booking
   (`'MEX25SEP146/015'`) into `{ pcc, date, queue, pic }` (new `QueuePlaceRemark` type), or `null`
   if it does not have that shape or a part is out of range. `date` stays as `DDMMM`, without a

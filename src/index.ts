@@ -42,6 +42,13 @@ export type {
 export type { QueueListEntry, QueueListOptions, QueueListRequest, QueueListResponse } from './queue/queue-list.js';
 export type { QueueRef } from './queue/queue-ref.js';
 export type { QueueCount, QueueCountOptions, QueueCountRequest, QueueCountResponse } from './queue/queue-count.js';
+export type {
+  QueueActivity,
+  QueueActivityCounters,
+  QueueActivityOptions,
+  QueueActivityRequest,
+  QueueActivityResponse,
+} from './queue/queue-activity.js';
 export { resolveHostDate } from './queue/host-date.js';
 export type { HostDateDirection, ResolveHostDateOptions } from './queue/host-date.js';
 export { parseQueueParagraph } from './queue/queue-paragraph.js';

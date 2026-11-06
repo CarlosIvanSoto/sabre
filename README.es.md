@@ -45,7 +45,7 @@ El Tier 3 agrega el cliente SOAP `SabreLegacy`, con una sesión stateful y Queue
 | Paso | Servicio | Método |
 | - | - | - |
 | Sesión | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
-| Colas | Get Queue Count, Access Queue, Place Queue Message | `session.queue.count`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
+| Colas | Get Queue Count, Get Queue Activity, Access Queue, Place Queue Message | `session.queue.count`, `activity`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
 | Párrafo de cola | — (función pura) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
 | Comandos de host | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
@@ -418,6 +418,7 @@ todavía no hay evidencia de qué hace Sabre con el mensaje.
 | Método | Servicio de Sabre | Devuelve |
 | - | - | - |
 | `count({ pcc? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, warnings }` |
+| `activity({ pcc? })` | `QueueAnalysisLLSRQ` | `{ queues: [{ queue, numMessages, ended, ignored, … }], totals, analyzedAt, warnings }` |
 | `list({ queue, pcc?, primaryPassenger? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, sin entrar a la cola |
 | `access({ queue, pcc?, selection? })` | `QueueAccessLLSRQ` | `QueueStep` |
 | `ignore()` | `QueueAccessLLSRQ` (`I`) | `QueueStep` |
@@ -435,6 +436,12 @@ type QueueStep =
 > **Migración desde la 0.4.x**: un paso que no terminó ahora trae `kind`. Comprueba
 > `step.kind === 'pnr'` antes de leer `step.item`. Solo la cola `S` devuelve `kind: 'message'`.
 
+- **`activity`** devuelve, por cola, los ocho contadores de la pantalla `QA` del host:
+  `numMessages` (los que están hoy en la cola), `ended`, `ignored`, `moved`, `removed`,
+  `transferred`, `leftMessageToContact` y `unableToReach`, más `totals` para el PCC. Sabre lista
+  también colas vacías con contadores. Ninguna fuente dice desde cuándo cuentan, así que el SDK los
+  devuelve tal cual. Como `count`, es una lectura: se reintenta, funciona dentro o fuera de una
+  cola y no pide duty code 9.
 - **Cada resultado de colas trae `respondedAt`**: el `eb:Timestamp` de Sabre, en ISO 8601 UTC
   (`'2026-11-06T17:34:16Z'`). A diferencia de `countedAt` y `placedAt`, que llegan como los manda
   el host (sin año y en hora local del PCC), trae año y zona. Solo falta si Sabre no lo manda.

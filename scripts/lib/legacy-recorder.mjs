@@ -47,7 +47,7 @@ const encode = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').repla
 /**
  * Captura y anonimización de un recorrido. Cada localizador pasa a un alias (`AAAAAA`, `AAAAAB`…)
  * igual en todo el sobre; `PassengerName` y `Group` a valores falsos; `AgentSine` a `AAA` (salvo
- * `SABRE`); todo PCC, el usuario y las credenciales a `XXXX`. De cada `<Text>` (el PNR en formato
+ * `SABRE`); todo PCC, el usuario y las credenciales a `XXXX`; el `LNIATA` a `XXXXXX`. De cada `<Text>` (el PNR en formato
  * de host, en `Paragraph` o suelto en `QueuePlaceRS`) quedan tal cual solo las líneas de la lista
  * blanca; las demás se enmascaran: letras a `X` y dígitos a `9`.
  */
@@ -98,11 +98,14 @@ export function createRecorder(secretValues) {
     text = text.replace(/(<(?:\w+:)?Group>)([^<]*)(<\/)/g, (_, a, value, b) => (value === '' ? `${a}${b}` : `${a}GRUPO${b}`));
     text = text.replace(/(\bAgentSine=")([^"]*)(")/g, (_, a, sine, b) => `${a}${sine === 'SABRE' ? sine : 'AAA'}${b}`);
     text = text.replace(/(\bPseudoCityCode=")([^"]*)(")/g, '$1XXXX$3');
+    // La dirección de la terminal, como en validate-command.mjs.
+    text = text.replace(/(\bLNIATA=")([^"]*)(")/g, '$1XXXXXX$3');
     text = text.replace(/(<(?:\w+:)?Text\b[^>/]*>)([\s\S]*?)(<\/(?:\w+:)?Text>)/g, (_, a, line, b) => `${a}${encode(anonymizeLine(decode(line)))}${b}`);
     return redactSecrets(text);
   }
 
   const raws = [];
+  const transforms = [];
   const results = [];
   const events = [];
   const logger = Object.fromEntries(
@@ -151,6 +154,7 @@ export function createRecorder(secretValues) {
    * quede un dato real: entonces corta con código 1 sin escribir nada.
    */
   function writeFixture(name, meta, findings) {
+    for (const raw of raws) raw.body = transforms.reduce((body, transform) => transform(body), raw.body);
     const fixture = {
       recordedAt: new Date().toISOString().slice(0, 10),
       ...meta,
@@ -178,7 +182,15 @@ export function createRecorder(secretValues) {
     console.log(`fixture: ${file.pathname}`);
   }
 
-  return { aliasOf, anonymize, step, stepSummary, results, options, logger, writeFixture };
+  /** Las respuestas crudas, sin anonimizar, en orden: solo para calcular hallazgos. */
+  const rawBodies = () => raws.map(({ operation, body }) => ({ operation, body }));
+  /**
+   * Una anonimización extra para los bodies, que corre antes de la general al escribir la fixture
+   * (p. ej. el historial del PNR, que trae datos fuera de `<Text>`).
+   */
+  const transformBodies = (transform) => transforms.push(transform);
+
+  return { aliasOf, anonymize, step, stepSummary, results, options, logger, writeFixture, rawBodies, transformBodies };
 }
 
 /** Un `SabreLegacy` sin reintentos genéricos, para ver la primera respuesta de Sabre. */

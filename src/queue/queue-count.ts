@@ -2,7 +2,7 @@
 // (punto 2) y wiki/entities/queue-management.md (Get Queue Count y respuestas reales).
 import type { RequestOptions } from '../air/bargain-finder-max.js';
 import { SabreGatewayError, type SabreWarning } from '../errors/index.js';
-import { asArray, type SoapResponse, xmlEscape } from '../http/soap-transport.js';
+import { asArray, respondedAtField, type SoapResponse, xmlEscape } from '../http/soap-transport.js';
 import type { SessionRequest } from '../session/session.js';
 import { type QueueRef, toQueueRef } from './queue-ref.js';
 
@@ -37,6 +37,11 @@ export interface QueueCountResponse {
   countedAt?: string;
   /** Los `stl:Warning` de la respuesta. No lanzan. */
   warnings: SabreWarning[];
+  /**
+   * `eb:Timestamp` de la respuesta de Sabre, en ISO 8601 UTC (`"2026-11-06T17:34:16Z"`). A
+   * diferencia de las fechas del host, trae año y zona. Falta si Sabre no lo manda.
+   */
+  respondedAt?: string;
 }
 
 const TOTAL_TYPES = { MESSAGES: 'messages', SPECIALS: 'specials', PNRS: 'pnrs' } as const;
@@ -105,7 +110,13 @@ export function parseQueueCountResponse(response: SoapResponse): QueueCountRespo
     totals[key] = count;
   }
 
-  return { queues, totals, ...(countedAt === undefined ? {} : { countedAt }), warnings: response.warnings };
+  return {
+    queues,
+    totals,
+    ...(countedAt === undefined ? {} : { countedAt }),
+    warnings: response.warnings,
+    ...respondedAtField(response.raw),
+  };
 }
 
 function malformed(detail: string, response: SoapResponse): SabreGatewayError {

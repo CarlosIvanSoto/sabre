@@ -3,7 +3,7 @@
 // wiki/sources/place-queue-message-v2-0-4-design.md y wiki/sources/sabre-legacy-client-1-0-8.md.
 import type { RequestOptions } from '../air/bargain-finder-max.js';
 import { SabreGatewayError, type SabreWarning } from '../errors/index.js';
-import { asArray, type SoapResponse, xmlEscape } from '../http/soap-transport.js';
+import { asArray, respondedAtField, type SoapResponse, xmlEscape } from '../http/soap-transport.js';
 import type { SessionRequest } from '../session/session.js';
 import {
   attribute,
@@ -70,6 +70,11 @@ export interface QueuePlaceResult {
   /** Las líneas `Text`, tal cual (p. ej. `"OK 1030 NMIUTF"`). */
   text: string[];
   warnings: SabreWarning[];
+  /**
+   * `eb:Timestamp` de la respuesta de Sabre, en ISO 8601 UTC (`"2026-11-06T17:34:16Z"`). A
+   * diferencia de las fechas del host, trae año y zona. Falta si Sabre no lo manda.
+   */
+  respondedAt?: string;
 }
 
 /**
@@ -144,7 +149,7 @@ function isEnd(response: SoapResponse, text: readonly string[]): boolean {
  */
 export function parsePlaceStep(response: SoapResponse): QueueStep {
   const text = textLines(response.raw, 'QueuePlaceRS');
-  if (isEnd(response, text)) return endStep(response.warnings);
+  if (isEnd(response, text)) return endStep(response.warnings, 'end-of-display', response.raw);
   const locator = signatureLocator(text);
   if (locator === undefined) {
     throw new SabreGatewayError(`${QUEUE_PLACE_SERVICE}: respuesta no reconocida (sin línea de firma del PNR ni fin de cola)`, {
@@ -154,7 +159,7 @@ export function parsePlaceStep(response: SoapResponse): QueueStep {
       raw: response.raw,
     });
   }
-  return { done: false, item: { locator, paragraph: text }, warnings: response.warnings };
+  return { done: false, item: { locator, paragraph: text }, warnings: response.warnings, ...respondedAtField(response.raw) };
 }
 
 /**
@@ -185,5 +190,10 @@ export function parsePlaceResult(response: SoapResponse): QueuePlaceResult {
       ...(placedAt === undefined ? {} : { placedAt }),
     };
   });
-  return { placements, text: textLines(response.raw, 'QueuePlaceRS'), warnings: response.warnings };
+  return {
+    placements,
+    text: textLines(response.raw, 'QueuePlaceRS'),
+    warnings: response.warnings,
+    ...respondedAtField(response.raw),
+  };
 }

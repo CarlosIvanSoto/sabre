@@ -125,6 +125,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `QueueFakeOptions.queues`, `'S'` is the alphabetic queue and `'name:HOTELS'` (or `'HOTELS'`) a
   named one, and each response uses the right attribute (#169).
 
+### Removed
+
+- **BREAKING**: `pcc` in the `Sabre` and `SabreLegacy` config, deprecated in `0.4.1`. Passing it
+  is now a type error in TypeScript, and in JavaScript it is no longer validated and is ignored.
+  No client read it. The PCC you authenticate with goes in `credentials` (`buildCredentials`
+  builds it); to work in another PCC, pass it per operation: `targetPcc` in REST, `pcc` in the
+  queue operations (#147).
+
 ## [0.4.1] - 2026-11-04
 
 ### Changed

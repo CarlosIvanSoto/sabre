@@ -13,7 +13,6 @@ describe('SabreConfig', () => {
     const resolved = resolveConfig(config());
     expect(resolved.authVersion).toBe('v3');
     expect(resolved.retry).toEqual({ maxRetries: 3, baseDelayMs: 500 });
-    expect(resolved.pcc).toBeUndefined();
   });
 
   it('combina retry parcial con los defaults', () => {
@@ -43,7 +42,6 @@ describe('SabreConfig', () => {
     ['sin password', { environment: 'sandbox', credentials: { ...credentials, password: undefined } }, /credentials\.password/],
     ['v3 sin clientSecret', { environment: 'sandbox', credentials: { ...credentials, clientSecret: ' ' } }, /clientSecret \(requerido con authVersion v3\)/],
     ['authVersion inválido', { ...config(), authVersion: 'v4' }, /authVersion debe ser 'v3' o 'v2'/],
-    ['pcc vacío', { ...config(), pcc: '' }, /pcc es requerido/],
     ['logger incompleto', { ...config(), logger: { info() {} } }, /logger\.debug debe ser una función/],
     ['maxRetries negativo', { ...config(), retry: { maxRetries: -1 } }, /retry\.maxRetries/],
     ['baseDelayMs no numérico', { ...config(), retry: { baseDelayMs: Number.NaN } }, /retry\.baseDelayMs/],

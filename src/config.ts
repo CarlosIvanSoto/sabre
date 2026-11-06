@@ -40,12 +40,6 @@ export interface SabreCredentialsV2 {
 
 interface SabreBaseConfig {
   environment: SabreEnvironment;
-  /**
-   * @deprecated Desde 0.4.1; se quita en 0.5.0. Ningún cliente lo lee. El PCC con el que te
-   * autenticas va en `credentials` (ver `buildCredentials`). Para trabajar en otro PCC, se pasa en
-   * cada operación: `targetPcc` en REST, `pcc` en colas.
-   */
-  pcc?: string;
   logger?: SabreLogger;
   /** Reintentos por defecto del cliente; cada request puede pisarlos. */
   retry?: Partial<RetryOptions>;
@@ -127,7 +121,6 @@ export interface ResolvedConfig {
   baseUrl: string;
   soapBaseUrl: string;
   authVersion: SabreAuthVersion;
-  pcc: string | undefined;
   logger: SabreLogger | undefined;
   retry: Readonly<RetryOptions>;
   fetch: typeof fetch;
@@ -179,8 +172,6 @@ export function resolveConfig(config: SabreConfig): ResolvedConfig {
     requireString(credentials.clientSecret, 'credentials.clientSecret (requerido con authVersion v3)');
   }
 
-  if (config.pcc !== undefined) requireString(config.pcc, 'pcc');
-
   const { logger } = config;
   if (logger !== undefined) {
     if (!isObject(logger)) fail('logger debe ser un objeto con debug/info/warn/error');
@@ -211,7 +202,6 @@ export function resolveConfig(config: SabreConfig): ResolvedConfig {
     baseUrl: BASE_URLS[environment],
     soapBaseUrl: SOAP_BASE_URLS[environment],
     authVersion,
-    pcc: config.pcc,
     logger,
     retry: Object.freeze({ ...DEFAULT_RETRY, ...definedOnly(config.retry ?? {}) }),
     // Enlazado al global para evitar "Illegal invocation" en algunos runtimes.

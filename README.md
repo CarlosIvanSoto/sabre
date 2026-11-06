@@ -124,7 +124,9 @@ The object that `buildCredentials` returns carries its `authVersion`, so the con
 need to repeat it: with `authVersion: 'v2'` in `buildCredentials`, `{ environment, credentials }`
 is already a v2 config. If you pass `authVersion` in the config too, it must match, or the client
 throws a `TypeError`. Credentials you build by hand have no `authVersion`, so with v2 the config
-still needs `authVersion: 'v2'`.
+still needs `authVersion: 'v2'`. If the version is only known at runtime (for example, read
+from an environment variable into a `BuildCredentialsOptions`), the result of `buildCredentials`
+can still go straight into the config, with no `authVersion` there.
 
 The PCC in the credentials is the one you authenticate with. Working in another PCC is not a
 second set of credentials: pass it per operation, as `targetPcc` in `booking.create`, `get` and

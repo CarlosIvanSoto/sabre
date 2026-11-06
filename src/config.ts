@@ -80,10 +80,34 @@ export interface SabreConfigV2FromCredentials extends SabreBaseConfig {
 }
 
 /**
+ * Credenciales con su versión, sin saber cuál al compilar: lo que devuelve
+ * `buildCredentials(options: BuildCredentialsOptions)`. Es un solo tipo y no la unión de
+ * `BuiltCredentialsV3 | BuiltCredentialsV2`: con la unión, TypeScript aceptaría también un
+ * `SabreCredentialsV2` sin marca, porque toma su `authVersion` opcional como discriminante. A
+ * cambio, el tipo no exige `clientId`/`clientSecret` con `'v3'`: eso lo valida `resolveConfig`.
+ */
+export interface SabreCredentialsAnyVersion {
+  authVersion: SabreAuthVersion;
+  clientId?: string;
+  clientSecret?: string;
+  username: string;
+  password: string;
+}
+
+/**
+ * Config sin `authVersion`, con credenciales de `buildCredentials` cuya versión no se conoce al
+ * compilar. La versión sale de la marca de las credenciales en runtime (Q-084, #159).
+ */
+export interface SabreConfigFromCredentials extends SabreBaseConfig {
+  authVersion?: never;
+  credentials: SabreCredentialsAnyVersion;
+}
+
+/**
  * Config del cliente, discriminada por `authVersion`: el de la config o, si falta, el de
  * `credentials`. Sin ninguno de los dos, es v3.
  */
-export type SabreConfig = SabreConfigV3 | SabreConfigV2 | SabreConfigV2FromCredentials;
+export type SabreConfig = SabreConfigV3 | SabreConfigV2 | SabreConfigV2FromCredentials | SabreConfigFromCredentials;
 
 export const BASE_URLS: Readonly<Record<SabreEnvironment, string>> = Object.freeze({
   sandbox: 'https://api.cert.platform.sabre.com',
@@ -181,7 +205,8 @@ export function resolveConfig(config: SabreConfig): ResolvedConfig {
   if (typeof fetchImpl !== 'function') fail('no hay fetch disponible: pasa config.fetch');
 
   return {
-    credentials: Object.freeze({ ...credentials }),
+    // Ya validado arriba: con v3 trae clientId/clientSecret; la marca de versión ya se resolvió.
+    credentials: Object.freeze({ ...credentials }) as SabreCredentials | SabreCredentialsV2,
     environment,
     baseUrl: BASE_URLS[environment],
     soapBaseUrl: SOAP_BASE_URLS[environment],

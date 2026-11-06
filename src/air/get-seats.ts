@@ -154,6 +154,12 @@ export interface SeatFlightLeg {
 export interface SeatSegmentRs extends SeatSegment {
   isChangeOfGauge?: boolean;
   flightLegs?: SeatFlightLeg[];
+  /**
+   * El segmento en la reserva (p. ej. `"10"`). Coincide con `flights[].itemId` y
+   * `allSegments[].id` de Get Booking, así que sirve para cruzar el mapa con la reserva. No está en
+   * el spec 3.0: llega en `byPnrLocator` (CERT, 2026-11-04, sabre-playground #11).
+   */
+  reservationSegmentId?: string;
 }
 
 /** `PassengerRs` del spec. */
@@ -274,7 +280,19 @@ export interface SeatCabinFacility {
   facilityTypeCode: string;
 }
 
-/** `CabinLayoutType` del spec. */
+/**
+ * Un pasillo de la cabina: entre qué filas está y entre qué columnas (p. ej. `leftFromColumn: "D"`,
+ * `rightFromColumn: "C"`). No está en el spec 3.0: llega en `byPnrLocator` y en
+ * `byReservationPayload`, en CERT y en producción.
+ */
+export interface SeatCabinAisle {
+  firstRow: number;
+  lastRow: number;
+  leftFromColumn: string;
+  rightFromColumn: string;
+}
+
+/** `CabinLayoutType` del spec, más `aisles`, que el spec no trae. */
 export interface SeatCabinLayout {
   columns: Array<{ id: string; position?: string[] }>;
   rows: SeatCabinRowPosition;
@@ -286,6 +304,8 @@ export interface SeatCabinLayout {
   missingSeats?: string[];
   facilities?: SeatCabinFacility[];
   deckCode?: string;
+  /** Los pasillos. No está en el spec 3.0 (ver `SeatCabinAisle`). */
+  aisles?: SeatCabinAisle[];
 }
 
 /** `CabinCompartment` del spec. */
@@ -303,7 +323,11 @@ export interface SeatCabinCompartment {
 export interface SeatMap {
   /** `id` del segmento, del request o de `segments[]` de la respuesta. */
   segmentRef: string;
-  flightLegRef?: string;
+  /**
+   * `id` de un `flightLegs[]` del segmento. En un vuelo directo, `byPnrLocator` lo manda como
+   * `null` y `byReservationPayload` no lo manda (CERT, 2026-11-04, sabre-playground #11).
+   */
+  flightLegRef?: string | null;
   cabinCompartments?: SeatCabinCompartment[];
 }
 

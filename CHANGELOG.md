@@ -7,6 +7,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Get Seats response fields that Sabre sends outside the 3.0 spec: `reservationSegmentId` in
+  `SeatSegmentRs` (it matches `flights[].itemId` and `allSegments[].id` in Get Booking) and
+  `aisles` in `SeatCabinLayout`, with the new `SeatCabinAisle` type. `SeatMap.flightLegRef` can
+  now be `null`, as `byPnrLocator` sends it on a nonstop flight (#159).
+- `codeShared` in `ScheduleCarrier` (`scheduleDescs[].carrier`) of BFM and Revalidate: the
+  operator's name, as Sabre sends it (e.g. `'/AVIANCA'`). It is not in the spec (#159).
+- The config accepts credentials from `buildCredentials` whose version is not known at compile
+  time (`buildCredentials(options: BuildCredentialsOptions)`), with no `authVersion` in the
+  config: new `SabreConfigFromCredentials` and `SabreCredentialsAnyVersion` types. The version is
+  taken from the credentials at runtime (Q-084, #159).
+
 ## [0.4.1] - 2026-11-04
 
 ### Changed

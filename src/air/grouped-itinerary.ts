@@ -36,6 +36,13 @@ export interface ScheduleCarrier {
   operatingFlightNumber?: number;
   alliances?: string;
   equipment?: ScheduleEquipment;
+  /**
+   * Nombre del operador en un código compartido, tal cual (p. ej. `"/AVIANCA"`). No está en el
+   * spec. Se observó en BFM y Revalidate en CERT, también cuando `operating` y
+   * `operatingFlightNumber` coinciden con el comercializador (AM101 TRC→MEX, operado por
+   * `"AEROLITORAL DBA AEROMEXICO CONNECT"`, 2026-11-05).
+   */
+  codeShared?: string;
 }
 
 /** Vuelo/segmento operado (`scheduleDescs[]`). */

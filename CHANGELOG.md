@@ -9,6 +9,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `queueFakePnrs(fixture)` in `sabre-client/testing`: the PNRs of a recording (`queueFixtures.*`)
+  as `QueueFakePnr[]`, ready for `createQueueFake`. The ones from `list` come first, in order, with
+  `placedAt`, `placedBy` and `primaryPassenger` from their `Line`, and each one gets the paragraph
+  that `access`, `ignore`, `remove` or `place` showed for it (#166).
+
 - `createAnonymizer({ secrets? })` and `isSafeHostLine(line)` in `sabre-client/testing`: the
   anonymization the SDK's queue fixtures are recorded with, so consumers do not have to copy it.
   The anonymizer has `anonymize(text)` for a whole envelope, `maskLine` and `maskParagraph` for
@@ -76,6 +81,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   end of queue that Sabre sends as an `stl:Error` also carries it (#157).
 
 ### Changed
+
+- `queueFixtures` no longer reuses locator aliases across recordings: `place` now uses
+  `AAAAAE`–`AAAAAF` and `placeWithoutInstructionCodeInside` uses `AAAAAG`–`AAAAAH` (`walk` keeps
+  `AAAAAA`–`AAAAAD`). The signature lines of `walk` and `placeWithoutInstructionCodeInside`, which
+  were masked whole (`… XXXXXX X`), now keep their shape with the alias (`… AAAAAA H`), as in
+  `place`. Each fixture says so in `postprocessed`. Code that looked for `AAAAAA` in `place` must
+  use `AAAAAE` (#166).
 
 - The docs of `placedAt` now say what each date is: in `QueueListEntry` (`list`) it is when the PNR
   was placed on the queue, the date `QD` filters on; in `QueueItem` (`access` and the steps) it is

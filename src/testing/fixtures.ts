@@ -33,7 +33,12 @@ function fixture(json: { recordedAt: string; responses: readonly RecordedRespons
 }
 
 /**
- * Las corridas de producción del Tier 3:
+ * Las corridas de producción del Tier 3. Cada una usa sus propios alias de localizador, así que
+ * se pueden juntar en un fake con `queueFakePnrs` sin que choquen:
+ * - `walk`: `AAAAAA`–`AAAAAD`; `place`: `AAAAAE`–`AAAAAF`;
+ *   `placeWithoutInstructionCodeInside`: `AAAAAG`–`AAAAAH`.
+ *
+ * Qué trae cada una:
  * - `walk`: `count`, `list`, `access` y `ignore` sobre una cola de 4 PNR hasta el fin de cola,
  *   más `I` y `QXI` fuera de una cola;
  * - `emptyQueue`: `access` y `list` sobre una cola vacía (`QUEUE SELECTED WAS EMPTY`);

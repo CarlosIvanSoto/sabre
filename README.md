@@ -592,7 +592,19 @@ fake.openSessions; // 0: the session was closed
 - **Not simulated**: PCCs (the queues are the same for any `pcc`) and `selection`, which gets an
   error instead of the whole queue, in `access` and in `list`.
 - `queueFixtures` holds the anonymized responses recorded in production (`walk`, `emptyQueue`,
-  `place`, …), as `{ operation, status, body }`.
+  `place`, …), as `{ operation, status, body }`. Each one has its own locator aliases (`walk`:
+  `AAAAAA`–`AAAAAD`, `place`: `AAAAAE`–`AAAAAF`, `placeWithoutInstructionCodeInside`:
+  `AAAAAG`–`AAAAAH`), and their signature lines keep their shape (`… <alias> H`).
+- `queueFakePnrs(fixture)` turns a recording into the fake's PNRs: those of `list` first, in
+  order, with their `Line`, and the paragraph `access`, `ignore`, `remove` or `place` showed for
+  each one. You choose the queue, and you can mix fixtures:
+
+  ```ts
+  const fake = createQueueFake({
+    queues: { '9': queueFakePnrs(queueFixtures.walk), '50': [] },
+    pnrs: queueFakePnrs(queueFixtures.place),
+  });
+  ```
 
 `examples/queue-review.mjs` is a full example, and its test runs it against the fake.
 

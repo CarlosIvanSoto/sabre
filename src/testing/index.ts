@@ -12,5 +12,6 @@ export type {
 } from './queue-fake.js';
 export { createAnonymizer, isSafeHostLine } from './anonymize.js';
 export type { Anonymizer, AnonymizerLeak, AnonymizerOptions } from './anonymize.js';
+export { queueFakePnrs } from './fixture-pnrs.js';
 export { queueFixtures } from './fixtures.js';
 export type { RecordedFixture, RecordedResponse } from './fixtures.js';

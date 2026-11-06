@@ -598,7 +598,20 @@ fake.openSessions; // 0: la sesión se cerró
 - **No simula** los PCC (las colas son las mismas para cualquier `pcc`) ni `selection`, que recibe
   un error en vez de la cola entera, en `access` y en `list`.
 - `queueFixtures` trae las respuestas anonimizadas que se grabaron en producción (`walk`,
-  `emptyQueue`, `place`…), como `{ operation, status, body }`.
+  `emptyQueue`, `place`…), como `{ operation, status, body }`. Cada una tiene sus propios alias de
+  localizador (`walk`: `AAAAAA`–`AAAAAD`, `place`: `AAAAAE`–`AAAAAF`,
+  `placeWithoutInstructionCodeInside`: `AAAAAG`–`AAAAAH`), y sus líneas de firma conservan la
+  forma (`… <alias> H`).
+- `queueFakePnrs(fixture)` convierte una grabación en los PNR del fake: primero los de `list`, en
+  orden, con su `Line`, y el párrafo que mostró `access`, `ignore`, `remove` o `place` para cada
+  uno. La cola la eliges tú, y puedes juntar fixtures:
+
+  ```ts
+  const fake = createQueueFake({
+    queues: { '9': queueFakePnrs(queueFixtures.walk), '50': [] },
+    pnrs: queueFakePnrs(queueFixtures.place),
+  });
+  ```
 
 `examples/queue-review.mjs` es un ejemplo completo, y su test lo corre contra el fake.
 

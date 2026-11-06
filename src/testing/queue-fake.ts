@@ -75,9 +75,9 @@ export interface QueueFakeOptions {
   pnrs?: readonly QueueFakeItem[];
   /**
    * Los contadores de `queue.activity` por cola, con las mismas claves que `queues`. `numMessages`
-   * sale del estado del fake, como en `count` (sin el PNR en pantalla). Los demás valen lo que se
-   * siembre aquí, o 0. Las acciones del fake (`ignore`, `remove`, `place`) **no** los cambian:
-   * nadie probó qué contador sube con cada una (Q-097).
+   * sale del estado del fake, como en `count`: sin el PNR en pantalla (CERT, #167). Los demás valen
+   * lo que se siembre aquí, o 0. Las acciones del fake (`ignore`, `remove`, `place`, `exit`) **no**
+   * los cambian: no se probó qué contador sube Sabre con cada una (Q-097).
    */
   activity?: Readonly<Record<string, QueueFakeActivity>>;
   /**
@@ -553,7 +553,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     return accessRS(`${results('Complete', success)}${lineXml(entry)}<Paragraph>${textLines(pnr.paragraph)}</Paragraph>`);
   };
 
-  /** Cuántos hay en una cola para `count` y `activity`: sin el PNR en pantalla (producción, #96). */
+  /** Cuántos hay en una cola para `count` y `activity`: sin el PNR en pantalla (producción, #96; CERT, #167). */
   const waiting = (session: Session, key: string, entries: readonly Entry[]): number =>
     entries.length - (session.inside?.key === key && entries[session.inside.index] !== undefined ? 1 : 0);
 
@@ -718,8 +718,8 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
       `<TravelItineraryHistoryRS xmlns="${SWS_NAMESPACE}" xmlns:stl="${STL_NAMESPACE}" Version="2.4.0">${inner}</TravelItineraryHistoryRS>`;
     const historyError = (message: string): string => historyRS(results('NotProcessed', hostResult('Error', message)));
 
-    // Dentro de una cola, Sabre rechaza el historial de otro PNR (CERT, Q-102). Que acepte el del
-    // PNR en pantalla es un supuesto del fake.
+    // Dentro de una cola, Sabre rechaza el historial de otro PNR (CERT, Q-102) y acepta el del PNR
+    // en pantalla (CERT, #167).
     const inside = session.inside;
     const current = inside === undefined ? undefined : queue(inside.key)[inside.index];
     if (current !== undefined && current.locator !== locator) return historyError(NOT_ALLOWED_INSIDE_QUEUE);

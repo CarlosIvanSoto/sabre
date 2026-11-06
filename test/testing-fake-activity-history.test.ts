@@ -2,7 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { SabreBusinessError, SabreLegacy } from '../src/index.js';
 import { createQueueFake, type QueueFakeHistoryTransaction, type QueueFakeOptions } from '../src/testing/index.js';
-import { rejection } from './soap-helpers.js';
+import inQueueOwn from './fixtures/activity.sandbox-in-queue-own.json';
+import { mockFetch } from './helpers.js';
+import { rejection, xml } from './soap-helpers.js';
 
 const NOW = new Date('2026-11-06T17:34:00Z');
 const pnr = (locator: string) => [' 1.1PEREZ/JUAN', `ABCD.ABCD*AAA 1200/01NOV26 ${locator} H`];
@@ -175,5 +177,44 @@ describe('reservation.history contra el fake', () => {
     [{ AAAAAA: [{ flightSegments: {} }] }, "histories['AAAAAA'][0].flightSegments debe ser una lista"],
   ])('histories inválido lanza TypeError: %j', (histories, message) => {
     expect(() => createQueueFake({ histories } as never)).toThrow(new TypeError(`sabre-client/testing: ${message}`));
+  });
+});
+
+describe('el fake y CERT dentro de una cola (fixture activity.sandbox-in-queue-own, #167)', () => {
+  const recorded = (operation: string) =>
+    inQueueOwn.responses.filter((response) => response.operation === operation).map((response) => xml(response.status, response.body));
+
+  /** El mismo recorrido: count y activity fuera, access, count y activity dentro, history del PNR en pantalla, exit. */
+  async function walk(legacy: SabreLegacy) {
+    return legacy.withSession(async (session) => {
+      const countOutside = await session.queue.count();
+      const activityOutside = await session.queue.activity();
+      const step = await session.queue.access({ queue: 401 });
+      const locator = step.done || step.kind !== 'pnr' ? '' : step.item.locator;
+      const countInside = await session.queue.count();
+      const activityInside = await session.queue.activity();
+      const history = await session.reservation.history(locator);
+      await session.queue.exit();
+      const on401 = (queues: ReadonlyArray<{ queue: unknown; numMessages?: number; count?: number }>) =>
+        queues.find((q) => q.queue === 401);
+      return {
+        count: [on401(countOutside.queues)?.count ?? 0, on401(countInside.queues)?.count ?? 0],
+        numMessages: [on401(activityOutside.queues)?.numMessages ?? 0, on401(activityInside.queues)?.numMessages ?? 0],
+        historyAccepted: history.transactions.length > 0,
+      };
+    });
+  }
+
+  it('las respuestas grabadas: QA no cuenta el PNR en pantalla y el historial de ese PNR se acepta', async () => {
+    const [open, countOut, countIn] = [recorded('openSession')[0]!, ...recorded('queue.count')];
+    const [activityOut, activityIn] = recorded('queue.activity');
+    const fetch = mockFetch(open, countOut!, activityOut!, recorded('queue.access')[0]!, countIn!, activityIn!, recorded('reservation.history')[0]!, recorded('queue.exit')[0]!, recorded('close')[0]!);
+    const legacy = new SabreLegacy({ environment: 'production', authVersion: 'v2', credentials: { username: 'V1:7971:ABCD:AA', password: 'x' }, fetch });
+    expect(await walk(legacy)).toEqual({ count: [1, 0], numMessages: [1, 0], historyAccepted: true });
+  });
+
+  it('el fake da lo mismo', async () => {
+    const { legacy } = client({ queues: { '401': [pnr('AAAAAA')] } });
+    expect(await walk(legacy)).toEqual({ count: [1, 0], numMessages: [1, 0], historyAccepted: true });
   });
 });

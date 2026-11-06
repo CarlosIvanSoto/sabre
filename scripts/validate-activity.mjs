@@ -10,6 +10,7 @@
 //   SABRE_HISTORY_PNR=ABC123 SABRE_HISTORY_PLACE_QUEUE=401 \
 //     node --env-file=.env scripts/validate-activity.mjs history
 //   SABRE_HISTORY_PNR=ABC123 SABRE_QUEUE=50 node --env-file=.env scripts/validate-activity.mjs history-in-queue
+//   SABRE_QUEUE=401 node --env-file=.env scripts/validate-activity.mjs in-queue-own
 //
 // `qa` (sandbox o producción, solo lectura), en una sesión:
 //  1. `QueueAnalysisLLSRQ` 2.0.0 crudo, sin `SI9` (Q-098: ¿hace falta duty code 9?).
@@ -41,6 +42,14 @@
 //  5. `ignore`: ¿llega a P2 y `state` sigue en `inside`?
 //  6. `exit`.
 //
+// `in-queue-own` (solo sandbox, #167): los dos supuestos del fake. Solo lectura (`count`,
+// `activity`, `access`, historial y `QXI`; sin `I`, para no sumar a `Ignored`):
+//  1. `count` y `activity` fuera de la cola SABRE_QUEUE.
+//  2. `access`: el primer PNR (P1) queda en pantalla.
+//  3. `count` y `activity` dentro de la cola: ¿`NumMessages` cuenta a P1, como no lo hace `count`?
+//  4. `session.reservation.history(P1)`: ¿el historial del PNR en pantalla se acepta?
+//  5. `exit`, y `activity` otra vez: ¿qué contador movió el `QXI`? (un dato para Q-097).
+//
 // Las pruebas crudas usan el método interno de la sesión (`sessionSend`), como validate-queue.mjs:
 // es un truco de los scripts, no API pública (aprobado por el usuario el 2026-11-01).
 //
@@ -55,19 +64,20 @@
 import { createRecorder, env, legacyClient, legacyEnvironment, queueRef, sessionSendOf } from './lib/legacy-recorder.mjs';
 
 const scenario = process.argv[2];
-if (scenario !== 'qa' && scenario !== 'history' && scenario !== 'history-in-queue') {
-  console.error(`escenario desconocido: ${scenario ?? '(ninguno)'} (usa qa, history o history-in-queue)`);
+const SCENARIOS = ['qa', 'history', 'history-in-queue', 'in-queue-own'];
+if (!SCENARIOS.includes(scenario)) {
+  console.error(`escenario desconocido: ${scenario ?? '(ninguno)'} (usa ${SCENARIOS.join(', ')})`);
   process.exit(2);
 }
 const { environment, credentials, queuePcc, secrets } = legacyEnvironment();
-const historyScenario = scenario === 'history' || scenario === 'history-in-queue';
+const historyScenario = scenario === 'history' || scenario === 'history-in-queue' || scenario === 'in-queue-own';
 if (historyScenario && environment !== 'sandbox') {
   console.error(`${scenario} solo corre en sandbox: lee un PNR de prueba de CERT`);
   process.exit(2);
 }
 const pcc = queuePcc ?? env('SABRE_PCC');
-const historyPnr = historyScenario ? env('SABRE_HISTORY_PNR').toUpperCase() : undefined;
-const walkQueue = scenario === 'history-in-queue' ? queueRef(env('SABRE_QUEUE')) : undefined;
+const historyPnr = scenario === 'history' || scenario === 'history-in-queue' ? env('SABRE_HISTORY_PNR').toUpperCase() : undefined;
+const walkQueue = scenario === 'history-in-queue' || scenario === 'in-queue-own' ? queueRef(env('SABRE_QUEUE')) : undefined;
 if (historyPnr !== undefined && !/^[A-Z0-9]{6}$/.test(historyPnr)) {
   console.error('SABRE_HISTORY_PNR debe ser un localizador de 6 caracteres');
   process.exit(2);
@@ -130,6 +140,49 @@ try {
     const dateTimes = xml.flatMap((body) => [...body.matchAll(/<(?:\w+:)?QueueInfo\b[^>]*\bDateTime="([^"]*)"/g)].map((m) => m[1]));
     findings.queueInfoDateTime = dateTimes.map((value) => ({ value, hasYear: /^\d{4}-/.test(value) }));
     findings.counters = [...new Set(xml.flatMap((body) => [...body.matchAll(/<(?:\w+:)?(\w+) Count="/g)].map((m) => m[1])))].sort();
+  } else if (scenario === 'in-queue-own') {
+    const sameQueue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const counted = (r) => r?.queues.find((q) => sameQueue(q.queue, walkQueue))?.count ?? 0;
+    const analyzed = (r) => r?.queues.find((q) => sameQueue(q.queue, walkQueue));
+    const countersOf = (r) => {
+      const { queue: _queue, ...counters } = analyzed(r) ?? {};
+      return counters;
+    };
+    const activitySummary = (r) => ({ queue: countersOf(r) });
+
+    const countBefore = await step('count fuera', () => session.queue.count({}, options), (r) => ({ count: counted(r) }));
+    const activityBefore = await step('activity fuera', () => session.queue.activity({}, options), activitySummary);
+    const first = await step('access', () => session.queue.access({ queue: walkQueue }, options), stepSummary);
+    const p1 = first !== undefined && !first.done && first.kind === 'pnr' ? first.item.locator : undefined;
+    let countInside;
+    let activityInside;
+    let history;
+    if (p1 !== undefined) {
+      countInside = await step('count dentro', () => session.queue.count({}, options), (r) => ({ count: counted(r) }));
+      activityInside = await step('activity dentro', () => session.queue.activity({}, options), activitySummary);
+      history = await step('reservation.history del PNR en pantalla', () => session.reservation.history(p1, options), (r) => ({ transactions: r.transactions.length }));
+    }
+    if (session.queue.state !== 'outside') await step('exit', () => session.queue.exit(options));
+    const activityAfter = await step('activity después del exit', () => session.queue.activity({}, options), activitySummary);
+
+    const before = countersOf(activityBefore);
+    const after = countersOf(activityAfter);
+    findings.inQueueOwn = {
+      p1Found: p1 !== undefined,
+      countOutside: counted(countBefore),
+      countInside: countInside === undefined ? null : counted(countInside),
+      numMessagesOutside: before.numMessages ?? null,
+      numMessagesInside: analyzed(activityInside)?.numMessages ?? null,
+      activityInsideExcludesScreenPnr:
+        activityInside === undefined ? null : analyzed(activityInside)?.numMessages === (before.numMessages ?? 0) - 1,
+      ownHistoryAccepted: p1 === undefined ? null : history !== undefined,
+      ownHistoryError: results.find((r) => r.step === 'reservation.history del PNR en pantalla' && !r.ok)?.error?.message ?? null,
+      countersChangedByAccessAndExit: Object.fromEntries(
+        Object.keys(after)
+          .filter((key) => after[key] !== before[key])
+          .map((key) => [key, { before: before[key], after: after[key] }]),
+      ),
+    };
   } else if (scenario === 'history-in-queue') {
     // El localizador del PNR en el AAA, de la línea de firma de `*R` (`… HHMM/DDMMMYY ABC123 H`).
     const aaaLocator = (name) => /\d{4}\/\d{2}[A-Z]{3}\d{2}\s+([A-Z0-9]{6})\s+H\s*$/m.exec(screens.get(name) ?? '')?.[1];

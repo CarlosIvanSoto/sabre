@@ -1,0 +1,159 @@
+#!/usr/bin/env node
+// Pruebas previas del Tier 4 (#154, F0.1): Get Queue Activity (`QA`) e historial del PNR (`*H`),
+// por `session.command()` y por los servicios XML que tiparán A1 y B1 (ADR-027). Graba las
+// respuestas, anonimizadas, como fixtures para #161 y #164. Lo corre el usuario, con su
+// confirmación en cada corrida; nunca la CI. Necesita `npm run build` antes.
+//
+//   node --env-file=.env scripts/validate-activity.mjs qa
+//   SABRE_ENVIRONMENT=production node --env-file=.env.production scripts/validate-activity.mjs qa
+//   SABRE_HISTORY_PNR=ABC123 node --env-file=.env scripts/validate-activity.mjs history
+//   SABRE_HISTORY_PNR=ABC123 SABRE_HISTORY_PLACE_QUEUE=401 \
+//     node --env-file=.env scripts/validate-activity.mjs history
+//
+// `qa` (sandbox o producción, solo lectura), en una sesión:
+//  1. `QueueAnalysisLLSRQ` 2.0.0 crudo, sin `SI9` (Q-098: ¿hace falta duty code 9?).
+//  2. `QA/<PCC>` por `session.command()`, sin `SI9`.
+//  3. `SI9`: duty code 9 en la sesión. No cambia la configuración del PCC; el AAA se descarta al
+//     cerrar (igual que en validate-command.mjs).
+//  4. `QueueAnalysisLLSRQ` y `QA/<PCC>` otra vez, ya con duty 9.
+//  Hallazgos: si cada intento funcionó, el formato de `QueueInfo@DateTime` (¿con año?) y los
+//  contadores que llegaron.
+//
+// `history` (solo sandbox), en una sesión, sobre SABRE_HISTORY_PNR (un PNR de prueba de CERT):
+//  0. Solo con SABRE_HISTORY_PLACE_QUEUE: coloca el PNR en esa cola (PIC SABRE_INSTRUCTION_CODE, 11
+//     por defecto), para ver si el historial registra la colocación (Q-097). **Escribe en la
+//     cola** y deja el PNR ahí.
+//  1. `TravelItineraryHistoryLLSRQ` 2.4.0 crudo, con `UniqueID` (JX HST*<PNR>).
+//  2. `*<PNR>` y `*H` por `session.command()`.
+//  3. `TravelItineraryHistoryLLSRQ` sin `UniqueID` (JX HST), con el PNR ya en el AAA.
+//  Hallazgos: el nombre del atributo del PCC en `Source` (`AAA_PseudoCityCode` o
+//  `AAAPseudoCityCode`), el formato de `CreateDateTime`, los valores de `@Action` y si el historial
+//  menciona la cola.
+//
+// Las pruebas crudas usan el método interno de la sesión (`sessionSend`), como validate-queue.mjs:
+// es un truco de los scripts, no API pública (aprobado por el usuario el 2026-11-01).
+//
+// Variables: el juego único de credenciales de scripts/lib/env-credentials.mjs, SABRE_ENVIRONMENT,
+// SABRE_QUEUE_PCC (el PCC del `QA`; por defecto, el de la sesión), y para `history`,
+// SABRE_HISTORY_PNR, SABRE_HISTORY_PLACE_QUEUE y SABRE_INSTRUCTION_CODE.
+//
+// Anonimización: la de scripts/lib/legacy-recorder.mjs, más una propia para el historial, que
+// enmascara (letras a `X`, dígitos a `9`) el texto y los valores de atributo salvo `@Action` y las
+// fechas, y conserva solo las líneas de pantalla que nombran una cola. Si queda un dato real, no se
+// escribe la fixture.
+import { createRecorder, env, legacyClient, legacyEnvironment, queueRef, sessionSendOf } from './lib/legacy-recorder.mjs';
+
+const scenario = process.argv[2];
+if (scenario !== 'qa' && scenario !== 'history') {
+  console.error(`escenario desconocido: ${scenario ?? '(ninguno)'} (usa qa o history)`);
+  process.exit(2);
+}
+const { environment, credentials, queuePcc, secrets } = legacyEnvironment();
+if (scenario === 'history' && environment !== 'sandbox') {
+  console.error('history solo corre en sandbox: lee un PNR de prueba de CERT');
+  process.exit(2);
+}
+const pcc = queuePcc ?? env('SABRE_PCC');
+const historyPnr = scenario === 'history' ? env('SABRE_HISTORY_PNR').toUpperCase() : undefined;
+if (historyPnr !== undefined && !/^[A-Z0-9]{6}$/.test(historyPnr)) {
+  console.error('SABRE_HISTORY_PNR debe ser un localizador de 6 caracteres');
+  process.exit(2);
+}
+const placeQueue = scenario === 'history' && process.env.SABRE_HISTORY_PLACE_QUEUE ? queueRef(process.env.SABRE_HISTORY_PLACE_QUEUE) : undefined;
+const instructionCode = Number(process.env.SABRE_INSTRUCTION_CODE ?? 11);
+
+const recorder = createRecorder([...secrets, pcc]);
+const { aliasOf, step, results, options, logger } = recorder;
+if (historyPnr !== undefined) aliasOf(historyPnr);
+const legacy = legacyClient(environment, credentials, logger);
+
+const NAMESPACE = 'http://webservices.sabre.com/sabreXML/2011/10';
+const escapeXml = (text) => text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+console.log(`entorno ${environment} · escenario ${scenario}${placeQueue === undefined ? '' : ' · CON place (escribe en la cola)'}`);
+const session = await legacy.openSession(options);
+const send = sessionSendOf(session);
+if (send === undefined) {
+  console.error('no se encontró sessionSend en el prototipo de la sesión');
+  await session.close();
+  process.exit(1);
+}
+const raw = (operation, action, payload) =>
+  session[send]({ service: operation, action, payload, idempotent: true, operation: `probe.${operation}`, ...options });
+
+// Pantallas de `session.command()`, sin anonimizar: solo para calcular hallazgos.
+const screens = new Map();
+const commandStep = (name, command) =>
+  step(
+    name,
+    async () => {
+      const screen = await session.command(command, { idempotent: true, ...options });
+      screens.set(name, screen.text);
+      return screen;
+    },
+    (screen) => ({ lines: screen.text.split('\n').length, warnings: screen.warnings.length }),
+  );
+
+const findings = {};
+try {
+  if (scenario === 'qa') {
+    const qaPayload = `<QueueAnalysisRQ Version="2.0.0" xmlns="${NAMESPACE}"><QueueInfo><QueueIdentifier PseudoCityCode="${escapeXml(pcc)}"/></QueueInfo></QueueAnalysisRQ>`;
+    const qaXml = (name) =>
+      step(name, () => raw('queueAnalysis', 'QueueAnalysisLLSRQ', qaPayload), (r) => ({ payload: r.payloadName }));
+    await qaXml('QueueAnalysisLLSRQ sin SI9');
+    await commandStep('QA sin SI9', `QA/${pcc}`);
+    await commandStep('SI9', 'SI9');
+    await qaXml('QueueAnalysisLLSRQ con SI9');
+    await commandStep('QA con SI9', `QA/${pcc}`);
+
+    const ok = (name) => results.find((r) => r.step === name)?.ok === true;
+    findings.q098 = {
+      xmlWithoutSi9: ok('QueueAnalysisLLSRQ sin SI9'),
+      hostWithoutSi9: ok('QA sin SI9'),
+      xmlWithSi9: ok('QueueAnalysisLLSRQ con SI9'),
+      hostWithSi9: ok('QA con SI9'),
+    };
+    const xml = recorder.rawBodies().filter((r) => r.operation === 'probe.queueAnalysis').map((r) => r.body);
+    const dateTimes = xml.flatMap((body) => [...body.matchAll(/<(?:\w+:)?QueueInfo\b[^>]*\bDateTime="([^"]*)"/g)].map((m) => m[1]));
+    findings.queueInfoDateTime = dateTimes.map((value) => ({ value, hasYear: /^\d{4}-/.test(value) }));
+    findings.counters = [...new Set(xml.flatMap((body) => [...body.matchAll(/<(?:\w+:)?(\w+) Count="/g)].map((m) => m[1])))].sort();
+  } else {
+    if (placeQueue !== undefined) {
+      await step('place', () => session.queue.place({ to: [{ queue: placeQueue, instructionCode }], locators: [historyPnr] }, options), (r) => ({ placements: r.placements.length }));
+    }
+    const historyXml = (name, payload) =>
+      step(name, () => raw('itineraryHistory', 'TravelItineraryHistoryLLSRQ', payload), (r) => ({ payload: r.payloadName }));
+    await historyXml('TravelItineraryHistoryLLSRQ con UniqueID', `<TravelItineraryHistoryRQ Version="2.4.0" xmlns="${NAMESPACE}"><UniqueID ID="${historyPnr}"/></TravelItineraryHistoryRQ>`);
+    await commandStep('*PNR', `*${historyPnr}`);
+    await commandStep('*H', '*H');
+    await historyXml('TravelItineraryHistoryLLSRQ sin UniqueID', `<TravelItineraryHistoryRQ Version="2.4.0" xmlns="${NAMESPACE}"/>`);
+
+    const xml = recorder.rawBodies().filter((r) => r.operation === 'probe.itineraryHistory').map((r) => r.body);
+    const screen = screens.get('*H') ?? '';
+    findings.sourcePccAttributes = [...new Set(xml.flatMap((body) => [...body.matchAll(/\b(AAA_?PseudoCityCode)="/g)].map((m) => m[1])))];
+    findings.createDateTime = [...new Set(xml.flatMap((body) => [...body.matchAll(/\bCreateDateTime="([^"]*)"/g)].map((m) => (/^\d{4}-/.test(m[1]) ? 'con año' : `sin año (${m[1].replace(/\d/g, '9')})`))))];
+    findings.actions = [...new Set(xml.flatMap((body) => [...body.matchAll(/\bAction="([^"]*)"/g)].map((m) => m[1])))].sort();
+    findings.queueMentions = {
+      xml: xml.some((body) => /QUEUE|\bQP\b|\bQ\/\d/i.test(body)),
+      host: /QUEUE|\bQP\b|\bQ\/\d/i.test(screen),
+      hostLines: screen.split('\n').filter((line) => /QUEUE|\bQP\b|\bQ\/\d/i.test(line)).map((line) => line.replace(/\b[A-Z0-9]{6}\b/g, (m) => (m === historyPnr ? aliasOf(m) : m))),
+    };
+  }
+} finally {
+  await step('close', () => session.close(options));
+}
+
+// El historial trae el PNR entero en atributos y elementos que el recorder no cubre: se enmascara
+// todo salvo `@Action`, las fechas, los nombres de elemento/atributo y las líneas que nombran una cola.
+const HISTORY_KEEP_ATTRIBUTES = /^(Action|Version|status|xmlns(:\w+)?|timeStamp|TimeStamp|\w*Date\w*|\w*Time\w*)$/;
+const maskValue = (text) => text.replace(/\p{L}/gu, 'X').replace(/\p{N}/gu, '9');
+const keepLine = (line) => /QUEUE|\bQP\b|\bQ\/\d/i.test(line);
+function anonymizeHistory(body) {
+  if (!/TravelItineraryHistoryRS|SabreCommandLLSRS/.test(body)) return body;
+  return body
+    .replace(/(\s)([\w:]+)="([^"]*)"/g, (all, space, name, value) => (HISTORY_KEEP_ATTRIBUTES.test(name) ? all : `${space}${name}="${maskValue(value)}"`))
+    .replace(/>([^<]+)</g, (all, text) => `>${text.split('\n').map((line) => (keepLine(line) ? line : maskValue(line))).join('\n')}<`);
+}
+if (scenario === 'history') recorder.transformBodies(anonymizeHistory);
+
+recorder.writeFixture(`activity.${environment}-${scenario}`, { environment, scenario, place: placeQueue !== undefined }, findings);

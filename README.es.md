@@ -592,6 +592,16 @@ fake.openSessions; // 0: la sesión se cerró
 - `queues['S']` es la cola de mensajes: cada elemento es el texto de un mensaje (`string[]`), no
   un PNR. `access` lo muestra sin `Line`, como Sabre, y `fake.messages()` da los que quedan. Que
   `remove` saque el mensaje es un supuesto del fake, no se probó con Sabre.
+- `queue.activity`: `numMessages` sale de las colas del fake (sin el PNR en pantalla, como en
+  `count`, igual que CERT). Los otros siete contadores valen 0, salvo que los siembres con
+  `activity: { '9': { ignored: 27 } }`. Las acciones del fake **no** los cambian: nadie probó qué
+  contador sube Sabre con cada acción.
+- `reservation.history`: `histories: { AAAAAA: [transacciones] }` fija lo que devuelve cada PNR,
+  con la forma de `ReservationHistoryTransaction` (las listas que falten llegan vacías). Un PNR que
+  el fake conoce sin historial sembrado devuelve una transacción sintética (su creación), y un
+  localizador desconocido da un error de host marcado como no simulado. Dentro de una cola, el
+  historial de otro PNR se rechaza con `NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY` y el del
+  PNR en pantalla se devuelve, como en CERT.
 - Responde como producción: colas vacías, el fin de cola, `place` que mueve el PNR, el PIC
   obligatorio y una sesión vencida con `fake.expireSessions()`. `fake.calls` lista lo que pidió el
   SDK.

@@ -400,7 +400,10 @@ session's PCC. A queue (`QueueRef`) comes in three forms:
 
 The queues returned by `count` can be passed straight to the other operations. `'S'` is the PCC's
 **message queue**: it holds messages, not PNRs, and Sabre does not list it, so `list({ queue: 'S' })`
-throws a `TypeError` without calling Sabre.
+throws a `TypeError` without calling Sabre. Walk it by hand: `access({ queue: 'S' })` returns the
+first message (`kind: 'message'`) and `ignore()` the next one, leaving it in the queue. `process`
+and `place` inside `S` throw a `TypeError` without calling Sabre. `remove()` sends `QR`, but there
+is no evidence yet of what Sabre does with the message.
 
 > **Migrating from 0.4.x**: `count` used to return the `S` queue as `{ name: 'S' }`, which Sabre
 > rejects (`INVALID QUEUE NAME FORMAT`). It now returns `'S'`. Code that does
@@ -420,9 +423,13 @@ throws a `TypeError` without calling Sabre.
 
 ```ts
 type QueueStep =
-  | { done: false; item: QueueItem; warnings: SabreWarning[] }
+  | { done: false; kind: 'pnr'; item: QueueItem; warnings: SabreWarning[] }
+  | { done: false; kind: 'message'; message: { text: string[] }; warnings: SabreWarning[] } // queue 'S'
   | { done: true; reason: 'end-of-display' | 'empty'; message: string; warnings: SabreWarning[] };
 ```
+
+> **Migrating from 0.4.x**: a step that is not done now has a `kind`. Check `step.kind === 'pnr'`
+> before reading `step.item`. Only the `S` queue returns `kind: 'message'`.
 
 - **Every queue result carries `respondedAt`**: Sabre's `eb:Timestamp`, in ISO 8601 UTC
   (`'2026-11-06T17:34:16Z'`). Unlike `countedAt` and `placedAt`, which come as the host sends them
@@ -518,6 +525,9 @@ fake.openSessions; // 0: the session was closed
   `{ locator, paragraph?, placedAt?, placedBy?, primaryPassenger? }`. A paragraph without a
   signature line gets a synthetic one. `pnrs` adds PNRs that are not in any queue, for
   `place({ locators })`. The fake has no AAA: outside a queue, `place` needs `locators`.
+- `queues['S']` is the message queue: each item is a message's text (`string[]`), not a PNR.
+  `access` shows it without `Line`, as Sabre does, and `fake.messages()` lists the ones left.
+  That `remove` takes a message out is an assumption of the fake, not tested against Sabre.
 - It answers like production: empty queues, the end of the queue, `place` moving the PNR, the
   required PIC, and an expired session with `fake.expireSessions()`. `fake.calls` lists what the
   SDK asked for.

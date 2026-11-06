@@ -103,6 +103,7 @@ describe('recorrido de solo lectura en producción (cola 2, 4 PNR)', () => {
     let step = await session.queue.access({ queue: 2 });
     const inside = await session.queue.count();
     while (!step.done) {
+      if (step.kind !== 'pnr') throw new Error('se esperaba un PNR');
       visited.push(step.item);
       step = await session.queue.ignore();
     }
@@ -212,7 +213,7 @@ describe('place y remove con colas de prueba en producción (51 y 52, 2 PNR)', (
 
   it('el PNR colocado con el PIC 11 muestra el aviso 011  SEE REMARKS', async () => {
     const { next } = await replayPlace();
-    if (!('done' in next) || next.done) throw new Error('place dentro de la cola no devolvió un PNR');
+    if (!('done' in next) || next.done || next.kind !== 'pnr') throw new Error('place dentro de la cola no devolvió un PNR');
     expect(parseQueueParagraph(next.item.paragraph, { referenceDate: '2026-11-01' }).messages).toEqual([
       { instructionCode: 11, text: 'SEE REMARKS' },
     ]);

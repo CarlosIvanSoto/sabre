@@ -159,7 +159,7 @@ export function parsePlaceStep(response: SoapResponse): QueueStep {
       raw: response.raw,
     });
   }
-  return { done: false, item: { locator, paragraph: text }, warnings: response.warnings, ...respondedAtField(response.raw) };
+  return { done: false, kind: 'pnr', item: { locator, paragraph: text }, warnings: response.warnings, ...respondedAtField(response.raw) };
 }
 
 /**

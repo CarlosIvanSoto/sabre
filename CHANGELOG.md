@@ -41,6 +41,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and a lowercase letter (`'s'`) throw a `TypeError` without calling Sabre (#169).
 - `list({ queue: 'S' })` throws a `TypeError` without calling Sabre: `S` is the PCC's message
   queue, and Sabre does not list it (#169).
+- **BREAKING**: `QueueStep` has a `kind` when it is not done: `{ done: false, kind: 'pnr', item }`
+  for a PNR, or `{ done: false, kind: 'message', message: { text } }` for a message of the `S`
+  queue (new `QueueMessage` type). `access({ queue: 'S' })` and `ignore()` inside it now return
+  the message instead of throwing a `SabreGatewayError`, and its end of queue (`END OF DISPLAY` as
+  `Paragraph/Text` with status `Complete`) gives `{ done: true }`. Code that reads `step.item`
+  must check `step.kind === 'pnr'` first. Showing a message does not remove it (CERT,
+  2026-11-06). `process({ queue: 'S' })` and `place` inside `S` throw a `TypeError` without
+  calling Sabre (#169).
+- `sabre-client/testing`: in the queue fake, `queues['S']` holds messages (`string[]` each), not
+  PNRs, and `access` shows them without `Line`. `place` to `S` is not simulated. New
+  `fake.messages()` (#169).
 - `sabre-client/testing`: the queue fake keeps alphabetic and named queues apart. In
   `QueueFakeOptions.queues`, `'S'` is the alphabetic queue and `'name:HOTELS'` (or `'HOTELS'`) a
   named one, and each response uses the right attribute (#169).

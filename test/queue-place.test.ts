@@ -176,6 +176,7 @@ describe('queue.place dentro de una cola', () => {
     expect(step).toEqual({
       respondedAt: '2026-10-31T12:00:00Z',
       done: false,
+      kind: 'pnr',
       item: {
         locator: 'ZXCVBN',
         paragraph: [
@@ -197,7 +198,7 @@ describe('queue.place dentro de una cola', () => {
       warnings: [],
     });
     // Fuera de `{ locators }` el tipo es la unión: se distingue con `'done' in step`.
-    if (!('done' in step) || step.done) throw new Error('se esperaba un PNR');
+    if (!('done' in step) || step.done || step.kind !== 'pnr') throw new Error('se esperaba un PNR');
     expect(step.item).not.toHaveProperty('placedAt');
     expect(step.item).not.toHaveProperty('placedBy');
     expect(session.queue.state).toBe('inside');
@@ -303,7 +304,7 @@ describe('queue.place con unknown', () => {
 
   it('si llega un PNR con firma, devuelve el paso y deja inside', async () => {
     const { session } = await unknown(ok(REAL_INSIDE('NEXT01')));
-    expect(await session.queue.place({ to: [{ queue: 1, instructionCode: 11 }] })).toMatchObject({ done: false, item: { locator: 'NEXT01' } });
+    expect(await session.queue.place({ to: [{ queue: 1, instructionCode: 11 }] })).toMatchObject({ done: false, kind: 'pnr', item: { locator: 'NEXT01' } });
     expect(session.queue.state).toBe('inside');
   });
 

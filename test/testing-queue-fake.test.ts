@@ -70,6 +70,7 @@ describe('process contra el fake', () => {
 
     expect(step).toEqual({
       done: false,
+      kind: 'pnr',
       item: {
         locator: 'AAAAAA',
         placedAt: '2026-10-01T09:15',
@@ -106,7 +107,7 @@ describe('process contra el fake', () => {
 
 describe('primitivas', () => {
   it('count no cuenta las colas vacías ni el PNR en pantalla', async () => {
-    const { legacy } = client({ queues: { '12': [pnr('AAAAAA'), pnr('BBBBBB')], '13': [], S: [pnr('CCCCCC')] } });
+    const { legacy } = client({ queues: { '12': [pnr('AAAAAA'), pnr('BBBBBB')], '13': [], S: [['MENSAJE']] } });
     const [outside, inside] = await legacy.withSession(async (session) => {
       const before = await session.queue.count();
       await session.queue.access({ queue: 12 });
@@ -150,7 +151,7 @@ describe('primitivas', () => {
       return [next, end];
     });
 
-    expect(moved).toMatchObject({ done: false, item: { locator: 'BBBBBB' } });
+    expect(moved).toMatchObject({ done: false, kind: 'pnr', item: { locator: 'BBBBBB' } });
     expect(last).toMatchObject({ done: true, reason: 'end-of-display' });
     expect(fake.locators(12)).toEqual([]);
     expect(fake.locators(50)).toEqual(['AAAAAA', 'BBBBBB']);
@@ -198,7 +199,7 @@ describe('primitivas', () => {
       return next;
     });
 
-    expect(step).toMatchObject({ done: false, item: { locator: 'BBBBBB' } });
+    expect(step).toMatchObject({ done: false, kind: 'pnr', item: { locator: 'BBBBBB' } });
     expect(fake.locators(12)).toEqual(['BBBBBB']);
     expect(fake.locators(13)).toEqual([]);
   });
@@ -296,14 +297,14 @@ describe('queueFixtures', () => {
     const fetch = mockFetch(...responses.map((response) => xml(response.status, response.body)));
     const legacy = new SabreLegacy({ environment: 'production', authVersion: 'v2', credentials: { username: 'V1:7971:XXXX:AA', password: 'x' }, fetch });
     const session = await legacy.openSession();
-    expect(await session.queue.access({ queue: 2 })).toMatchObject({ done: false, item: { locator: 'AAAAAA' } });
+    expect(await session.queue.access({ queue: 2 })).toMatchObject({ done: false, kind: 'pnr', item: { locator: 'AAAAAA' } });
   });
 });
 
 describe('colas alfabéticas y con nombre en el fake (ADR-028)', () => {
   it("'S' y una cola con nombre usan claves y atributos distintos", async () => {
     const { fake, legacy } = client({
-      queues: { S: [pnr('AAAAAA')], 'name:HOTELS': [pnr('BBBBBB')], CARS: [pnr('CCCCCC')] },
+      queues: { S: [['MENSAJE']], 'name:HOTELS': [pnr('BBBBBB')], CARS: [pnr('CCCCCC')] },
     });
     const { count, hotels } = await legacy.withSession(async (session) => {
       const count = await session.queue.count();
@@ -318,7 +319,7 @@ describe('colas alfabéticas y con nombre en el fake (ADR-028)', () => {
     ]);
     expect(count.totals).toEqual({ messages: 1, specials: 0, pnrs: 2 });
     expect(hotels.locators).toEqual(['BBBBBB']);
-    expect(fake.locators('S')).toEqual(['AAAAAA']);
+    expect(fake.messages()).toEqual([['MENSAJE']]);
     expect(fake.locators({ name: 'HOTELS' })).toEqual(['BBBBBB']);
     expect(fake.calls).toContainEqual({ command: 'list', queue: { name: 'HOTELS' } });
   });
@@ -326,10 +327,10 @@ describe('colas alfabéticas y con nombre en el fake (ADR-028)', () => {
   it('place a una cola alfabética responde con Number y a una con nombre, con Name', async () => {
     const { fake, legacy } = client({ pnrs: [pnr('DDDDDD')] });
     const result = await legacy.withSession((session) =>
-      session.queue.place({ to: [{ queue: 'S', instructionCode: 11 }, { queue: { name: 'HOTELS' }, instructionCode: 11 }], locators: ['DDDDDD'] }),
+      session.queue.place({ to: [{ queue: 'A', instructionCode: 11 }, { queue: { name: 'HOTELS' }, instructionCode: 11 }], locators: ['DDDDDD'] }),
     );
-    expect(result.placements.map((placement) => placement.queue)).toEqual(['S', { name: 'HOTELS' }]);
-    expect(fake.locators('S')).toEqual(['DDDDDD']);
+    expect(result.placements.map((placement) => placement.queue)).toEqual(['A', { name: 'HOTELS' }]);
+    expect(fake.locators('A')).toEqual(['DDDDDD']);
     expect(fake.locators({ name: 'HOTELS' })).toEqual(['DDDDDD']);
   });
 });

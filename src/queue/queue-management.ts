@@ -110,6 +110,8 @@ function rejectedBySabre(error: unknown): boolean {
 export class QueueManagement {
   readonly #context: QueueContext;
   #state: QueueState = 'outside';
+  /** Si la última cola a la que se entró es la `S`: ahí cada paso es un mensaje, no un PNR. */
+  #messages = false;
 
   /** @internal Lo construye `SabreSession`. */
   constructor(context: QueueContext) {
@@ -166,7 +168,9 @@ export class QueueManagement {
   }
 
   /**
-   * Access Queue (`QueueAccessLLSRQ` 2.1.1): entra a una cola y devuelve su primer PNR. Una cola
+   * Access Queue (`QueueAccessLLSRQ` 2.1.1): entra a una cola y devuelve su primer PNR
+   * (`kind: 'pnr'`). En la cola `S`, la de mensajes, devuelve el primer mensaje
+   * (`kind: 'message'`), y `ignore` pasa al siguiente sin borrarlo (CERT, 2026-11-06). Una cola
    * vacía, o sin PNR que cumplan `selection`, devuelve `{ done: true }` y la sesión sigue afuera.
    *
    * Lanza `TypeError` sin red si la sesión ya está dentro de una cola (o en `'unknown'`: hay que
@@ -181,6 +185,7 @@ export class QueueManagement {
     validateQueueRef(request.queue, 'queue');
     const pcc = this.#pcc(request.pcc, 'pcc');
     const selection = validateSelection(request.selection);
+    this.#messages = isMessageQueue(request.queue);
     return this.#step(queueAccessRequest(queueAccessPayload(request.queue, pcc, selection), 'queue.access', options));
   }
 
@@ -195,7 +200,8 @@ export class QueueManagement {
 
   /**
    * Saca el PNR actual de la cola y pasa al siguiente (`QR`). Con `from` (de 1 a 3 colas), lo saca
-   * de esas colas a la vez. Fuera de una cola lanza `TypeError` sin red.
+   * de esas colas a la vez. Fuera de una cola lanza `TypeError` sin red. En la cola `S` manda `QR`
+   * igual, pero no hay evidencia de qué hace Sabre con el mensaje.
    */
   async remove(request: QueueRemoveRequest = {}, options: QueueNavigationOptions = {}): Promise<QueueStep> {
     this.#requireQueue('remove');
@@ -253,6 +259,8 @@ export class QueueManagement {
     if (typeof request !== 'object' || request === null) fail('queue.process recibe { queue, pcc?, selection?, limit? }');
     if (typeof callback !== 'function') fail('queue.process necesita un callback');
     const { limit, ...access } = request;
+    // El callback recibe PNR, y sobre un mensaje no hay `place`: la S se recorre a mano (ADR-028).
+    if (isMessageQueue(access.queue)) fail("queue.process no recorre la cola 'S', la de mensajes: usa queue.access() e queue.ignore()");
     if (limit !== undefined && !(Number.isInteger(limit) && limit >= 1)) fail('limit debe ser un entero mayor o igual a 1');
 
     // Si la sesión ya estaba en una cola, `access` lanza sin red: esa cola es del consumidor.
@@ -265,6 +273,8 @@ export class QueueManagement {
           await this.exit(options);
           return { visited, ended: 'limit' };
         }
+        // Fuera de la S no hay mensajes: parseQueueStep solo los lee dentro de ella.
+        if (step.kind !== 'pnr') throw new TypeError('sabre-client: queue.process recibió un mensaje en vez de un PNR');
         const action = await callback(step.item);
         visited++;
         step = await this.#processAction(action, options);
@@ -320,6 +330,9 @@ export class QueueManagement {
     if (typeof request !== 'object' || request === null) fail('queue.place recibe { to, locators? }');
     const to = this.#placeTo(request.to);
     const locators = validateLocators(request.locators);
+    if (this.#messages && this.#state !== 'outside') {
+      fail("queue.place no se puede dentro de la cola 'S': lo que hay en pantalla es un mensaje, no un PNR");
+    }
     if (locators.length > 0 && this.#state === 'inside') {
       fail('queue.place con locators no se puede dentro de una cola, donde coloca el PNR actual: sal con queue.exit() antes');
     }
@@ -337,7 +350,8 @@ export class QueueManagement {
 
   /** Manda una operación que avanza y actualiza `state` con el resultado. */
   #step(request: SessionRequest): Promise<QueueStep> {
-    return this.#advance(request, parseQueueStep);
+    const messages = this.#messages;
+    return this.#advance(request, (response) => parseQueueStep(response, { messages }));
   }
 
   /**

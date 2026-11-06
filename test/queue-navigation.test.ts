@@ -144,6 +144,7 @@ describe('queue.access: respuesta', () => {
     expect(await session.queue.access({ queue: 12 })).toEqual({
       respondedAt: '2026-10-31T12:00:00Z',
       done: false,
+      kind: 'pnr',
       item: {
         locator: 'ABC123',
         placedAt: '12-21T07:00',
@@ -171,6 +172,7 @@ describe('queue.access: respuesta', () => {
     expect(step).toEqual({
       respondedAt: '2026-10-31T12:00:00Z',
       done: false,
+      kind: 'pnr',
       item: {
         locator: 'QWERTY',
         placedAt: '2024-05-15T13:24',
@@ -186,6 +188,7 @@ describe('queue.access: respuesta', () => {
     const { session } = await openWith(ok(payload));
     expect(await session.queue.access({ queue: 200 })).toMatchObject({
       done: false,
+      kind: 'pnr',
       item: { locator: 'NGDEZP', paragraph: ['011  SEE REMARKS'] },
     });
   });
@@ -252,7 +255,7 @@ describe('fin de cola en sus tres lugares', () => {
   it('el texto tiene que ser exacto: otra línea que lo contiene no es el fin de cola', async () => {
     const payload = queueRS(success, `<Line><UniqueID ID="ABC123"/></Line><Paragraph><Text>RMK ${END}</Text></Paragraph>`);
     const { session } = await inside(ok(payload));
-    expect(await session.queue.ignore()).toMatchObject({ done: false, item: { locator: 'ABC123' } });
+    expect(await session.queue.ignore()).toMatchObject({ done: false, kind: 'pnr', item: { locator: 'ABC123' } });
   });
 
   it('isEndOfDisplayResult reconoce el texto entre los Message y el ShortText', () => {
@@ -267,7 +270,7 @@ describe('fin de cola en sus tres lugares', () => {
 describe('navegación', () => {
   it('ignore manda Navigation I y devuelve el PNR siguiente', async () => {
     const { fetch, session } = await inside(ok(REAL_ITEM('NEXT01')));
-    expect(await session.queue.ignore()).toMatchObject({ done: false, item: { locator: 'NEXT01' } });
+    expect(await session.queue.ignore()).toMatchObject({ done: false, kind: 'pnr', item: { locator: 'NEXT01' } });
     expect(body(fetch, 2)).toBe(
       '<QueueAccessRQ Version="2.1.1" xmlns="http://webservices.sabre.com/sabreXML/2011/10"><Navigation Action="I"/></QueueAccessRQ>',
     );
@@ -276,7 +279,7 @@ describe('navegación', () => {
 
   it('remove manda Navigation QR y devuelve el PNR siguiente', async () => {
     const { fetch, session } = await inside(ok(REAL_ITEM('NEXT01')));
-    expect(await session.queue.remove()).toMatchObject({ done: false, item: { locator: 'NEXT01' } });
+    expect(await session.queue.remove()).toMatchObject({ done: false, kind: 'pnr', item: { locator: 'NEXT01' } });
     expect(body(fetch, 2)).toContain('<Navigation Action="QR"/></QueueAccessRQ>');
   });
 
@@ -391,7 +394,7 @@ describe('estado unknown', () => {
 
   it('con unknown, las demás operaciones se mandan igual y el resultado fija el estado', async () => {
     const { session } = await unknown(ok(REAL_ITEM('NEXT01')));
-    expect(await session.queue.ignore()).toMatchObject({ done: false, item: { locator: 'NEXT01' } });
+    expect(await session.queue.ignore()).toMatchObject({ done: false, kind: 'pnr', item: { locator: 'NEXT01' } });
     expect(session.queue.state).toBe('inside');
   });
 

@@ -8,7 +8,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import { END_OF_DISPLAY, OFF_QUEUE, QUEUE_EMPTY } from '../queue/queue-access.js';
 import { signatureLocator } from '../queue/queue-place.js';
-import { MAX_QUEUE_NUMBER, MIN_QUEUE_NUMBER, type QueueRef, toQueueRef } from '../queue/queue-ref.js';
+import { MAX_QUEUE_NUMBER, MESSAGE_QUEUE, MIN_QUEUE_NUMBER, type QueueRef, toQueueRef } from '../queue/queue-ref.js';
 
 /** Un PNR del fake, con los campos que Sabre manda en `Line`. */
 export interface QueueFakePnr {
@@ -38,6 +38,10 @@ export interface QueueFakeOptions {
    * `'HOTELS'` sin el prefijo). La alfabética y la con nombre viajan por atributos distintos
    * (`Number` y `Name`, ADR-028). El fake no distingue PCC: las colas son las mismas para cualquier
    * `pcc`.
+   *
+   * La `'S'` es la cola de mensajes: cada elemento es el texto de un mensaje (`string[]`), no un
+   * PNR. `access` lo muestra sin `Line`, como Sabre en CERT, e `ignore` lo deja en la cola. Que
+   * `remove` lo saque es un supuesto del fake: no se probó con Sabre.
    */
   queues?: Readonly<Record<string, readonly QueueFakeItem[]>>;
   /** PNR que no están en ninguna cola, para colocarlos con `place({ locators })`. */
@@ -70,6 +74,8 @@ export interface QueueFake {
   readonly fetch: typeof fetch;
   /** Los localizadores de una cola, en orden, con lo que el recorrido haya sacado o colocado. */
   locators(queue: QueueRef): string[];
+  /** El texto de los mensajes que siguen en la cola `S`, en orden. */
+  messages(): string[][];
   /** Las llamadas recibidas, en orden. */
   readonly calls: readonly QueueFakeCall[];
   /** Cuántas sesiones siguen abiertas: sirve para comprobar que el consumidor las cierra. */
@@ -98,7 +104,10 @@ interface Pnr {
 
 /** Un PNR dentro de una cola: el PNR y los datos de su colocación. */
 interface Entry {
+  /** Vacío en un mensaje de la `S`. */
   locator: string;
+  /** El texto de un mensaje de la `S`. */
+  message?: readonly string[];
   placedAt: string | undefined;
   placedBy: { agentSine?: string; pseudoCityCode?: string } | undefined;
 }
@@ -207,6 +216,17 @@ function longDate(date: Date): string {
   return date.toISOString().slice(0, 16);
 }
 
+/** Un mensaje de `queues['S']`: una lista de líneas, con al menos una que no esté vacía. */
+function toMessage(item: unknown, index: number): string[] {
+  const label = `queues['${MESSAGE_QUEUE}'][${index}]`;
+  if (!Array.isArray(item) || item.some((line) => typeof line !== 'string')) {
+    fail(`${label}: la S es la cola de mensajes; cada elemento es el texto de un mensaje (string[])`);
+  }
+  const lines = item as string[];
+  if (!lines.some((line) => line.trim() !== '')) fail(`${label}: el mensaje no puede estar vacío`);
+  return [...lines];
+}
+
 function toPnr(item: QueueFakeItem, label: string): Pnr & Omit<Entry, 'locator'> {
   if (Array.isArray(item)) {
     const lines = item as readonly string[];
@@ -300,6 +320,10 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     const key = optionKey(optionName);
     validateKey(key);
     if (!Array.isArray(items)) fail(`queues['${key}'] debe ser una lista`);
+    if (key === MESSAGE_QUEUE) {
+      queues.set(key, items.map((item, index) => ({ locator: '', placedAt: undefined, placedBy: undefined, message: toMessage(item, index) })));
+      continue;
+    }
     queues.set(
       key,
       items.map((item, index) => {
@@ -368,6 +392,9 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     if (entry === undefined) {
       session.inside = undefined;
       return accessRS(`${results('Complete', success)}<Paragraph>${textLines([END_OF_DISPLAY])}</Paragraph>`);
+    }
+    if (entry.message !== undefined) {
+      return accessRS(`${results('Complete', success)}<Paragraph>${textLines(entry.message)}</Paragraph>`);
     }
     const pnr = pnrs.get(entry.locator)!;
     return accessRS(`${results('Complete', success)}${lineXml(entry)}<Paragraph>${textLines(pnr.paragraph)}</Paragraph>`);
@@ -462,6 +489,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
       return placeError(moving ? 'NEED INSTRUCTION NUMBER' : 'INSTRUCTION NUMBER NOT IN RANGE');
     }
     for (const target of targets) validateKey(target.key);
+    if (targets.some((target) => target.key === MESSAGE_QUEUE)) return placeError('sabre-client/testing: place a la cola S no está simulado');
 
     const at = now();
     const add = (locator: string, target: (typeof targets)[number]): void => {
@@ -586,7 +614,8 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
 
   return {
     fetch: fakeFetch as typeof fetch,
-    locators: (ref) => (queues.get(queueKey(ref)) ?? []).map((entry) => entry.locator),
+    locators: (ref) => (queues.get(queueKey(ref)) ?? []).filter((entry) => entry.message === undefined).map((entry) => entry.locator),
+    messages: () => (queues.get(MESSAGE_QUEUE) ?? []).map((entry) => [...(entry.message ?? [])]),
     get calls() {
       return [...calls];
     },

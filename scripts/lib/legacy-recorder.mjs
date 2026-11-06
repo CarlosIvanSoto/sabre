@@ -190,7 +190,13 @@ export function createRecorder(secretValues) {
    */
   const transformBodies = (transform) => transforms.push(transform);
 
-  return { aliasOf, anonymize, step, stepSummary, results, options, logger, writeFixture, rawBodies, transformBodies };
+  /**
+   * Una línea del PNR en formato de host, enmascarada como dentro de `<Text>`, para copiarla a
+   * `results` o `findings`. Llamarla después de dar alias a los localizadores.
+   */
+  const maskLine = (line) => redactSecrets(anonymizeLine(line));
+
+  return { aliasOf, anonymize, maskLine, step, stepSummary, results, options, logger, writeFixture, rawBodies, transformBodies };
 }
 
 /** Un `SabreLegacy` sin reintentos genéricos, para ver la primera respuesta de Sabre. */

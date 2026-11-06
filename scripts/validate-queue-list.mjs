@@ -49,7 +49,7 @@ if (!Number.isInteger(limit) || limit < 1) {
 const pcc = queuePcc ?? env('SABRE_PCC');
 const pccRequest = queuePcc === undefined ? {} : { pcc: queuePcc };
 
-const { aliasOf, step, stepSummary, results, options, logger, writeFixture } = createRecorder([...secrets, pcc]);
+const { aliasOf, maskLine, step, stepSummary, results, options, logger, writeFixture } = createRecorder([...secrets, pcc]);
 const legacy = legacyClient(environment, credentials, logger);
 
 console.log(`entorno ${environment} · cola ${queueText} · QD-${date} · PI-${pic} · PCC de las colas: ${queuePccLabel}`);
@@ -84,7 +84,6 @@ const count = await step('count', () => session.queue.count(pccRequest, options)
 }));
 const listed = await step('list', () => session.queue.list({ queue, ...pccRequest }, options), (r) => ({
   locators: r.locators.length,
-  lastLines: r.paragraph.slice(-3),
 }));
 listed?.locators.forEach(aliasOf);
 const listQd = await step(`list con QD-${date}`, () => rawList('listQD', 'QD', date), (r) => ({ payload: r.payloadName, lines: lineCount(r), warnings: r.warnings.length }));
@@ -112,7 +111,8 @@ const findings = {
   queueCount,
   listedCount,
   listReturnsAll: queueCount !== undefined && listedCount !== undefined ? listedCount === queueCount : undefined,
-  listParagraphTail: listed?.paragraph.slice(-3),
+  // Enmascaradas como las del párrafo: fuera de `<Text>` el recorder no las toca.
+  listParagraphTail: listed?.paragraph.slice(-3).map(maskLine),
   listAcceptsSelection: {
     QD: listQd === undefined ? 'error' : { lines: lineCount(listQd), sameAsUnfiltered: lineCount(listQd) === listedCount },
     PI: listPi === undefined ? 'error' : { lines: lineCount(listPi), sameAsUnfiltered: lineCount(listPi) === listedCount },

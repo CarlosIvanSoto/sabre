@@ -45,7 +45,7 @@ Tier 3 adds the `SabreLegacy` SOAP client, with a stateful session and Queue Man
 | Step | Service | Method |
 | - | - | - |
 | Session | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
-| Queues | Get Queue Count, Access Queue, Place Queue Message | `session.queue.count`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
+| Queues | Get Queue Count, Get Queue Activity, Access Queue, Place Queue Message | `session.queue.count`, `activity`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
 | Queue paragraph | — (pure function) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
 | Host commands | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
@@ -414,6 +414,7 @@ is no evidence yet of what Sabre does with the message.
 | Method | Sabre service | Returns |
 | - | - | - |
 | `count({ pcc? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, warnings }` |
+| `activity({ pcc? })` | `QueueAnalysisLLSRQ` | `{ queues: [{ queue, numMessages, ended, ignored, … }], totals, analyzedAt, warnings }` |
 | `list({ queue, pcc?, primaryPassenger? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, without entering the queue |
 | `access({ queue, pcc?, selection? })` | `QueueAccessLLSRQ` | `QueueStep` |
 | `ignore()` | `QueueAccessLLSRQ` (`I`) | `QueueStep` |
@@ -431,6 +432,12 @@ type QueueStep =
 > **Migrating from 0.4.x**: a step that is not done now has a `kind`. Check `step.kind === 'pnr'`
 > before reading `step.item`. Only the `S` queue returns `kind: 'message'`.
 
+- **`activity`** returns, per queue, the eight counters of the host's `QA` screen: `numMessages`
+  (on the queue now), `ended`, `ignored`, `moved`, `removed`, `transferred`,
+  `leftMessageToContact` and `unableToReach`, plus `totals` for the PCC. Sabre also lists empty
+  queues that have counters. No source says since when the counters run, so the SDK returns them
+  as they come. Like `count`, it is a read: it is retried, it works inside or outside a queue, and
+  it does not need duty code 9.
 - **Every queue result carries `respondedAt`**: Sabre's `eb:Timestamp`, in ISO 8601 UTC
   (`'2026-11-06T17:34:16Z'`). Unlike `countedAt` and `placedAt`, which come as the host sends them
   (no year, PCC local time), it has a year and a zone. It is missing only if Sabre does not send it.

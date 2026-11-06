@@ -221,3 +221,5 @@ export type {
   TotalFare,
   ValidatingCarrierDesc,
 } from './air/grouped-itinerary.js';
+// Tipos completos de `Booking` (spec v1.33, #158).
+export type * from './booking/booking-types.js';

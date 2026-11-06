@@ -96,6 +96,8 @@ export interface SoapResponse {
   warnings: SabreWarning[];
   /** `eb:MessageId` de la respuesta, el dato que pide soporte de Sabre. */
   messageId: string | undefined;
+  /** `eb:Timestamp` de la respuesta, en UTC con `Z` (ver `respondedAtOf`). */
+  respondedAt: string | undefined;
   /** El sobre redactado, como `raw` de los errores que arme la operación al leer el payload. */
   raw: string;
   /** El `BinarySecurityToken` del header, solo con `readSecurityToken`. */
@@ -254,6 +256,7 @@ export class SoapTransport {
       return {
         ...result,
         messageId,
+        respondedAt: respondedAtOf(text),
         raw: text,
         securityToken: request.readSecurityToken === true ? readSecurityToken(original) : undefined,
         status: response.status,
@@ -378,6 +381,27 @@ export class SoapTransport {
 }
 
 /** Escapa texto para un elemento o un atributo XML. */
+/**
+ * `eb:Timestamp` del header de un sobre de respuesta, en ISO 8601 UTC: Sabre lo manda sin zona
+ * (`"2026-11-06T17:34:16"`) y en UTC (comparado con `stl:Success@timeStamp`, que trae `Z`, en
+ * CERT el 2026-11-06), así que se le agrega `Z`. Con una zona explícita queda tal cual. Si no
+ * viene o no tiene forma de fecha y hora, `undefined`. Ver ADR-027 (C1).
+ */
+export function respondedAtOf(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const header = /<(?:[\w-]+:)?Header\b[\s\S]*?<\/(?:[\w-]+:)?Header>/.exec(raw)?.[0];
+  const value = header === undefined ? undefined : /<(?:[\w-]+:)?Timestamp>\s*([^<\s]+)\s*</.exec(header)?.[1];
+  const match = value === undefined ? null : /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:\d{2})?$/.exec(value);
+  if (match === null) return undefined;
+  return `${match[1]}${match[2] ?? 'Z'}`;
+}
+
+/** `{ respondedAt }` si el sobre lo trae; si no, nada (`exactOptionalPropertyTypes`). */
+export function respondedAtField(raw: unknown): { respondedAt?: string } {
+  const respondedAt = respondedAtOf(raw);
+  return respondedAt === undefined ? {} : { respondedAt };
+}
+
 export function xmlEscape(value: string): string {
   return value
     .replace(/&/g, '&amp;')

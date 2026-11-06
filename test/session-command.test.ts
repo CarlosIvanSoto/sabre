@@ -119,7 +119,7 @@ describe('session.command', () => {
 
     const screen = await session.command('DC¥USD1/MXN/20MAR25');
 
-    expect(screen).toEqual({ text: DC_SCREEN, warnings: [], messageId: '3412287548732070140' });
+    expect(screen).toEqual({ text: DC_SCREEN, warnings: [], messageId: '3412287548732070140' , respondedAt: '2026-10-31T12:00:00Z' });
     const sent = body(fetch, 1);
     expect(sent).toContain('<eb:Action>SabreCommandLLSRQ</eb:Action>');
     expect(sent).toContain('<HostCommand>DC¥USD1/MXN/20MAR25</HostCommand>');

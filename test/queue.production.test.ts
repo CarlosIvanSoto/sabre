@@ -37,12 +37,13 @@ describe('cola vacía en producción: QUEUE SELECTED WAS EMPTY', () => {
 
   it('list devuelve una lista vacía', async () => {
     const { session } = await open(one(emptyQueueWalk, 'queue.list'));
-    expect(await session.queue.list({ queue: 2 })).toEqual({ locators: [], entries: [], paragraph: [], warnings: [] });
+    expect(await session.queue.list({ queue: 2 })).toEqual({ locators: [], entries: [], paragraph: [], warnings: [] , respondedAt: '2026-11-02T02:48:28Z' });
   });
 
   it('access devuelve el fin de cola con reason empty y deja la sesión afuera', async () => {
     const { session } = await open(one(emptyQueueWalk, 'queue.access'));
     expect(await session.queue.access({ queue: 2 })).toEqual({
+      respondedAt: '2026-11-02T02:48:28Z',
       done: true,
       reason: 'empty',
       message: 'QUEUE SELECTED WAS EMPTY',

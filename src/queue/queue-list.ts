@@ -3,7 +3,7 @@
 // wiki/sources/access-queue-v2-1-1-design.md.
 import type { RequestOptions } from '../air/bargain-finder-max.js';
 import { SabreGatewayError, type SabreWarning } from '../errors/index.js';
-import { asArray, type SoapResponse, xmlEscape } from '../http/soap-transport.js';
+import { asArray, respondedAtField, type SoapResponse, xmlEscape } from '../http/soap-transport.js';
 import type { SessionRequest } from '../session/session.js';
 import {
   attribute,
@@ -42,6 +42,11 @@ export interface QueueListResponse {
   /** `Paragraph/Text` tal cual: empieza con la cabecera `QUEUE LIST FOR <PCC>  QUEUE <n>`. */
   paragraph: string[];
   warnings: SabreWarning[];
+  /**
+   * `eb:Timestamp` de la respuesta de Sabre, en ISO 8601 UTC (`"2026-11-06T17:34:16Z"`). A
+   * diferencia de las fechas del host, trae año y zona. Falta si Sabre no lo manda.
+   */
+  respondedAt?: string;
 }
 
 export function queueListPayload(queue: QueueRef, pcc: string, primaryPassenger: boolean): string {
@@ -61,8 +66,8 @@ export function queueListRequest(payload: string, options: QueueListOptions): Se
   };
 }
 
-export function emptyList(warnings: SabreWarning[], paragraph: string[] = []): QueueListResponse {
-  return { locators: [], entries: [], paragraph, warnings };
+export function emptyList(warnings: SabreWarning[], paragraph: string[] = [], raw?: unknown): QueueListResponse {
+  return { locators: [], entries: [], paragraph, warnings, ...respondedAtField(raw) };
 }
 
 /**
@@ -74,7 +79,7 @@ export function parseQueueList(response: SoapResponse): QueueListResponse {
   const { warnings } = response;
   const paragraph = paragraphLines(response.raw);
   const firstLine = paragraph.find((line) => line.trim() !== '');
-  if (isEndOfDisplay(firstLine) || warnings.some(isEndOfDisplayResult)) return emptyList(warnings, paragraph);
+  if (isEndOfDisplay(firstLine) || warnings.some(isEndOfDisplayResult)) return emptyList(warnings, paragraph, response.raw);
 
   const entries = asArray(response.payload.Line).map((line): QueueListEntry => {
     const fields = lineFields(line);
@@ -90,5 +95,5 @@ export function parseQueueList(response: SoapResponse): QueueListResponse {
     const position = number !== undefined && /^\d+$/.test(number) ? Number(number) : undefined;
     return { ...(position === undefined ? {} : { position }), ...fields };
   });
-  return { locators: entries.map((entry) => entry.locator), entries, paragraph, warnings };
+  return { locators: entries.map((entry) => entry.locator), entries, paragraph, warnings, ...respondedAtField(response.raw) };
 }

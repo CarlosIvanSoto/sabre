@@ -13,6 +13,7 @@ import {
   toWarning,
 } from './booking-errors.js';
 import type { Booking } from './create-booking.js';
+import { rawHooks, type SabreRawRequestCallback } from '../http/raw-request.js';
 
 export const GET_BOOKING_SERVICE = 'getBooking';
 const PATH = '/v1/trip/orders/getBooking';
@@ -90,6 +91,8 @@ export interface GetBookingOptions {
   signal?: AbortSignal;
   /** Respuesta cruda del último intento HTTP. El body trae PII: ver `SabreRawResponse`. */
   onRawResponse?: SabreRawResponseCallback;
+  /** Request crudo del último intento que se mandó, sin `Authorization`. Trae PII: ver `SabreRawRequest`. */
+  onRawRequest?: SabreRawRequestCallback;
 }
 
 /** `GetBookingResponse` tal cual llega de Sabre: el `Booking` va en el primer nivel. */
@@ -144,9 +147,7 @@ export async function getBooking(
     body: request,
     classify: classifyGetBooking,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ...(options.onRawResponse === undefined
-      ? {}
-      : { operation: 'booking.get', onRawResponse: options.onRawResponse }),
+    ...rawHooks(options, 'booking.get'),
   });
   return toGetBookingResponse(body);
 }

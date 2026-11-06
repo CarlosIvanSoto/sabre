@@ -17,6 +17,7 @@ import type {
   LowFareSearchOriginDestination,
   OtaAirLowFareSearchRq,
 } from './low-fare-search-request.js';
+import { rawHooks } from '../http/raw-request.js';
 
 export const REVALIDATE_ITINERARY_SERVICE = 'revalidateItinerary';
 const PATH = '/v5/shop/flights/revalidate';
@@ -47,9 +48,7 @@ export async function revalidateItinerary(
     classify: classifyRevalidateItinerary,
     ...(options.retry === undefined ? {} : { retry: options.retry }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ...(options.onRawResponse === undefined
-      ? {}
-      : { operation: 'air.revalidateItinerary', onRawResponse: options.onRawResponse }),
+    ...rawHooks(options, 'air.revalidateItinerary'),
   });
   return denormalizeGroupedItineraryResponse(body.groupedItineraryResponse, REVALIDATE_ITINERARY_SERVICE);
 }

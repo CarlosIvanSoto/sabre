@@ -14,6 +14,7 @@ import {
 } from './booking-errors.js';
 import type { Booking } from './create-booking.js';
 import type { BookingSource } from './get-booking.js';
+import { rawHooks, type SabreRawRequestCallback } from '../http/raw-request.js';
 
 export const CANCEL_BOOKING_SERVICE = 'cancelBooking';
 const PATH = '/v1/trip/orders/cancelBooking';
@@ -89,6 +90,8 @@ export interface CancelBookingOptions {
   signal?: AbortSignal;
   /** Respuesta cruda del último intento HTTP. El body trae PII: ver `SabreRawResponse`. */
   onRawResponse?: SabreRawResponseCallback;
+  /** Request crudo del último intento que se mandó, sin `Authorization`. Trae PII: ver `SabreRawRequest`. */
+  onRawRequest?: SabreRawRequestCallback;
 }
 
 /** `CancelBookingResponse` tal cual llega de Sabre. */
@@ -139,9 +142,7 @@ export async function cancelBooking(
     body: request,
     classify: classifyCancelBooking,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ...(options.onRawResponse === undefined
-      ? {}
-      : { operation: 'booking.cancel', onRawResponse: options.onRawResponse }),
+    ...rawHooks(options, 'booking.cancel'),
   });
   return toCancelBookingResponse(body);
 }

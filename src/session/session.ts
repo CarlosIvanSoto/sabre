@@ -219,6 +219,8 @@ export class SabreSession {
 
   async #sendClose(options: RequestOptions): Promise<void> {
     if (this.#unusable !== undefined) return;
+    // SessionCloseRQ queda fuera de onRawRequest, como las demás llamadas de auth (ADR-029).
+    const { onRawRequest: _skipped, ...closeOptions } = options;
     this.#busy = true;
     try {
       await this.#transport.request({
@@ -229,7 +231,7 @@ export class SabreSession {
         // Solo se reintenta ante `USG_*_BUSY`: tras un fallo de red no se sabe si ya se cerró.
         idempotent: false,
         operation: 'close',
-        ...options,
+        ...closeOptions,
       });
     } catch (error) {
       throw this.#markUnusable(error);

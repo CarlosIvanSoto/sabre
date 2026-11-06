@@ -11,6 +11,7 @@ import {
 } from './grouped-itinerary.js';
 import { classifyItineraryMessages, type ItineraryMessageCatalogEntry } from './itinerary-messages.js';
 import type { OtaAirLowFareSearchRq } from './low-fare-search-request.js';
+import { rawHooks, type SabreRawRequestCallback } from '../http/raw-request.js';
 
 export const BARGAIN_FINDER_MAX_SERVICE = 'bargainFinderMax';
 const PATH = '/v5/offers/shop';
@@ -27,6 +28,8 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Respuesta cruda del último intento HTTP. El body trae PII: ver `SabreRawResponse`. */
   onRawResponse?: SabreRawResponseCallback;
+  /** Request crudo del último intento que se mandó, sin `Authorization`. Trae PII: ver `SabreRawRequest`. */
+  onRawRequest?: SabreRawRequestCallback;
   /** Pisa los reintentos del cliente solo para esta request. */
   retry?: Partial<RetryOptions>;
 }
@@ -63,9 +66,7 @@ export async function bargainFinderMax(
     classify: classifyBargainFinderMax,
     ...(options.retry === undefined ? {} : { retry: options.retry }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ...(options.onRawResponse === undefined
-      ? {}
-      : { operation: 'air.bargainFinderMax', onRawResponse: options.onRawResponse }),
+    ...rawHooks(options, 'air.bargainFinderMax'),
   });
   return denormalizeGroupedItineraryResponse(body.groupedItineraryResponse, BARGAIN_FINDER_MAX_SERVICE);
 }

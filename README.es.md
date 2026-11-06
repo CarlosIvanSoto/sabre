@@ -672,6 +672,39 @@ En `SabreLegacy`, `protocol` es `'soap'`, `body` es el sobre SOAP completo, y `o
 > `body` es la respuesta cruda y **trae datos de pasajeros**. El SDK nunca lo manda al logger.
 > Dónde lo guardas es tu responsabilidad.
 
+## Request crudo
+
+Las mismas operaciones aceptan `onRawRequest`, al lado de `onRawResponse`. Recibe lo que el SDK
+mandó por la red, por ejemplo para mostrar el request real junto a la respuesta:
+
+```ts
+import type { SabreRawRequest } from 'sabre-client';
+
+let sent: SabreRawRequest | undefined;
+await sabre.booking.get({ confirmationId }, { onRawRequest: (r) => (sent = r) });
+// sent: { operation: 'booking.get', protocol: 'rest', method, url, headers, body, attempts }
+```
+
+- `operation` es el mismo valor que recibe `onRawResponse`. `url` es la URL completa, con su query
+  string. `headers` son los que se mandaron, **sin `Authorization`** (se quita el header entero).
+  `body` es el texto que se mandó, o `undefined` si no hubo. En REST va tal cual; en
+  `SabreLegacy` es el sobre SOAP completo con el `BinarySecurityToken` reemplazado por
+  `[REDACTED]`, igual que en la respuesta.
+- Se llama **una vez**, con el último intento que se mandó, antes de que la operación devuelva o
+  lance y antes que `onRawResponse`. A diferencia de este, se llama también si ningún intento tuvo
+  respuesta HTTP (error de red, abort), siempre que se haya mandado al menos uno. No se llama si la
+  operación lanza antes de mandar nada (por ejemplo, un `TypeError` de validación).
+- En SOAP, `eb:MessageId` y `eb:Timestamp` son nuevos en cada intento, así que el sobre que llega
+  es el del último intento.
+- No se llama con la autenticación: el request de token de OAuth, `openSession`
+  (`SessionCreateRQ`, cuyo sobre lleva la contraseña del EPR) y `close` (`SessionCloseRQ`).
+- Es síncrono y su retorno se ignora. Si lanza, el SDK registra
+  `sabre.request.rawRequestHookFailed` sin el body y la operación sigue.
+
+> [!WARNING]
+> `body` y `url` **traen datos de pasajeros** (localizadores, nombres, contactos). El SDK nunca los
+> manda al logger. Dónde los guardas es tu responsabilidad.
+
 ## Reintentos
 
 Solo se reintentan las operaciones idempotentes: Bargain Finder Max y Revalidate Itinerary
@@ -727,7 +760,8 @@ const sabre = new Sabre({
 ```
 
 El SDK registra eventos estructurados (`sabre.request.start`, `sabre.request.end`,
-`sabre.request.retry`, `sabre.request.rawResponseHookFailed`, `sabre.auth.token.refresh`,
+`sabre.request.retry`, `sabre.request.rawResponseHookFailed`,
+`sabre.request.rawRequestHookFailed`, `sabre.auth.token.refresh`,
 `sabre.auth.token.store`, `sabre.booking.seat.priced`, `sabre.session.open`,
 `sabre.session.close`, `sabre.session.closeFailed`, `sabre.session.keepAliveFailed`,
 `sabre.session.command`, `sabre.queue.exitTolerated`, `sabre.queue.exitFailed`) y nunca los bodies

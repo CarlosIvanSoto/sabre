@@ -31,6 +31,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   UTC (`'2026-11-06T17:34:16Z'`), with a year and a zone, unlike `countedAt` and `placedAt`. An
   end of queue that Sabre sends as an `stl:Error` also carries it (#157).
 
+### Changed
+
+- **BREAKING**: `QueueRef` is now `number | string | { name }` (ADR-028). An alphabetic queue
+  (one or two uppercase letters, like `'S'`) is a `string` and is sent as `Number="S"`, as Sabre
+  expects. `count` and `place` return it as `'S'` instead of `{ name: 'S' }`, which Sabre rejected
+  with `INVALID QUEUE NAME FORMAT`. Code that does `typeof q === 'number' ? … : q.name` must
+  handle the `string` case. A `{ name }` of one or two uppercase letters, a numeric string (`'12'`)
+  and a lowercase letter (`'s'`) throw a `TypeError` without calling Sabre (#169).
+- `list({ queue: 'S' })` throws a `TypeError` without calling Sabre: `S` is the PCC's message
+  queue, and Sabre does not list it (#169).
+- `sabre-client/testing`: the queue fake keeps alphabetic and named queues apart. In
+  `QueueFakeOptions.queues`, `'S'` is the alphabetic queue and `'name:HOTELS'` (or `'HOTELS'`) a
+  named one, and each response uses the right attribute (#169).
+
 ## [0.4.1] - 2026-11-04
 
 ### Changed

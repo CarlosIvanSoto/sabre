@@ -164,7 +164,7 @@ describe('queue.process', () => {
   it.each([
     ['limit 0', { queue: 12, limit: 0 }, 'sabre-client: limit debe ser un entero mayor o igual a 1'],
     ['limit no entero', { queue: 12, limit: 1.5 }, 'sabre-client: limit debe ser un entero mayor o igual a 1'],
-    ['una cola inválida', { queue: -1 }, 'sabre-client: queue debe ser un número de cola entero de 0 a 511, o { name }'],
+    ['una cola inválida', { queue: -1 }, 'sabre-client: queue debe ser un número de cola entero de 0 a 511, una cola alfabética (\'S\') o { name }'],
   ])('%s lanza TypeError sin red', async (_name, request, message) => {
     const { fetch, session } = await openWith();
     expect(await rejection(session.queue.process(request, () => ({ action: 'ignore' })))).toEqual(new TypeError(message));

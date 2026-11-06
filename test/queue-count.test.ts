@@ -109,7 +109,7 @@ describe('queue.count: respuesta', () => {
     expect(await session.queue.count()).toEqual({
       respondedAt: '2026-10-31T12:00:00Z',
       queues: [
-        { queue: { name: 'S' }, count: 261 },
+        { queue: 'S', count: 261 },
         { queue: 9, count: 3 },
         { queue: 20, count: 29 },
         { queue: 100, count: 2 },
@@ -129,7 +129,7 @@ describe('queue.count: respuesta', () => {
     expect(await session.queue.count()).toEqual({
       respondedAt: '2026-10-31T12:00:00Z',
       queues: [
-        { queue: { name: 'S' }, count: 6 },
+        { queue: 'S', count: 6 },
         { queue: 305, count: 1 },
       ],
       totals: { messages: 6, specials: 0, pnrs: 1 },
@@ -216,22 +216,22 @@ describe('parseHostCount', () => {
 });
 
 describe('QueueRef', () => {
-  it('toQueueRef convierte los números en number y lo demás en { name }', () => {
+  it('toQueueRef convierte los números en number y lo alfabético en string (ADR-028)', () => {
     expect(toQueueRef('12')).toBe(12);
     expect(toQueueRef('0')).toBe(0);
-    expect(toQueueRef('S')).toEqual({ name: 'S' });
-    expect(toQueueRef('9A')).toEqual({ name: '9A' });
+    expect(toQueueRef('S')).toBe('S');
+    expect(toQueueRef('9A')).toBe('9A');
     expect(toQueueRef('')).toBeUndefined();
     expect(toQueueRef(undefined)).toBeUndefined();
   });
 
-  it.each([[0], [49], [511], [{ name: 'S' }]])('%j es válida', (queue) => {
+  it.each([[0], [49], [511], ['S'], ['A'], ['AB'], [{ name: 'HOTELS' }], [{ name: 'ABC123' }]])('%j es válida', (queue) => {
     expect(() => validateQueueRef(queue, 'queue')).not.toThrow();
   });
 
   it.each([[-1], [512], [1.5], [Number.NaN]])('el número %j lanza TypeError', (queue) => {
     expect(() => validateQueueRef(queue, 'queue')).toThrow(
-      new TypeError('sabre-client: queue debe ser un número de cola entero de 0 a 511, o { name }'),
+      new TypeError("sabre-client: queue debe ser un número de cola entero de 0 a 511, una cola alfabética ('S') o { name }"),
     );
   });
 
@@ -241,14 +241,33 @@ describe('QueueRef', () => {
     );
   });
 
-  it.each([['12'], [null], [undefined], [[12]]])('%j lanza TypeError', (queue) => {
+  it.each([['s'], ['ABC'], ['S1'], [''], [' ']])('el string %j lanza TypeError: no es una cola alfabética', (queue) => {
     expect(() => validateQueueRef(queue, 'queue')).toThrow(
-      new TypeError('sabre-client: queue debe ser un número de cola (0–511) o { name }'),
+      new TypeError("sabre-client: queue debe ser una cola alfabética de una o dos letras mayúsculas (p. ej. 'S')"),
+    );
+  });
+
+  it('un string numérico lanza TypeError: cada cola tiene una sola forma', () => {
+    expect(() => validateQueueRef('12', 'queue')).toThrow(
+      new TypeError('sabre-client: queue: una cola numérica va como número (12), no como string'),
+    );
+  });
+
+  it.each([['S'], ['AB']])('{ name: %j } lanza TypeError y pide la cola alfabética (sub-decisión ii)', (name) => {
+    expect(() => validateQueueRef({ name }, 'queue')).toThrow(
+      new TypeError(`sabre-client: queue: '${name}' es una cola alfabética: pasa '${name}', no { name: '${name}' }`),
+    );
+  });
+
+  it.each([[null], [undefined], [[12]], [true]])('%j lanza TypeError', (queue) => {
+    expect(() => validateQueueRef(queue, 'queue')).toThrow(
+      new TypeError("sabre-client: queue debe ser un número de cola (0–511), una cola alfabética ('S') o { name }"),
     );
   });
 
   it('queueRefAttribute arma Number o Name, escapado', () => {
     expect(queueRefAttribute(12)).toBe('Number="12"');
+    expect(queueRefAttribute('S')).toBe('Number="S"');
     expect(queueRefAttribute({ name: 'A&B' })).toBe('Name="A&amp;B"');
   });
 });

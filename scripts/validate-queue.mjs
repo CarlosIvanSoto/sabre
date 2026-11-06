@@ -72,7 +72,8 @@ class CountOnly extends Error {}
 let listed;
 const visited = [];
 try {
-  const sameQueue = (ref) => (typeof ref === 'number' ? ref === queue : typeof queue === 'object' && ref.name === queue.name);
+  // Número y cola alfabética ('S') se comparan por valor; las con nombre, por `name` (ADR-028).
+  const sameQueue = (ref) => (typeof ref !== 'object' ? ref === queue : typeof queue === 'object' && ref.name === queue.name);
   await step('count', () => session.queue.count(pccRequest, options), (r) => ({
     queues: r.queues.length,
     totals: r.totals,
@@ -126,4 +127,4 @@ const findings = {
   finalState: session.queue.state,
 };
 
-writeFixture(`queue.${environment}-${scenario}`, { environment, scenario, queue: typeof queue === 'number' ? queue : { name: 'XXXX' } }, findings);
+writeFixture(`queue.${environment}-${scenario}`, { environment, scenario, queue: typeof queue === 'object' ? { name: 'XXXX' } : queue }, findings);

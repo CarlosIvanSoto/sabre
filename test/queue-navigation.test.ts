@@ -80,8 +80,8 @@ describe('queue.access: request', () => {
 
   it('con { name } y pcc manda Name y ese PCC', async () => {
     const { fetch, session } = await openWith(ok(DESIGN_ITEM));
-    await session.queue.access({ queue: { name: 'S' }, pcc: 'ABC1' });
-    expect(body(fetch, 1)).toContain('<QueueIdentifier Name="S" PseudoCityCode="ABC1"/>');
+    await session.queue.access({ queue: { name: 'HOTELS' }, pcc: 'ABC1' });
+    expect(body(fetch, 1)).toContain('<QueueIdentifier Name="HOTELS" PseudoCityCode="ABC1"/>');
   });
 
   it('manda los filtros de selection en orden, después de QueueIdentifier', async () => {
@@ -105,7 +105,7 @@ describe('queue.access: request', () => {
   });
 
   it.each([
-    ['una cola fuera de rango', { queue: 512 }, 'sabre-client: queue debe ser un número de cola entero de 0 a 511, o { name }'],
+    ['una cola fuera de rango', { queue: 512 }, 'sabre-client: queue debe ser un número de cola entero de 0 a 511, una cola alfabética (\'S\') o { name }'],
     ['una cola sin nombre', { queue: { name: '' } }, 'sabre-client: queue.name debe ser un string no vacío'],
     ['un pcc inválido', { queue: 1, pcc: 'X' }, 'sabre-client: pcc debe tener 3 o 4 caracteres alfanuméricos'],
     [
@@ -282,16 +282,16 @@ describe('navegación', () => {
 
   it('remove({ from }) manda QR con hasta 3 QueueIdentifier, con el PCC de la sesión por defecto', async () => {
     const { fetch, session } = await inside(ok(REAL_ITEM('NEXT01')));
-    await session.queue.remove({ from: [{ queue: 2, pcc: '7TZA' }, { queue: 3 }, { queue: { name: 'S' }, pcc: 'G7HE' }] });
+    await session.queue.remove({ from: [{ queue: 2, pcc: '7TZA' }, { queue: 3 }, { queue: 'S', pcc: 'G7HE' }] });
     expect(body(fetch, 2)).toContain(
-      '<Navigation Action="QR"/><QueueIdentifier Number="2" PseudoCityCode="7TZA"/><QueueIdentifier Number="3" PseudoCityCode="H8GI"/><QueueIdentifier Name="S" PseudoCityCode="G7HE"/></QueueAccessRQ>',
+      '<Navigation Action="QR"/><QueueIdentifier Number="2" PseudoCityCode="7TZA"/><QueueIdentifier Number="3" PseudoCityCode="H8GI"/><QueueIdentifier Number="S" PseudoCityCode="G7HE"/></QueueAccessRQ>',
     );
   });
 
   it.each([
     ['una lista vacía', [], 'sabre-client: from debe ser una lista de 1 a 3 colas'],
     ['4 colas', [{ queue: 1 }, { queue: 2 }, { queue: 3 }, { queue: 4 }], 'sabre-client: from debe ser una lista de 1 a 3 colas'],
-    ['una cola inválida', [{ queue: -1 }], 'sabre-client: from[0].queue debe ser un número de cola entero de 0 a 511, o { name }'],
+    ['una cola inválida', [{ queue: -1 }], 'sabre-client: from[0].queue debe ser un número de cola entero de 0 a 511, una cola alfabética (\'S\') o { name }'],
     ['un pcc inválido', [{ queue: 1, pcc: 'TOOLONG' }], 'sabre-client: from[0].pcc debe tener 3 o 4 caracteres alfanuméricos'],
     ['un destino que no es objeto', [3], 'sabre-client: from[0] debe ser { queue, pcc? }'],
   ])('remove({ from }) con %s lanza TypeError sin red', async (_name, from, message) => {

@@ -69,7 +69,8 @@ const { aliasOf, step, stepSummary, results, options, logger, writeFixture } = c
 for (const locator of designated) aliasOf(locator);
 const legacy = legacyClient(environment, credentials, logger);
 
-const sameQueue = (a, b) => (typeof a === 'number' ? a === b : typeof b === 'object' && a.name === b.name);
+// Número y cola alfabética ('S') se comparan por valor; las con nombre, por `name` (ADR-028).
+const sameQueue = (a, b) => (typeof a !== 'object' ? a === b : typeof b === 'object' && a.name === b.name);
 const countOf = (response, queue) => response?.queues.find((q) => sameQueue(q.queue, queue))?.count ?? 0;
 const countStep = (name) =>
   step(name, () => session.queue.count(pccRequest, options), (r) => ({

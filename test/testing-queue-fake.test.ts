@@ -118,7 +118,7 @@ describe('primitivas', () => {
     expect(outside).toEqual({
       queues: [
         { queue: 12, count: 2 },
-        { queue: { name: 'S' }, count: 1 },
+        { queue: 'S', count: 1 },
       ],
       totals: { messages: 1, specials: 0, pnrs: 2 },
       countedAt: '11-02T15:30',
@@ -297,5 +297,39 @@ describe('queueFixtures', () => {
     const legacy = new SabreLegacy({ environment: 'production', authVersion: 'v2', credentials: { username: 'V1:7971:XXXX:AA', password: 'x' }, fetch });
     const session = await legacy.openSession();
     expect(await session.queue.access({ queue: 2 })).toMatchObject({ done: false, item: { locator: 'AAAAAA' } });
+  });
+});
+
+describe('colas alfabéticas y con nombre en el fake (ADR-028)', () => {
+  it("'S' y una cola con nombre usan claves y atributos distintos", async () => {
+    const { fake, legacy } = client({
+      queues: { S: [pnr('AAAAAA')], 'name:HOTELS': [pnr('BBBBBB')], CARS: [pnr('CCCCCC')] },
+    });
+    const { count, hotels } = await legacy.withSession(async (session) => {
+      const count = await session.queue.count();
+      const hotels = await session.queue.list({ queue: { name: 'HOTELS' } });
+      return { count, hotels };
+    });
+
+    expect(count.queues).toEqual([
+      { queue: 'S', count: 1 },
+      { queue: { name: 'HOTELS' }, count: 1 },
+      { queue: { name: 'CARS' }, count: 1 },
+    ]);
+    expect(count.totals).toEqual({ messages: 1, specials: 0, pnrs: 2 });
+    expect(hotels.locators).toEqual(['BBBBBB']);
+    expect(fake.locators('S')).toEqual(['AAAAAA']);
+    expect(fake.locators({ name: 'HOTELS' })).toEqual(['BBBBBB']);
+    expect(fake.calls).toContainEqual({ command: 'list', queue: { name: 'HOTELS' } });
+  });
+
+  it('place a una cola alfabética responde con Number y a una con nombre, con Name', async () => {
+    const { fake, legacy } = client({ pnrs: [pnr('DDDDDD')] });
+    const result = await legacy.withSession((session) =>
+      session.queue.place({ to: [{ queue: 'S', instructionCode: 11 }, { queue: { name: 'HOTELS' }, instructionCode: 11 }], locators: ['DDDDDD'] }),
+    );
+    expect(result.placements.map((placement) => placement.queue)).toEqual(['S', { name: 'HOTELS' }]);
+    expect(fake.locators('S')).toEqual(['DDDDDD']);
+    expect(fake.locators({ name: 'HOTELS' })).toEqual(['DDDDDD']);
   });
 });

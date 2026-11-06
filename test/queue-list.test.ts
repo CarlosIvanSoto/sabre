@@ -49,11 +49,11 @@ describe('queue.list: request', () => {
   });
 
   it('con { name } manda Name', () => {
-    expect(queueListPayload({ name: 'S' }, 'ABCD', false)).toContain('<QueueIdentifier Name="S" PseudoCityCode="ABCD">');
+    expect(queueListPayload({ name: 'HOTELS' }, 'ABCD', false)).toContain('<QueueIdentifier Name="HOTELS" PseudoCityCode="ABCD">');
   });
 
   it.each([
-    ['una cola inválida', { queue: 999 }, 'sabre-client: queue debe ser un número de cola entero de 0 a 511, o { name }'],
+    ['una cola inválida', { queue: 999 }, 'sabre-client: queue debe ser un número de cola entero de 0 a 511, una cola alfabética (\'S\') o { name }'],
     ['un pcc inválido', { queue: 1, pcc: '!!' }, 'sabre-client: pcc debe tener 3 o 4 caracteres alfanuméricos'],
     ['primaryPassenger que no es boolean', { queue: 1, primaryPassenger: 'yes' }, 'sabre-client: primaryPassenger debe ser un boolean'],
   ])('%s lanza TypeError sin red', async (_name, request, message) => {
@@ -145,5 +145,29 @@ describe('queue.list: respuesta', () => {
     expect(session.queue.state).toBe('outside');
     await rejection(session.queue.list({ queue: 12 }));
     expect(session.queue.state).toBe('outside');
+  });
+});
+
+describe('queue.list de la cola de mensajes (ADR-028)', () => {
+  it("list('S') lanza TypeError sin red: Sabre no lista la cola de mensajes", async () => {
+    const { fetch, session } = await openWith();
+    expect(await rejection(session.queue.list({ queue: 'S' }))).toEqual(
+      new TypeError("sabre-client: la cola 'S' es la de mensajes del PCC: no tiene PNR y Sabre no la lista"),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('otra cola alfabética sí va a Sabre, en Number', async () => {
+    const { fetch, session } = await openWith(ok(DESIGN_LIST));
+    await session.queue.list({ queue: 'A' });
+    expect(sentBody(fetch, 1)).toContain('<QueueIdentifier Number="A" PseudoCityCode="H8GI"><List Ind="true"/></QueueIdentifier>');
+  });
+
+  it('{ name: \'S\' } de la 0.4.x lanza TypeError sin red y pide la cola alfabética', async () => {
+    const { fetch, session } = await openWith();
+    expect(await rejection(session.queue.list({ queue: { name: 'S' } }))).toEqual(
+      new TypeError("sabre-client: queue: 'S' es una cola alfabética: pasa 'S', no { name: 'S' }"),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

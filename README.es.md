@@ -394,8 +394,23 @@ const screen = await legacy.withSession((session) => session.command('W/PT¥*', 
 ### Colas
 
 Las operaciones de cola están en `session.queue`. `pcc` es opcional en cada llamada, y por defecto
-es el de la sesión. Una cola es un número de 0 a 511, o `{ name }` para las colas alfabéticas
-(`QueueRef`). Las colas que devuelve `count` se pasan tal cual a las demás operaciones.
+es el de la sesión. Una cola (`QueueRef`) tiene tres formas:
+
+| Cola | `QueueRef` | Viaja como |
+| - | - | - |
+| Numérica, de 0 a 511 | `400` | `Number="400"` |
+| Alfabética, una o dos letras mayúsculas | `'S'` | `Number="S"` |
+| Con nombre (tablas QN y QNB) | `{ name: 'HOTELS' }` | `Name="HOTELS"` |
+
+Las colas que devuelve `count` se pasan tal cual a las demás operaciones. `'S'` es la **cola de
+mensajes** del PCC: tiene mensajes y no PNR, y Sabre no la lista, así que `list({ queue: 'S' })`
+lanza un `TypeError` sin llamar a Sabre.
+
+> **Migración desde la 0.4.x**: `count` devolvía la cola `S` como `{ name: 'S' }`, que Sabre
+> rechaza (`INVALID QUEUE NAME FORMAT`). Ahora devuelve `'S'`. Un código como
+> `typeof q === 'number' ? … : q.name` deja de compilar, porque `q` puede ser un `string`. Un
+> `{ name }` de una o dos letras mayúsculas ahora lanza un `TypeError` que pide pasar la letra, y
+> `'12'` o `'s'` también lanzan: cada cola tiene una sola forma.
 
 | Método | Servicio de Sabre | Devuelve |
 | - | - | - |

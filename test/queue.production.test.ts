@@ -30,7 +30,7 @@ describe('cola vacía en producción: QUEUE SELECTED WAS EMPTY', () => {
   it('count la deja fuera de la lista de colas con PNR', async () => {
     const { session } = await open(one(emptyQueueWalk, 'queue.count'));
     const count = await session.queue.count();
-    expect(count.queues.map((queue) => queue.queue)).toEqual([{ name: 'S' }, 100, 200, 300]);
+    expect(count.queues.map((queue) => queue.queue)).toEqual(['S', 100, 200, 300]);
     expect(count.totals).toEqual({ messages: 6, specials: 0, pnrs: 4 });
     expect(count.countedAt).toBe('11-01T20:48');
   });
@@ -225,5 +225,16 @@ describe('place y remove con colas de prueba en producción (51 y 52, 2 PNR)', (
     expect(cleared52).toMatchObject({ done: true, reason: 'end-of-display' });
     expect(final).toEqual({ 51: 0, 52: 0 });
     expect(session.queue.state).toBe('outside');
+  });
+});
+
+describe('cola S de producción: count → access (ADR-028)', () => {
+  it('el QueueRef que devuelve count para la S viaja en Number="S"', async () => {
+    const { fetch, session } = await open(one(walk, 'queue.count'), xml(200, soap(queueRS(success))));
+    const { queues } = await session.queue.count();
+    const messages = queues.find((queue) => queue.queue === 'S');
+    expect(messages).toEqual({ queue: 'S', count: 385 });
+    await rejection(session.queue.access({ queue: messages!.queue }));
+    expect(String(fetch.mock.calls[2]?.[1]?.body)).toContain('<QueueIdentifier Number="S" PseudoCityCode=');
   });
 });

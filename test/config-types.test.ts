@@ -2,7 +2,13 @@
 // vitest solo se ejecutan los `expectTypeOf`, nunca los constructores de las funciones `_`.
 import { describe, expectTypeOf, it } from 'vitest';
 import { Sabre, SabreLegacy, buildCredentials } from '../src/index.js';
-import type { BuiltCredentialsV2, BuiltCredentialsV3, SabreConfig, SabreCredentialsV2 } from '../src/index.js';
+import type {
+  BuildCredentialsOptions,
+  BuiltCredentialsV2,
+  BuiltCredentialsV3,
+  SabreConfig,
+  SabreCredentialsV2,
+} from '../src/index.js';
 
 const parts = { user: '7971', pcc: 'H8GI', password: 'epr-pass' };
 const app = { clientId: 'app-client-id', clientSecret: 'app-client-secret' };
@@ -46,6 +52,19 @@ describe('tipos de SabreConfig con buildCredentials', () => {
       // @ts-expect-error sin marca ni authVersion, la config es v3 y pide clientId/clientSecret
       new Sabre({ environment: 'sandbox', credentials: v2 });
       new Sabre({ environment: 'sandbox', credentials: { ...app, username: '7971-H8GI-AA', password: 'epr-pass' } });
+    };
+  });
+  it('Q-084: credenciales de buildCredentials con la versión desconocida al compilar', () => {
+    const fromEnv = (options: BuildCredentialsOptions) => buildCredentials(options);
+    const credentials = fromEnv({ ...parts, ...app });
+    expectTypeOf(credentials).toEqualTypeOf<BuiltCredentialsV3 | BuiltCredentialsV2>();
+    expectTypeOf({ environment: 'sandbox' as const, credentials }).toMatchTypeOf<SabreConfig>();
+
+    const _ = () => {
+      new Sabre({ environment: 'sandbox', credentials });
+      new SabreLegacy({ environment: 'production', credentials });
+      // @ts-expect-error la config no puede fijar authVersion si la versión de las credenciales no se conoce
+      new Sabre({ environment: 'sandbox', authVersion: 'v2', credentials });
     };
   });
 });

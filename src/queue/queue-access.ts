@@ -85,12 +85,24 @@ export interface QueueItem {
 }
 
 /**
- * Resultado de una operación que avanza en la cola. El fin de cola es un resultado, no un error:
- * `END OF DISPLAY FOR REQUESTED DATA` llega como `{ done: true }`, también al entrar a una cola
- * vacía, y deja la sesión fuera de la cola.
+ * Un mensaje de la cola `S`, la de mensajes del PCC (ADR-028). No es un PNR: no trae localizador
+ * ni datos de colocación, solo texto libre.
+ */
+export interface QueueMessage {
+  /** `Paragraph/Text`, línea por línea y tal cual, con su sangría. */
+  text: string[];
+}
+
+/**
+ * Resultado de una operación que avanza en la cola. Lo que queda en pantalla se distingue por
+ * `kind`: un PNR (`'pnr'`, en las colas numéricas y con nombre) o un mensaje (`'message'`, en la
+ * cola `S`). El fin de cola es un resultado, no un error: `END OF DISPLAY FOR REQUESTED DATA`
+ * llega como `{ done: true }`, también al entrar a una cola vacía, y deja la sesión fuera de la
+ * cola.
  */
 export type QueueStep =
-  | { done: false; item: QueueItem; warnings: SabreWarning[]; respondedAt?: string }
+  | { done: false; kind: 'pnr'; item: QueueItem; warnings: SabreWarning[]; respondedAt?: string }
+  | { done: false; kind: 'message'; message: QueueMessage; warnings: SabreWarning[]; respondedAt?: string }
   | { done: true; reason: QueueEndReason; message: string; warnings: SabreWarning[]; respondedAt?: string };
 
 /** Qué acción de navegación se manda en `Navigation@Action`. */
@@ -229,18 +241,24 @@ export function endStep(warnings: SabreWarning[], reason: QueueEndReason = 'end-
 
 /**
  * Lee el paso de un `QueueAccessRS`. El fin de cola llega como primera línea del `Paragraph`
- * (evidencia de `1.0.8`) o como `stl:Warning`. Un `Line` sin localizador es una respuesta que el
- * SDK no entiende: lanza `SabreGatewayError`.
+ * (evidencia de `1.0.8`, y la cola `S` en CERT) o como `stl:Warning`. Con `messages` (la sesión
+ * está en la cola `S`), un `Paragraph` sin `Line` es un mensaje (CERT, 2026-11-06). Fuera de la
+ * `S`, un `Line` sin localizador es una respuesta que el SDK no entiende: lanza
+ * `SabreGatewayError`. En la `S`, un `Line` con localizador también lanza.
  */
-export function parseQueueStep(response: SoapResponse): QueueStep {
+export function parseQueueStep(response: SoapResponse, { messages = false }: { messages?: boolean } = {}): QueueStep {
   const { warnings } = response;
   const paragraph = paragraphLines(response.raw);
   const firstLine = paragraph.find((line) => line.trim() !== '');
   if (isEndOfDisplay(firstLine) || warnings.some(isEndOfDisplayResult)) return endStep(warnings, 'end-of-display', response.raw);
 
-  const fields = lineFields(response.payload.Line);
+  if (messages && response.payload.Line === undefined && firstLine !== undefined) {
+    return { done: false, kind: 'message', message: { text: paragraph }, warnings, ...respondedAtField(response.raw) };
+  }
+  const fields = messages ? undefined : lineFields(response.payload.Line);
   if (fields === undefined) {
-    throw new SabreGatewayError(`${QUEUE_ACCESS_SERVICE}: respuesta no reconocida (sin Line/UniqueID ni fin de cola)`, {
+    const expected = messages ? 'sin Paragraph de mensaje ni fin de cola en la cola S' : 'sin Line/UniqueID ni fin de cola';
+    throw new SabreGatewayError(`${QUEUE_ACCESS_SERVICE}: respuesta no reconocida (${expected})`, {
       protocol: 'soap',
       status: response.status,
       retryable: false,
@@ -248,7 +266,7 @@ export function parseQueueStep(response: SoapResponse): QueueStep {
     });
   }
   const item: QueueItem = { ...fields, paragraph };
-  return { done: false, item, warnings, ...respondedAtField(response.raw) };
+  return { done: false, kind: 'pnr', item, warnings, ...respondedAtField(response.raw) };
 }
 
 /** Los campos de un `Line`, o `undefined` si no trae `UniqueID`. */

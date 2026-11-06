@@ -5,6 +5,7 @@
 //
 //   SABRE_ENVIRONMENT=production SABRE_QUEUE=2 node --env-file=.env.production scripts/validate-queue.mjs walk
 //   SABRE_ENVIRONMENT=production SABRE_EMPTY_QUEUE=3 node --env-file=.env.production scripts/validate-queue.mjs empty
+//   node --env-file=.env scripts/validate-queue.mjs messages
 //
 // Solo lectura: count, list, access, ignore (`I`) y exit (`QXI`). Nunca manda `QR` (remove) ni
 // place, así que ningún PNR sale de su cola ni se mueve a otra.
@@ -15,6 +16,10 @@
 // - `empty` (una sesión): count → list(SABRE_EMPTY_QUEUE) → access → exit si hace falta.
 // - `count` (una sesión): solo count, para comprobar cuántos PNR tiene SABRE_QUEUE después de un
 //   recorrido. No entra a ninguna cola.
+// - `messages` (una sesión, #169 punto 3): count → access crudo a la cola `S` (`Number="S"`, la de
+//   mensajes, ADR-028) → `I` crudo → `QXI` crudo. Crudo porque `access` del SDK todavía lanza
+//   `SabreGatewayError` cuando la respuesta no trae `Line`. Graba la forma de un paso de mensaje:
+//   qué trae en lugar de `Line` y si trae `Paragraph`. No usa SABRE_QUEUE.
 //
 // Las pruebas crudas usan el método interno de la sesión (`sessionSend`), sacado del prototipo con
 // Object.getOwnPropertySymbols: el SDK no deja mandar `I` ni `QXI` cuando cree que la sesión está
@@ -29,17 +34,18 @@
 // La anonimización y la protección contra fugas están en scripts/lib/legacy-recorder.mjs: el
 // párrafo es el PNR entero, así que se enmascara por estructura. Si queda un dato real, no se
 // escribe la fixture. La consola solo muestra los alias.
-import { createRecorder, env, legacyClient, legacyEnvironment, queueRef, sessionSendOf } from './lib/legacy-recorder.mjs';
+import { createRecorder, env, legacyClient, legacyEnvironment, queueRef, rejectMessageQueue, sessionSendOf } from './lib/legacy-recorder.mjs';
 
 const scenario = process.argv[2];
-if (scenario !== 'walk' && scenario !== 'empty' && scenario !== 'count') {
-  console.error(`escenario desconocido: ${scenario ?? '(ninguno)'} (usa walk, empty o count)`);
+if (!['walk', 'empty', 'count', 'messages'].includes(scenario)) {
+  console.error(`escenario desconocido: ${scenario ?? '(ninguno)'} (usa walk, empty, count o messages)`);
   process.exit(2);
 }
 const { environment, credentials, queuePcc, queuePccLabel, secrets } = legacyEnvironment();
 const pccRequest = queuePcc === undefined ? {} : { pcc: queuePcc };
-const queueText = scenario === 'empty' ? env('SABRE_EMPTY_QUEUE') : env('SABRE_QUEUE');
+const queueText = scenario === 'messages' ? 'S' : scenario === 'empty' ? env('SABRE_EMPTY_QUEUE') : env('SABRE_QUEUE');
 const queue = queueRef(queueText);
+if (scenario === 'walk' || scenario === 'empty') rejectMessageQueue(queue, scenario === 'empty' ? 'SABRE_EMPTY_QUEUE' : 'SABRE_QUEUE');
 const limit = Number(process.env.SABRE_QUEUE_LIMIT ?? 10);
 if (!Number.isInteger(limit) || limit < 1) {
   console.error('SABRE_QUEUE_LIMIT debe ser un entero ≥ 1');
@@ -68,6 +74,31 @@ const rawNavigation = (action) =>
     ...options,
   });
 
+/** La forma de una respuesta de `QueueAccessRS`, sin texto: nombres de nodos y cuántas líneas. */
+const shapeOf = (r) => {
+  const payload = r?.payload ?? {};
+  const paragraph = payload.Paragraph;
+  const texts = paragraph === undefined ? [] : [paragraph].flat().flatMap((p) => [p?.Text ?? []].flat());
+  return {
+    payload: r?.payloadName,
+    keys: Object.keys(payload),
+    line: payload.Line !== undefined,
+    paragraph: paragraph !== undefined,
+    paragraphKeys: paragraph === undefined ? undefined : Object.keys([paragraph].flat()[0] ?? {}),
+    textLines: texts.length,
+    warnings: r?.warnings?.length,
+  };
+};
+const rawAccess = () =>
+  session[send]({
+    service: 'queueAccess',
+    action: 'QueueAccessLLSRQ',
+    payload: `<QueueAccessRQ Version="2.1.1" xmlns="${NAMESPACE}"><QueueIdentifier Number="S" PseudoCityCode="${queuePcc ?? env('SABRE_PCC')}"/></QueueAccessRQ>`,
+    idempotent: false,
+    operation: 'probe.access S',
+    ...options,
+  });
+
 class CountOnly extends Error {}
 let listed;
 const visited = [];
@@ -80,6 +111,13 @@ try {
     queue: { queue: queueText, count: r.queues.find((q) => sameQueue(q.queue))?.count ?? 0 },
   }));
   if (scenario === 'count') throw new CountOnly();
+  if (scenario === 'messages') {
+    // Solo `I` y `QXI` después del access: nunca `QR`, así que ningún mensaje sale de la cola.
+    await step('probe.access S', rawAccess, shapeOf);
+    await step('probe.I en S', () => rawNavigation('I'), shapeOf);
+    await step('probe.QXI', () => rawNavigation('QXI'), shapeOf);
+    throw new CountOnly();
+  }
   listed = await step('list', () => session.queue.list({ queue, ...pccRequest }, options), (r) => ({ locators: r.locators.map(aliasOf) }));
 
   if (scenario === 'walk') {
@@ -125,6 +163,13 @@ const findings = {
     countInsideKeepsCursor: visited.length >= 2 ? visited[1] === listOrder[1] : undefined,
   }),
   finalState: session.queue.state,
+  ...(scenario === 'messages' && {
+    messageCount: result('count')?.queue?.count,
+    messagesTotal: result('count')?.totals,
+    accessShape: result('probe.access S'),
+    ignoreShape: result('probe.I en S'),
+    exitShape: result('probe.QXI'),
+  }),
 };
 
 writeFixture(`queue.${environment}-${scenario}`, { environment, scenario, queue: typeof queue === 'object' ? { name: 'XXXX' } : queue }, findings);

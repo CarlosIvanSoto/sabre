@@ -24,6 +24,7 @@ export type {
   QueueAccessRequest,
   QueueEndReason,
   QueueItem,
+  QueueMessage,
   QueueNavigationOptions,
   QueueRemoveRequest,
   QueueRemoveTarget,

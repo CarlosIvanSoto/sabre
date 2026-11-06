@@ -404,7 +404,10 @@ es el de la sesión. Una cola (`QueueRef`) tiene tres formas:
 
 Las colas que devuelve `count` se pasan tal cual a las demás operaciones. `'S'` es la **cola de
 mensajes** del PCC: tiene mensajes y no PNR, y Sabre no la lista, así que `list({ queue: 'S' })`
-lanza un `TypeError` sin llamar a Sabre.
+lanza un `TypeError` sin llamar a Sabre. Se recorre a mano: `access({ queue: 'S' })` devuelve el
+primer mensaje (`kind: 'message'`) e `ignore()` el siguiente, sin sacarlo de la cola. `process` y
+`place` dentro de la `S` lanzan un `TypeError` sin llamar a Sabre. `remove()` manda `QR`, pero
+todavía no hay evidencia de qué hace Sabre con el mensaje.
 
 > **Migración desde la 0.4.x**: `count` devolvía la cola `S` como `{ name: 'S' }`, que Sabre
 > rechaza (`INVALID QUEUE NAME FORMAT`). Ahora devuelve `'S'`. Un código como
@@ -424,9 +427,13 @@ lanza un `TypeError` sin llamar a Sabre.
 
 ```ts
 type QueueStep =
-  | { done: false; item: QueueItem; warnings: SabreWarning[] }
+  | { done: false; kind: 'pnr'; item: QueueItem; warnings: SabreWarning[] }
+  | { done: false; kind: 'message'; message: { text: string[] }; warnings: SabreWarning[] } // cola 'S'
   | { done: true; reason: 'end-of-display' | 'empty'; message: string; warnings: SabreWarning[] };
 ```
+
+> **Migración desde la 0.4.x**: un paso que no terminó ahora trae `kind`. Comprueba
+> `step.kind === 'pnr'` antes de leer `step.item`. Solo la cola `S` devuelve `kind: 'message'`.
 
 - **Cada resultado de colas trae `respondedAt`**: el `eb:Timestamp` de Sabre, en ISO 8601 UTC
   (`'2026-11-06T17:34:16Z'`). A diferencia de `countedAt` y `placedAt`, que llegan como los manda
@@ -525,6 +532,9 @@ fake.openSessions; // 0: la sesión se cerró
   `{ locator, paragraph?, placedAt?, placedBy?, primaryPassenger? }`. A un párrafo sin línea de
   firma se le agrega una sintética. `pnrs` agrega PNR que no están en ninguna cola, para
   `place({ locators })`. El fake no tiene AAA: fuera de una cola, `place` necesita `locators`.
+- `queues['S']` es la cola de mensajes: cada elemento es el texto de un mensaje (`string[]`), no
+  un PNR. `access` lo muestra sin `Line`, como Sabre, y `fake.messages()` da los que quedan. Que
+  `remove` saque el mensaje es un supuesto del fake, no se probó con Sabre.
 - Responde como producción: colas vacías, el fin de cola, `place` que mueve el PNR, el PIC
   obligatorio y una sesión vencida con `fake.expireSessions()`. `fake.calls` lista lo que pidió el
   SDK.

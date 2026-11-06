@@ -33,7 +33,7 @@
 // SABRE_INSTRUCTION_CODE: el PIC de cada colocación (11 por defecto, el de todos los ejemplos). Sin
 // PIC, producción rechaza el place con INSTRUCTION NUMBER NOT IN RANGE fuera de una cola y con
 // NEED INSTRUCTION NUMBER dentro (#97).
-import { createRecorder, env, legacyClient, legacyEnvironment, queueRef } from './lib/legacy-recorder.mjs';
+import { createRecorder, env, legacyClient, legacyEnvironment, queueRef, rejectMessageQueue } from './lib/legacy-recorder.mjs';
 
 const mode = process.argv[2] ?? 'run';
 if (mode !== 'run' && mode !== 'cleanup') {
@@ -63,6 +63,8 @@ if (!Number.isInteger(instructionCode)) {
 }
 const testQueue = queueRef(testQueueText);
 const testQueue2 = queueRef(testQueue2Text);
+rejectMessageQueue(testQueue, 'SABRE_TEST_QUEUE');
+rejectMessageQueue(testQueue2, 'SABRE_TEST_QUEUE_2');
 
 // Los PNR designados van como secretos además de con alias: ninguno puede quedar en la fixture.
 const { aliasOf, step, stepSummary, results, options, logger, writeFixture } = createRecorder([...secrets, ...designated]);

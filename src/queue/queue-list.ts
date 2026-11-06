@@ -28,13 +28,18 @@ export interface QueueListRequest {
   primaryPassenger?: boolean;
   /**
    * Hasta 8 filtros, como en `access`, pero Sabre solo acepta `QD` (fecha de colocación en la cola,
-   * p. ej. `{ function: 'QD', criteria: '05NOV' }`) o `AK` en la lista: con otro código responde
+   * p. ej. `{ function: 'QD', criteria: '05NOV' }`) o `AK` (el agente que lo colocó, PCC más firma,
+   * p. ej. `{ function: 'AK', criteria: 'PCC1AAT' }`) en la lista: con otro código responde
    * `VALID SELECTION CODE FOR QUEUE LIST ARE QD OR AK` (producción, #155). El SDK lo rechaza sin red.
    */
   selection?: readonly QueueSelection[];
 }
 
-/** Los únicos códigos de `Selection` que Sabre acepta en la lista (producción, #155). */
+/**
+ * Los únicos códigos de `Selection` que Sabre acepta en la lista (producción, #155): `QD`, la fecha
+ * de colocación en la cola, y `AK`, el agente que colocó el PNR (`AK-<PCC><firma>`, según
+ * wiki/sources/funciones-de-seleccion-de-colas.md). `QD` se probó en `list`; `AK` no.
+ */
 export const LIST_SELECTION_FUNCTIONS: readonly string[] = ['QD', 'AK'];
 
 export type QueueListOptions = RequestOptions;

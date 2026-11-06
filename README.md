@@ -463,7 +463,8 @@ type QueueStep =
 
 - **`list` returns the whole queue in one response**: there is no paging, even with more than 1000
   PNRs (1221 in about 279 KB, in production). `selection` narrows it, but in the list Sabre only
-  accepts `QD` (date placed on the queue, e.g. `{ function: 'QD', criteria: '05NOV' }`) or `AK`.
+  accepts `QD` (date placed on the queue, e.g. `{ function: 'QD', criteria: '05NOV' }`) or `AK`
+  (the agent who placed it, PCC plus sine, e.g. `'PCC1AAT'`; not tested in the list yet).
   Any other code throws a `TypeError` without calling Sabre. The `placedAt` of a list entry is
   when the PNR was placed on the queue, the date `QD` filters on.
 - **`activity`** returns, per queue, the eight counters of the host's `QA` screen: `numMessages`

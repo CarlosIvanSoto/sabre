@@ -10,7 +10,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `selection` in `session.queue.list`, as in `access` (up to 8 filters). In the list Sabre only
-  accepts `QD` (date placed on the queue) or `AK`, and answers any other code with `VALID
+  accepts `QD` (date placed on the queue) or `AK` (the agent who placed it), and answers any other code with `VALID
   SELECTION CODE FOR QUEUE LIST ARE QD OR AK`, so the SDK throws a `TypeError` without calling
   Sabre. `list` needs no paging: production returned a queue of 1221 PNRs in one response (#162).
 

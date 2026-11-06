@@ -467,7 +467,8 @@ type QueueStep =
 
 - **`list` devuelve la cola entera en una respuesta**: no pagina, ni con más de 1000 PNR (1221 en
   unos 279 KB, en producción). `selection` la acota, pero en la lista Sabre solo acepta `QD`
-  (fecha de colocación en la cola, p. ej. `{ function: 'QD', criteria: '05NOV' }`) o `AK`. Otro
+  (fecha de colocación en la cola, p. ej. `{ function: 'QD', criteria: '05NOV' }`) o `AK` (el
+  agente que lo colocó, PCC más firma, p. ej. `'PCC1AAT'`; todavía no se probó en la lista). Otro
   código lanza `TypeError` sin llamar a Sabre. El `placedAt` de una entrada de la lista es cuándo
   se colocó el PNR en la cola, la fecha por la que filtra `QD`.
 - **`activity`** devuelve, por cola, los ocho contadores de la pantalla `QA` del host:

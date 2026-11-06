@@ -7,6 +7,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Full `Booking` types for Get Booking and Create Booking, generated from the v1.33 spec: 128
+  types with the `Booking` prefix (`BookingFlight`, `BookingFare`, `BookingTraveler`…), all
+  exported. `booking.flights[0].flightStatusCode` now reads without a cast. Enums stay open
+  (`| (string & {})`), and `Booking` keeps an index signature for fields Sabre adds later. The
+  TSDoc notes what Q-091 found: `fares[].hasValidPricing: false` means the purchase deadline
+  (`TAW`) has passed, the `TAW` comes in `fares[].creationDetails`, and `updatedDeparture*` is an
+  operational delay, not a schedule change (#158).
+
 ## [0.4.1] - 2026-11-04
 
 ### Changed

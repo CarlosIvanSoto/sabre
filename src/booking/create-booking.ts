@@ -13,6 +13,7 @@ import {
   toBusinessError,
   toWarning,
 } from './booking-errors.js';
+import type { Booking } from './booking-types.js';
 import type { CreateBookingRequest } from './create-booking-request.js';
 import { pricedSeatsOf } from './flight-details.js';
 
@@ -30,18 +31,8 @@ export interface CreateBookingOptions {
 /** Elemento de `errors[]` de Create Booking. */
 export type CreateBookingResponseError = BookingResponseError;
 
-/**
- * `Booking` del spec (mismo modelo que Get Booking). Se tipa el primer nivel; el detalle de
- * `flights`, `travelers`, `fares`, etc. queda sin tipar en el Tier 1.
- */
-export interface Booking {
-  bookingId?: string;
-  startDate?: string;
-  endDate?: string;
-  isCancelable?: boolean;
-  isTicketed?: boolean;
-  [field: string]: unknown;
-}
+/** `Booking` del spec v1.33, tipado completo (#158): ver `booking-types.ts`. */
+export type { Booking };
 
 /** `CreateBookingResponse` tal cual llega de Sabre. */
 export interface RawCreateBookingResponse {

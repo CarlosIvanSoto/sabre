@@ -6,6 +6,7 @@ import { SabreGatewayError, SabreLegacy } from '../src/index.js';
 import { createQueueFake } from '../src/testing/index.js';
 import messages from './fixtures/queue.sandbox-messages.json';
 import countAfter from './fixtures/queue.sandbox-count.json';
+import production from './fixtures/queue.production-messages.json';
 import { mockFetch } from './helpers.js';
 import { legacyClient, queueRS, rejection, soap, success, xml } from './soap-helpers.js';
 
@@ -67,6 +68,34 @@ describe('cola S en CERT: access, ignore y el fin de cola', () => {
   it('fuera de la S, un Paragraph sin Line no se lee como mensaje', async () => {
     const { session } = await open(one(messages, 'probe.access S'));
     expect(await rejection(session.queue.access({ queue: 12 }))).toBeInstanceOf(SabreGatewayError);
+  });
+});
+
+describe('cola S en producción (2026-11-06): varios mensajes', () => {
+  async function openProduction(...responses: Response[]) {
+    const fetch = mockFetch(one(production, 'openSession'), ...responses);
+    const { client } = legacyClient(fetch);
+    return client.openSession();
+  }
+
+  it('access, ignore y exit: dos mensajes de 11 líneas y QXI con Paragraph y Complete', async () => {
+    const session = await openProduction(one(production, 'probe.access S'), one(production, 'probe.I'), one(production, 'probe.QXI'));
+    const first = await session.queue.access({ queue: 'S' });
+    const second = await session.queue.ignore();
+
+    for (const step of [first, second]) {
+      if (step.done || step.kind !== 'message') throw new Error('se esperaba un mensaje');
+      expect(step.message.text).toHaveLength(11);
+    }
+    await session.queue.exit();
+    expect(session.queue.state).toBe('outside');
+  });
+
+  it('count: la S cuenta los mismos 6 que Totals MESSAGES', async () => {
+    const session = await openProduction(one(production, 'queue.count'));
+    const { queues, totals } = await session.queue.count();
+    expect(queues).toEqual([{ queue: 'S', count: 6 }]);
+    expect(totals).toEqual({ messages: 6, specials: 0, pnrs: 0 });
   });
 });
 

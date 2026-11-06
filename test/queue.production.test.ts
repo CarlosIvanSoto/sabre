@@ -179,7 +179,7 @@ describe('place y remove con colas de prueba en producción (51 y 52, 2 PNR)', (
       return { 51: queues.find((q) => q.queue === 51)?.count ?? 0, 52: queues.find((q) => q.queue === 52)?.count ?? 0 };
     };
     const initial = await count();
-    const placed = await session.queue.place({ to: [{ queue: 51, instructionCode: 11 }], locators: ['AAAAAA', 'AAAAAB'] });
+    const placed = await session.queue.place({ to: [{ queue: 51, instructionCode: 11 }], locators: ['AAAAAE', 'AAAAAF'] });
     const afterPlace = await count();
     const first = await session.queue.access({ queue: 51 });
     const next = await session.queue.place({ to: [{ queue: 52, instructionCode: 11 }] });
@@ -197,16 +197,16 @@ describe('place y remove con colas de prueba en producción (51 y 52, 2 PNR)', (
     const { initial, placed, afterPlace } = await replayPlace();
     expect(initial).toEqual({ 51: 0, 52: 0 });
     expect(placed.placements.map((p) => [p.queue, p.locator])).toEqual([
-      [51, 'AAAAAA'],
-      [51, 'AAAAAB'],
+      [51, 'AAAAAE'],
+      [51, 'AAAAAF'],
     ]);
     expect(afterPlace).toEqual({ 51: 2, 52: 0 });
   });
 
   it('place dentro de la cola devuelve el siguiente PNR y saca el actual de la cola de origen', async () => {
     const { first, next, removed, afterPlaceInside } = await replayPlace();
-    expect(first).toMatchObject({ done: false, item: { locator: 'AAAAAA' } });
-    expect(next).toMatchObject({ done: false, item: { locator: 'AAAAAB' } });
+    expect(first).toMatchObject({ done: false, item: { locator: 'AAAAAE' } });
+    expect(next).toMatchObject({ done: false, item: { locator: 'AAAAAF' } });
     expect(removed).toMatchObject({ done: true, reason: 'end-of-display' });
     // El primero ya no está en la 51: quedó solo en la 52.
     expect(afterPlaceInside).toEqual({ 51: 0, 52: 1 });
@@ -223,7 +223,7 @@ describe('place y remove con colas de prueba en producción (51 y 52, 2 PNR)', (
   it('remove vacía las colas de prueba', async () => {
     const { empty51, in52, cleared52, final, session } = await replayPlace();
     expect(empty51).toMatchObject({ done: true, reason: 'empty' });
-    expect(in52).toMatchObject({ done: false, item: { locator: 'AAAAAA' } });
+    expect(in52).toMatchObject({ done: false, item: { locator: 'AAAAAE' } });
     expect(cleared52).toMatchObject({ done: true, reason: 'end-of-display' });
     expect(final).toEqual({ 51: 0, 52: 0 });
     expect(session.queue.state).toBe('outside');

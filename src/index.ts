@@ -206,6 +206,7 @@ export type {
   SabreEnvironment,
 } from './config.js';
 export type { RetryOptions } from './http/retry.js';
+export type { SabreRawRequest, SabreRawRequestCallback } from './http/raw-request.js';
 export type { SabreRawResponse, SabreRawResponseCallback } from './http/raw-response.js';
 export * from './errors/index.js';
 export * from './logging/index.js';

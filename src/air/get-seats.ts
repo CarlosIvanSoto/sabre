@@ -4,6 +4,7 @@ import { isObject, nonEmpty, toBusinessError, toWarning } from '../booking/booki
 import { type SabreBusinessError, SabreError, type SabreWarning } from '../errors/index.js';
 import type { RestTransport } from '../http/rest-transport.js';
 import type { RequestOptions } from './bargain-finder-max.js';
+import { rawHooks } from '../http/raw-request.js';
 
 /** `service` de errores y logs; distinto por endpoint para que no quede oculto (ADR, opción C). */
 export const GET_SEATS_BY_PAYLOAD_SERVICE = 'getSeatsByPayload';
@@ -422,9 +423,7 @@ async function send(
     classify: (raw) => classifyGetSeats(raw, service),
     ...(options.retry === undefined ? {} : { retry: options.retry }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ...(options.onRawResponse === undefined
-      ? {}
-      : { operation: `air.${service}`, onRawResponse: options.onRawResponse }),
+    ...rawHooks(options, `air.${service}`),
   });
   return {
     response: body.response!,

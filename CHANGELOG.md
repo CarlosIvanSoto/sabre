@@ -9,6 +9,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `onRawRequest`, next to `onRawResponse`, in every REST and `SabreLegacy` operation: what the SDK
+  sent over the network (`operation`, `protocol`, `method`, full `url`, `headers` without
+  `Authorization`, `body` and `attempts`). In SOAP the `BinarySecurityToken` of the envelope is
+  `[REDACTED]`. It is called once, with the last attempt sent, before `onRawResponse`, and also
+  when no attempt got an HTTP response. It is not called for the OAuth token, `openSession` or
+  `close`. A callback that throws logs `sabre.request.rawRequestHookFailed` and the operation goes
+  on. The body carries passenger data. New types `SabreRawRequest` and `SabreRawRequestCallback`
+  (#160).
+
 - `selection` in `session.queue.list`, as in `access` (up to 8 filters). In the list Sabre only
   accepts `QD` (date placed on the queue) or `AK` (the agent who placed it), and answers any other code with `VALID
   SELECTION CODE FOR QUEUE LIST ARE QD OR AK`, so the SDK throws a `TypeError` without calling

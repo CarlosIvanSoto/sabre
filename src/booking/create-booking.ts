@@ -16,6 +16,7 @@ import {
 import type { Booking } from './booking-types.js';
 import type { CreateBookingRequest } from './create-booking-request.js';
 import { pricedSeatsOf } from './flight-details.js';
+import { rawHooks, type SabreRawRequestCallback } from '../http/raw-request.js';
 
 export const CREATE_BOOKING_SERVICE = 'createBooking';
 const PATH = '/v1/trip/orders/createBooking';
@@ -26,6 +27,8 @@ export interface CreateBookingOptions {
   signal?: AbortSignal;
   /** Respuesta cruda del último intento HTTP. El body trae PII: ver `SabreRawResponse`. */
   onRawResponse?: SabreRawResponseCallback;
+  /** Request crudo del último intento que se mandó, sin `Authorization`. Trae PII: ver `SabreRawRequest`. */
+  onRawRequest?: SabreRawRequestCallback;
 }
 
 /** Elemento de `errors[]` de Create Booking. */
@@ -83,9 +86,7 @@ export async function createBooking(
     body: request,
     classify: classifyCreateBooking,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ...(options.onRawResponse === undefined
-      ? {}
-      : { operation: 'booking.create', onRawResponse: options.onRawResponse }),
+    ...rawHooks(options, 'booking.create'),
   });
   return toCreateBookingResponse(body);
 }

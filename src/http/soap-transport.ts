@@ -6,6 +6,7 @@ import { definedOnly, type ResolvedConfig } from '../config.js';
 import { SabreBusinessError, SabreGatewayError, SabreWarning } from '../errors/index.js';
 import { EventLogger } from '../logging/logger.js';
 import { REDACTED, redactSoapEnvelope } from '../logging/redact.js';
+import { type RawRequestCapture, rawRequestHeaders, type SabreRawRequestCallback } from './raw-request.js';
 import type { SabreRawResponseCallback } from './raw-response.js';
 import { type RetryOptions, retryDelay, sleep, validateRetryOptions } from './retry.js';
 
@@ -82,9 +83,14 @@ export interface SoapRequest {
   /** `true` para devolver el `BinarySecurityToken` de la respuesta (solo `SessionCreateRQ`). */
   readSecurityToken?: boolean;
   signal?: AbortSignal;
-  /** Método público sin `legacy.`, p. ej. `'queue.access'`. Lo recibe `onRawResponse`. */
+  /** Método público sin `legacy.`, p. ej. `'queue.access'`. Lo reciben `onRawResponse` y `onRawRequest`. */
   operation?: string;
   onRawResponse?: SabreRawResponseCallback;
+  /**
+   * No se llama con `usernameToken` (`SessionCreateRQ`): el sobre lleva `wsse:Password` y el
+   * `ClientSecret`, y la regla de auth lo deja fuera (ADR-029).
+   */
+  onRawRequest?: SabreRawRequestCallback;
 }
 
 export interface SoapResponse {
@@ -116,11 +122,17 @@ export interface SoapTransportOptions {
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
-/** Último intento con respuesta HTTP, para entregarlo una sola vez a `onRawResponse`. */
+/**
+ * Último intento con respuesta HTTP (`last`), para entregarlo una sola vez a `onRawResponse`, y
+ * último sobre mandado (`request`), para `onRawRequest`.
+ */
 interface RawCapture {
   attempts: number;
   last?: { status: number; headers: Headers; body: string };
+  request?: RawRequestCapture;
 }
+
+const SOAP_HEADERS = { 'Content-Type': 'text/xml; charset=utf-8', Accept: 'text/xml' } as const;
 
 type XmlNode = Record<string, unknown>;
 
@@ -168,7 +180,9 @@ export class SoapTransport {
     try {
       return await this.#attempts(request, capture);
     } finally {
-      // Una sola vez por operación, con el último intento que tuvo respuesta HTTP.
+      // Una sola vez por operación: primero el último sobre que se mandó, aunque no haya tenido
+      // respuesta, y después el último intento que tuvo respuesta HTTP.
+      if (capture.request !== undefined) this.#deliverRawRequest(request, capture.request, capture.attempts);
       if (capture.last !== undefined) this.#deliverRaw(request, { ...capture.last, attempts: capture.attempts });
     }
   }
@@ -218,10 +232,19 @@ export class SoapTransport {
 
     let response: Response;
     capture.attempts++;
+    if (wantsRawRequest(request)) {
+      // eb:MessageId y eb:Timestamp se generan en cada intento: se guarda el último sobre.
+      capture.request = {
+        method: 'POST',
+        url: this.#config.soapBaseUrl,
+        headers: rawRequestHeaders(SOAP_HEADERS),
+        body: redactSoapEnvelope(scrubToken(envelope, request.security)),
+      };
+    }
     try {
       response = await this.#config.fetch(this.#config.soapBaseUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/xml; charset=utf-8', Accept: 'text/xml' },
+        headers: SOAP_HEADERS,
         body: envelope,
         ...(request.signal === undefined ? {} : { signal: request.signal }),
       });
@@ -365,6 +388,20 @@ export class SoapTransport {
   }
 
   /** Un callback que lanza no rompe la operación (mismo criterio que REST). */
+  #deliverRawRequest(request: SoapRequest, raw: RawRequestCapture, attempts: number): void {
+    const operation = request.operation ?? request.service;
+    try {
+      request.onRawRequest?.({ operation, protocol: 'soap', ...raw, attempts });
+    } catch (error) {
+      this.#log.emit('warn', 'sabre.request.rawRequestHookFailed', {
+        service: request.service,
+        operation,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
+  }
+
+  /** Un callback que lanza no rompe la operación (mismo criterio que REST). */
   #deliverRaw(request: SoapRequest, raw: Required<RawCapture>['last'] & { attempts: number }): void {
     if (request.onRawResponse === undefined) return;
     const operation = request.operation ?? request.service;
@@ -436,6 +473,11 @@ function securityHeader(security: SoapSecurity): string {
  * `faultstring`), en texto plano o escapado. El `BinarySecurityToken` del header lo tapa
  * después `redactSoapEnvelope`.
  */
+/** `onRawRequest` solo con token de sesión: el sobre de `SessionCreateRQ` es la credencial. */
+function wantsRawRequest(request: SoapRequest): boolean {
+  return request.onRawRequest !== undefined && 'binarySecurityToken' in request.security;
+}
+
 function scrubToken(text: string, security: SoapSecurity): string {
   if (!('binarySecurityToken' in security) || security.binarySecurityToken === '') return text;
   const token = security.binarySecurityToken;

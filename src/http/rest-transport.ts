@@ -3,6 +3,7 @@
 import { definedOnly, type ResolvedConfig } from '../config.js';
 import { SabreError, SabreGatewayError } from '../errors/index.js';
 import { EventLogger } from '../logging/logger.js';
+import { type RawRequestCapture, rawRequestHeaders, type SabreRawRequestCallback } from './raw-request.js';
 import type { SabreRawResponse, SabreRawResponseCallback } from './raw-response.js';
 import { type RetryOptions, retryDelay, shouldRetry, sleep, validateRetryOptions } from './retry.js';
 
@@ -38,15 +39,21 @@ export interface RestRequest {
   classify?: ResponseClassifier;
   retry?: Partial<RetryOptions>;
   signal?: AbortSignal;
-  /** Método público sin `sabre.`, p. ej. `'booking.get'`. Lo recibe `onRawResponse`. */
+  /** Método público sin `sabre.`, p. ej. `'booking.get'`. Lo reciben `onRawResponse` y `onRawRequest`. */
   operation?: string;
   onRawResponse?: SabreRawResponseCallback;
+  /** No se llama si `auth` es `false` (la request de token lleva la credencial). */
+  onRawRequest?: SabreRawRequestCallback;
 }
 
-/** Último intento con respuesta HTTP. Solo se lleva si hay `onRawResponse`. */
+/**
+ * Último intento con respuesta HTTP (`last`) y último request mandado (`request`). Solo se lleva
+ * si hay `onRawResponse` u `onRawRequest`.
+ */
 interface RawCapture {
   attempts: number;
   last?: { status: number; headers: Headers; body: string };
+  request?: RawRequestCapture;
 }
 
 /** Fuente del header `Authorization` de los servicios (la implementa `AuthManager`). */
@@ -92,11 +99,15 @@ export class RestTransport {
 
   async request<T>(request: RestRequest): Promise<T> {
     if (request.retry !== undefined) validateRetryOptions(request.retry, 'retry');
-    const capture: RawCapture | undefined = request.onRawResponse === undefined ? undefined : { attempts: 0 };
+    const wantsRequest = request.onRawRequest !== undefined && request.auth !== false;
+    const capture: RawCapture | undefined =
+      request.onRawResponse === undefined && !wantsRequest ? undefined : { attempts: 0 };
     try {
       return await this.#attempts<T>(request, capture);
     } finally {
-      // Antes de devolver o de lanzar, con el último intento que tuvo respuesta HTTP.
+      // Antes de devolver o de lanzar: primero el último request que se mandó, aunque no haya
+      // tenido respuesta, y después el último intento que tuvo respuesta HTTP.
+      if (wantsRequest && capture?.request !== undefined) this.#deliverRawRequest(request, capture.request, capture.attempts);
       if (capture?.last !== undefined) this.#deliverRaw(request, { ...capture.last, attempts: capture.attempts });
     }
   }
@@ -157,6 +168,20 @@ export class RestTransport {
     }
   }
 
+  /** Igual que `#deliverRaw`: un callback que lanza no rompe la operación. */
+  #deliverRawRequest(request: RestRequest, raw: RawRequestCapture, attempts: number): void {
+    const operation = request.operation ?? request.service;
+    try {
+      request.onRawRequest?.({ operation, protocol: 'rest', ...raw, attempts });
+    } catch (error) {
+      this.#log.emit('warn', 'sabre.request.rawRequestHookFailed', {
+        service: request.service,
+        operation,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
+  }
+
   async #authorizationFor(request: RestRequest): Promise<string | undefined> {
     if (request.auth === false || this.#authorization === undefined) return undefined;
     return this.#authorization.get();
@@ -181,12 +206,18 @@ export class RestTransport {
     const startedAt = Date.now();
 
     let response: Response;
-    if (capture !== undefined) capture.attempts++;
+    const body = request.body === undefined ? undefined : form ? String(request.body) : JSON.stringify(request.body);
+    if (capture !== undefined) {
+      capture.attempts++;
+      if (request.onRawRequest !== undefined && request.auth !== false) {
+        capture.request = { method: request.method, url, headers: rawRequestHeaders(headers), body };
+      }
+    }
     try {
       response = await this.#config.fetch(url, {
         method: request.method,
         headers,
-        ...(request.body === undefined ? {} : { body: form ? String(request.body) : JSON.stringify(request.body) }),
+        ...(body === undefined ? {} : { body }),
         ...(request.signal === undefined ? {} : { signal: request.signal }),
       });
     } catch (cause) {
@@ -202,18 +233,18 @@ export class RestTransport {
 
     const text = await response.text();
     if (capture !== undefined) capture.last = { status: response.status, headers: response.headers, body: text };
-    const body = parseBody(text);
+    const parsed = parseBody(text);
     const endContext = { ...logContext, status: response.status, durationMs: Date.now() - startedAt };
 
     // Paso 1: HTTP status de gateway.
     if (!response.ok) {
-      const error = gatewayError(request.service, response.status, body);
+      const error = gatewayError(request.service, response.status, parsed);
       this.#log.emit('error', 'sabre.request.end', { ...endContext, error });
       throw error;
     }
 
     // Pasos 2–3: catálogo propio del servicio.
-    const serviceError = request.classify?.(body, response);
+    const serviceError = request.classify?.(parsed, response);
     if (serviceError !== undefined) {
       this.#log.emit('warn', 'sabre.request.end', { ...endContext, error: serviceError });
       throw serviceError;
@@ -221,7 +252,7 @@ export class RestTransport {
 
     // Paso 4: data.
     this.#log.emit('info', 'sabre.request.end', endContext);
-    return body as T;
+    return parsed as T;
   }
 
   #url(request: RestRequest): string {

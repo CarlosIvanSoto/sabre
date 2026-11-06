@@ -33,9 +33,11 @@ export type QueueFakeItem = QueueFakePnr | readonly string[];
 
 export interface QueueFakeOptions {
   /**
-   * El contenido de cada cola, en orden. La clave es el número de cola (`'12'`, de 0 a 511) o el
-   * nombre de una cola alfabética (`'S'`). El fake no distingue PCC: las colas son las mismas para
-   * cualquier `pcc`.
+   * El contenido de cada cola, en orden. La clave es el número de cola (`'12'`, de 0 a 511), una
+   * cola alfabética (`'S'`, una o dos letras mayúsculas) o una cola con nombre (`'name:HOTELS'`, o
+   * `'HOTELS'` sin el prefijo). La alfabética y la con nombre viajan por atributos distintos
+   * (`Number` y `Name`, ADR-028). El fake no distingue PCC: las colas son las mismas para cualquier
+   * `pcc`.
    */
   queues?: Readonly<Record<string, readonly QueueFakeItem[]>>;
   /** PNR que no están en ninguna cola, para colocarlos con `place({ locators })`. */
@@ -150,9 +152,38 @@ function escape(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** Clave interna de una cola: `'12'` o `'S'`. */
+/**
+ * Clave interna de una cola (ADR-028): `'12'` (numérica), `'S'` (alfabética) o `'name:HOTELS'` (con
+ * nombre). Las alfabéticas y las con nombre viajan por atributos distintos, así que no comparten clave.
+ */
 function queueKey(queue: QueueRef): string {
-  return typeof queue === 'number' ? String(queue) : queue.name;
+  if (typeof queue === 'number') return String(queue);
+  if (typeof queue === 'string') return queue;
+  return `${NAME_PREFIX}${queue.name}`;
+}
+
+const NAME_PREFIX = 'name:';
+const ALPHA_KEY = /^[A-Z]{1,2}$/;
+
+/**
+ * Clave de `QueueFakeOptions.queues`: un número (`'12'`), una cola alfabética (`'S'`), o una con
+ * nombre, como `'name:HOTELS'` o, sin el prefijo, `'HOTELS'`.
+ */
+function optionKey(key: string): string {
+  if (key.startsWith(NAME_PREFIX) || /^\d+$/.test(key) || ALPHA_KEY.test(key)) return key;
+  return `${NAME_PREFIX}${key}`;
+}
+
+/** La `QueueRef` de una clave interna. */
+function refOfKey(key: string): QueueRef {
+  if (key.startsWith(NAME_PREFIX)) return { name: key.slice(NAME_PREFIX.length) };
+  return /^\d+$/.test(key) ? Number(key) : key;
+}
+
+/** Atributo de `QueueIdentifier` de una clave, como lo manda Sabre en la respuesta. */
+function keyAttribute(key: string, pad = false): string {
+  if (key.startsWith(NAME_PREFIX)) return `Name="${escape(key.slice(NAME_PREFIX.length))}"`;
+  return `Number="${escape(pad && /^\d+$/.test(key) ? key.padStart(4, '0') : key)}"`;
 }
 
 function validateKey(key: string): void {
@@ -161,7 +192,9 @@ function validateKey(key: string): void {
     if (number < MIN_QUEUE_NUMBER || number > MAX_QUEUE_NUMBER) fail(`la cola ${key} está fuera de 0–511`);
     return;
   }
-  if (key.trim() === '') fail('el nombre de una cola no puede estar vacío');
+  if (key.startsWith(NAME_PREFIX) ? key.slice(NAME_PREFIX.length).trim() === '' : key.trim() === '') {
+    fail('el nombre de una cola no puede estar vacío');
+  }
 }
 
 /** `MM-DDTHH:mm`, como el `DateTime` de `QueueCountRS` y `QueuePlaceRS`. */
@@ -229,13 +262,15 @@ function textLines(lines: readonly string[]): string {
   return lines.map((line) => `<Text>${escape(line)}</Text>`).join('');
 }
 
-function queueIdentifier(queue: string): QueueRef {
-  return toQueueRef(queue) ?? { name: queue };
-}
-
-/** Lee una `QueueIdentifier` del request: `Number` o `Name`. */
+/** Lee la clave de una `QueueIdentifier` del request: `Number` (numérica o alfabética) o `Name`. */
 function requestedKey(identifier: XmlNode | undefined): string | undefined {
-  return attr(identifier, 'Number') ?? attr(identifier, 'Name');
+  const number = attr(identifier, 'Number');
+  if (number !== undefined) {
+    const ref = toQueueRef(number);
+    return ref === undefined ? undefined : queueKey(ref);
+  }
+  const name = attr(identifier, 'Name');
+  return name === undefined ? undefined : `${NAME_PREFIX}${name}`;
 }
 
 export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
@@ -261,7 +296,8 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     return pnr;
   };
 
-  for (const [key, items] of Object.entries(options.queues ?? {})) {
+  for (const [optionName, items] of Object.entries(options.queues ?? {})) {
+    const key = optionKey(optionName);
     validateKey(key);
     if (!Array.isArray(items)) fail(`queues['${key}'] debe ser una lista`);
     queues.set(
@@ -347,9 +383,10 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
       const open = session.inside?.key === key && entries[session.inside.index] !== undefined ? 1 : 0;
       const total = entries.length - open;
       if (total <= 0) continue;
-      identifiers.push(`<QueueIdentifier Count="${total}" Number="${escape(key)}"/>`);
-      if (/^\d+$/.test(key)) pnrsTotal += total;
-      else messages += total;
+      identifiers.push(`<QueueIdentifier Count="${total}" ${keyAttribute(key)}/>`);
+      // Las alfabéticas (la S) son de mensajes; las numéricas y las con nombre, de PNR.
+      if (ALPHA_KEY.test(key)) messages += total;
+      else pnrsTotal += total;
     }
     return `<QueueCountRS xmlns="${SWS_NAMESPACE}" xmlns:stl="${STL_NAMESPACE}" Version="2.2.1">${results('Complete', success)}<QueueInfo DateTime="${shortDate(now())}" PseudoCityCode="${escape(pcc)}">${identifiers.join('')}</QueueInfo><Totals Count="${messages}" Type="MESSAGES"/><Totals Count="0" Type="SPECIALS"/><Totals Count="${pnrsTotal}" Type="PNRS"/></QueueCountRS>`;
   };
@@ -362,7 +399,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     const key = requestedKey(identifier);
     if (key === undefined) return accessError('sabre-client/testing: QueueIdentifier sin Number ni Name');
     const isList = node(identifier?.List) !== undefined;
-    calls.push({ command: isList ? 'list' : 'access', queue: queueIdentifier(key) });
+    calls.push({ command: isList ? 'list' : 'access', queue: refOfKey(key) });
 
     if (nodes(rq.Selection).length > 0) return accessError('sabre-client/testing: selection no está simulado');
     const entries = queue(key);
@@ -458,7 +495,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     for (const locator of locators) {
       for (const target of targets) {
         add(locator, target);
-        const identifier = /^\d+$/.test(target.key) ? `Number="${target.key.padStart(4, '0')}"` : `Name="${escape(target.key)}"`;
+        const identifier = keyAttribute(target.key, true);
         const pcc = target.pcc === undefined ? '' : ` PseudoCityCode="${escape(target.pcc)}"`;
         placements.push(`<QueueInfo DateTime="${shortDate(at)}"><QueueIdentifier ${identifier}${pcc}/><UniqueID ID="${escape(locator)}"/></QueueInfo>`);
       }

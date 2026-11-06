@@ -58,7 +58,7 @@ import {
   queuePlaceRequest,
   type ResolvedPlaceTarget,
 } from './queue-place.js';
-import { type QueueRef, validateQueueRef } from './queue-ref.js';
+import { isMessageQueue, type QueueRef, validateQueueRef } from './queue-ref.js';
 
 /**
  * Dónde está la sesión respecto de las colas: `'outside'`, `'inside'` (hay un PNR de una cola en
@@ -150,6 +150,8 @@ export class QueueManagement {
   async list(request: QueueListRequest, options: QueueListOptions = {}): Promise<QueueListResponse> {
     if (typeof request !== 'object' || request === null) fail('queue.list recibe { queue, pcc?, primaryPassenger? }');
     validateQueueRef(request.queue, 'queue');
+    // Sabre no lista la cola de mensajes de ninguna forma: INVALID ENTRY con Number="S" (ADR-028).
+    if (isMessageQueue(request.queue)) fail("la cola 'S' es la de mensajes del PCC: no tiene PNR y Sabre no la lista");
     const pcc = this.#pcc(request.pcc, 'pcc');
     const { primaryPassenger = false } = request;
     if (typeof primaryPassenger !== 'boolean') fail('primaryPassenger debe ser un boolean');

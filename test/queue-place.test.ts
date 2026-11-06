@@ -91,11 +91,11 @@ describe('queue.place: request', () => {
   it('con locators, fuera de una cola, manda los UniqueID después de las colas', async () => {
     const { fetch, session } = await openWith(ok(DOC_SAMPLE));
     await session.queue.place({
-      to: [{ queue: 400, pcc: 'IPC1', instructionCode: 11 }, { queue: { name: 'S' }, instructionCode: 7 }],
+      to: [{ queue: 400, pcc: 'IPC1', instructionCode: 11 }, { queue: { name: 'HOTELS' }, instructionCode: 7 }],
       locators: ['ABC123', 'DEF456'],
     });
     expect(body(fetch, 1)).toContain(
-      '<QueueInfo><QueueIdentifier Number="400" PrefatoryInstructionCode="11" PseudoCityCode="IPC1"/><QueueIdentifier Name="S" PrefatoryInstructionCode="7" PseudoCityCode="H8GI"/><UniqueID ID="ABC123"/><UniqueID ID="DEF456"/></QueueInfo>',
+      '<QueueInfo><QueueIdentifier Number="400" PrefatoryInstructionCode="11" PseudoCityCode="IPC1"/><QueueIdentifier Name="HOTELS" PrefatoryInstructionCode="7" PseudoCityCode="H8GI"/><UniqueID ID="ABC123"/><UniqueID ID="DEF456"/></QueueInfo>',
     );
   });
 
@@ -120,7 +120,7 @@ describe('queue.place: request', () => {
     ['to vacío', { to: [] }, 'sabre-client: to debe ser una lista de 1 a 10 colas'],
     ['11 destinos', { to: Array.from({ length: 11 }, () => ({ queue: 1 })) }, 'sabre-client: to debe ser una lista de 1 a 10 colas'],
     ['un destino que no es objeto', { to: [5] }, 'sabre-client: to[0] debe ser { queue, pcc?, instructionCode }'],
-    ['una cola inválida', { to: [{ queue: 600 }] }, 'sabre-client: to[0].queue debe ser un número de cola entero de 0 a 511, o { name }'],
+    ['una cola inválida', { to: [{ queue: 600 }] }, 'sabre-client: to[0].queue debe ser un número de cola entero de 0 a 511, una cola alfabética (\'S\') o { name }'],
     ['un pcc inválido', { to: [{ queue: 1, pcc: 'A' }] }, 'sabre-client: to[0].pcc debe tener 3 o 4 caracteres alfanuméricos'],
     ['un PIC de 192', { to: [{ queue: 1, instructionCode: 192 }] }, 'sabre-client: to[0].instructionCode debe ser un entero de 0 a 191 o de 200 a 254'],
     ['un PIC de 255', { to: [{ queue: 1, instructionCode: 255 }] }, 'sabre-client: to[0].instructionCode debe ser un entero de 0 a 191 o de 200 a 254'],

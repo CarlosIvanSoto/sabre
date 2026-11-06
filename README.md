@@ -390,8 +390,23 @@ const screen = await legacy.withSession((session) => session.command('W/PT¥*', 
 ### Queues
 
 The queue operations live in `session.queue`. `pcc` is optional in every call and defaults to the
-session's PCC. A queue is a number from 0 to 511 or `{ name }` for alphabetic queues
-(`QueueRef`). The queues returned by `count` can be passed straight to the other operations.
+session's PCC. A queue (`QueueRef`) comes in three forms:
+
+| Queue | `QueueRef` | Sent as |
+| - | - | - |
+| Numeric, 0 to 511 | `400` | `Number="400"` |
+| Alphabetic, one or two uppercase letters | `'S'` | `Number="S"` |
+| Named (QN and QNB tables) | `{ name: 'HOTELS' }` | `Name="HOTELS"` |
+
+The queues returned by `count` can be passed straight to the other operations. `'S'` is the PCC's
+**message queue**: it holds messages, not PNRs, and Sabre does not list it, so `list({ queue: 'S' })`
+throws a `TypeError` without calling Sabre.
+
+> **Migrating from 0.4.x**: `count` used to return the `S` queue as `{ name: 'S' }`, which Sabre
+> rejects (`INVALID QUEUE NAME FORMAT`). It now returns `'S'`. Code that does
+> `typeof q === 'number' ? … : q.name` no longer compiles, because `q` can be a `string`. A
+> `{ name }` of one or two uppercase letters now throws a `TypeError` that tells you to pass the
+> letter instead, and `'12'` or `'s'` throw too: each queue has a single form.
 
 | Method | Sabre service | Returns |
 | - | - | - |

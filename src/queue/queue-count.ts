@@ -91,8 +91,11 @@ export function parseQueueCountResponse(response: SoapResponse): QueueCountRespo
   for (const info of asArray(response.payload.QueueInfo)) {
     countedAt ??= nonEmpty(attribute(info, 'DateTime'));
     for (const identifier of asArray((info as XmlNode).QueueIdentifier)) {
+      // `Number` trae las numéricas y las alfabéticas ("400", "S"); `Name`, las colas con nombre
+      // (ADR-028). Las respuestas reales solo traen `Number`, pero se lee igual que en place.
       const number = attribute(identifier, 'Number');
-      const queue = toQueueRef(number);
+      const name = nonEmpty(attribute(identifier, 'Name'));
+      const queue: QueueRef | undefined = number === undefined && name !== undefined ? { name } : toQueueRef(number);
       const count = parseHostCount(attribute(identifier, 'Count'));
       if (queue === undefined || count === undefined) {
         throw malformed(`QueueIdentifier con Number="${number ?? ''}" y Count="${attribute(identifier, 'Count') ?? ''}"`, response);

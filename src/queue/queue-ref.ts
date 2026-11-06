@@ -4,44 +4,79 @@
 import { xmlEscape } from '../http/soap-transport.js';
 
 /**
- * Una cola: su número, de 0 a 511, o su nombre (colas alfabéticas de las tablas QN y QNB, p. ej.
- * `{ name: 'S' }`). Lo que devuelve `queue.count` se pasa tal cual a las demás operaciones.
+ * Una cola (ADR-028). Hay tres clases, y viajan por dos atributos distintos de `QueueIdentifier`:
+ * - **numérica**, de 0 a 511: `400` → `Number="400"`;
+ * - **alfabética**, una o dos letras mayúsculas: `'S'` → `Number="S"`. La `S` es la cola de
+ *   **mensajes** del PCC (cuenta lo mismo que `Totals Type="MESSAGES"`): no tiene PNR y no se puede
+ *   listar;
+ * - **con nombre** (tablas QN y QNB): `{ name: 'HOTELS' }` → `Name="HOTELS"`.
  *
- * Las colas 0–49 son del sistema: el SDK no las restringe.
+ * Lo que devuelve `queue.count` se pasa tal cual a las demás operaciones. Las colas 0–49 son del
+ * sistema: el SDK no las restringe.
  */
-export type QueueRef = number | { name: string };
+export type QueueRef = number | string | { name: string };
 
 /** Primera y última cola numérica de un PCC. */
 export const MIN_QUEUE_NUMBER = 0;
 export const MAX_QUEUE_NUMBER = 511;
 
+/** La cola de mensajes del PCC: no tiene PNR y Sabre no la lista (`INVALID ENTRY`). */
+export const MESSAGE_QUEUE = 'S';
+
+/**
+ * Una cola alfabética: una o dos letras mayúsculas. Es una regla laxa a propósito: la documentación
+ * solo muestra `S` y `A`, y no se sabe si hay colas de dos letras (ADR-028).
+ */
+const ALPHA_QUEUE = /^[A-Z]{1,2}$/;
+
+function fail(message: string): never {
+  throw new TypeError(`sabre-client: ${message}`);
+}
+
 /** Valida una `QueueRef` de la entrada, sin red. `label` es el nombre del campo en el mensaje. */
 export function validateQueueRef(value: unknown, label: string): asserts value is QueueRef {
   if (typeof value === 'number') {
     if (Number.isInteger(value) && value >= MIN_QUEUE_NUMBER && value <= MAX_QUEUE_NUMBER) return;
-    throw new TypeError(
-      `sabre-client: ${label} debe ser un número de cola entero de ${MIN_QUEUE_NUMBER} a ${MAX_QUEUE_NUMBER}, o { name }`,
-    );
+    fail(`${label} debe ser un número de cola entero de ${MIN_QUEUE_NUMBER} a ${MAX_QUEUE_NUMBER}, una cola alfabética ('S') o { name }`);
+  }
+  if (typeof value === 'string') {
+    if (ALPHA_QUEUE.test(value)) return;
+    // Cada cola tiene una sola forma: '12' no se convierte en 12, ni 's' en 'S' (ADR-028).
+    if (/^\d+$/.test(value.trim())) fail(`${label}: una cola numérica va como número (${Number(value)}), no como string`);
+    fail(`${label} debe ser una cola alfabética de una o dos letras mayúsculas (p. ej. 'S')`);
   }
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     const { name } = value as { name?: unknown };
-    if (typeof name === 'string' && name.trim() !== '') return;
-    throw new TypeError(`sabre-client: ${label}.name debe ser un string no vacío`);
+    if (typeof name !== 'string' || name.trim() === '') fail(`${label}.name debe ser un string no vacío`);
+    // Un { name } de una o dos letras es casi seguro una cola alfabética mal armada, p. ej. el
+    // { name: 'S' } que devolvía count en la 0.4.x: Sabre lo rechaza con INVALID QUEUE NAME FORMAT.
+    // Ninguna fuente confirma que no existan colas con nombre tan cortas: si aparece una, se afloja
+    // esta regla, y eso no rompe la compatibilidad (ADR-028, sub-decisión ii).
+    if (ALPHA_QUEUE.test(name)) fail(`${label}: '${name}' es una cola alfabética: pasa '${name}', no { name: '${name}' }`);
+    return;
   }
-  throw new TypeError(`sabre-client: ${label} debe ser un número de cola (0–511) o { name }`);
+  fail(`${label} debe ser un número de cola (0–511), una cola alfabética ('S') o { name }`);
 }
 
-/** Atributo de `QueueIdentifier`: `Number="12"` o `Name="S"`, ya escapado. */
+/** Atributo de `QueueIdentifier`: `Number="12"`, `Number="S"` o `Name="HOTELS"`, ya escapado. */
 export function queueRefAttribute(queue: QueueRef): string {
-  return typeof queue === 'number' ? `Number="${queue}"` : `Name="${xmlEscape(queue.name)}"`;
+  if (typeof queue === 'number') return `Number="${queue}"`;
+  if (typeof queue === 'string') return `Number="${xmlEscape(queue)}"`;
+  return `Name="${xmlEscape(queue.name)}"`;
+}
+
+/** Si la cola es la de mensajes (`'S'`). */
+export function isMessageQueue(queue: QueueRef): boolean {
+  return queue === MESSAGE_QUEUE;
 }
 
 /**
- * Lee el `Number` alfanumérico de una respuesta: `"12"` da `12`, y `"S"`, `{ name: 'S' }`.
- * Devuelve `undefined` si viene vacío.
+ * Lee el `Number` de una respuesta (`QueueCountRS`, `QueuePlaceRS`, `QueueAnalysisRS`): `"12"` da
+ * `12`, y `"S"`, `'S'`. Devuelve `undefined` si viene vacío. Un `Number` que no es ni numérico ni
+ * alfabético sale tal cual, como string: es lo que mandó Sabre.
  */
 export function toQueueRef(value: string | undefined): QueueRef | undefined {
   const text = value?.trim();
   if (text === undefined || text === '') return undefined;
-  return /^\d+$/.test(text) ? Number(text) : { name: text };
+  return /^\d+$/.test(text) ? Number(text) : text;
 }

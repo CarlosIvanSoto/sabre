@@ -7,8 +7,8 @@ import { env, envCredentials } from './env-credentials.mjs';
 
 export { env };
 
-/** `"12"` da `12`, y `"S"`, `{ name: 'S' }`. */
-export const queueRef = (text) => (/^\d+$/.test(text) ? Number(text) : { name: text });
+/** `"12"` da `12`, `"S"` da `'S'` (cola alfabética) y `"HOTELS"`, `{ name: 'HOTELS' }` (ADR-028). */
+export const queueRef = (text) => (/^\d+$/.test(text) ? Number(text) : /^[A-Z]{1,2}$/.test(text) ? text : { name: text });
 
 /**
  * Credenciales v3 del entorno y el PCC de las colas: SABRE_QUEUE_PCC, o SABRE_TARGET_PCC si vale

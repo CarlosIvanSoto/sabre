@@ -46,7 +46,7 @@ El Tier 3 agrega el cliente SOAP `SabreLegacy`, con una sesión stateful y Queue
 | - | - | - |
 | Sesión | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
 | Colas | Get Queue Count, Access Queue, Place Queue Message | `session.queue.count`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
-| Párrafo de cola | — (función pura) | `parseQueueParagraph`, `resolveHostDate` |
+| Párrafo de cola | — (función pura) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
 | Comandos de host | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
 Planeado después de `0.4.0`: Get Ancillaries (solo NDC).
@@ -500,6 +500,19 @@ segmentos con su estado, el campo de ticketing con una marca `issued` y la líne
   zona horaria.
 - No lee los plazos que las aerolíneas escriben como texto libre en remarks, SSR u OSI. Su formato
   lo pone cada aerolínea. El texto sigue en `paragraph`.
+
+### Leer un remark `QUEUE_PLACE`
+
+Get Booking devuelve dónde se colocó el PNR como un remark con `type: 'QUEUE_PLACE'`. Su `text`
+junta el PCC, la fecha, la cola y el PIC sin separadores. `parseQueuePlaceRemark(text)` lo separa:
+
+```ts
+parseQueuePlaceRemark('MEX25SEP146/015'); // { pcc: 'MEX', date: '25SEP', queue: 146, pic: 15 }
+```
+
+Devuelve `null` si el texto no tiene esa forma, o si el día, el mes, la cola (0–511) o el PIC
+(0–191, 200–254) están fuera de rango. `date` viene sin año: se resuelve con
+`resolveHostDate(date, referenceDate)`. Leer los remarks de la reserva le toca al consumidor.
 
 ### Probar tu lógica de colas: `sabre-client/testing`
 

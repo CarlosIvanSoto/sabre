@@ -9,6 +9,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `parseQueuePlaceRemark(text)`: splits the `text` of a `QUEUE_PLACE` remark from Get Booking
+  (`'MEX25SEP146/015'`) into `{ pcc, date, queue, pic }` (new `QueuePlaceRemark` type), or `null`
+  if it does not have that shape or a part is out of range. `date` stays as `DDMMM`, without a
+  year (#163).
+
 - Get Seats response fields that Sabre sends outside the 3.0 spec: `reservationSegmentId` in
   `SeatSegmentRs` (it matches `flights[].itemId` and `allSegments[].id` in Get Booking) and
   `aisles` in `SeatCabinLayout`, with the new `SeatCabinAisle` type. `SeatMap.flightLegRef` can

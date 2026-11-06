@@ -46,7 +46,7 @@ Tier 3 adds the `SabreLegacy` SOAP client, with a stateful session and Queue Man
 | - | - | - |
 | Session | `SessionCreateRQ` 2.0.0 / 1.0.0, `OTA_PingRQ`, `SessionCloseRQ` | `legacy.withSession`, `legacy.openSession` |
 | Queues | Get Queue Count, Access Queue, Place Queue Message | `session.queue.count`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
-| Queue paragraph | — (pure function) | `parseQueueParagraph`, `resolveHostDate` |
+| Queue paragraph | — (pure function) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
 | Host commands | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 
 Planned after `0.4.0`: Get Ancillaries (NDC only).
@@ -494,6 +494,20 @@ segments with their status, the ticketing field with an `issued` flag, and the r
   received-from line goes backwards. Dates come out as ISO strings without a time zone.
 - It does not read deadlines that airlines write as free text in remarks, SSR or OSI. Their format
   belongs to each airline. The text is still in `paragraph`.
+
+### Reading a `QUEUE_PLACE` remark
+
+Get Booking returns where the PNR was placed as a remark with `type: 'QUEUE_PLACE'`. Its `text`
+packs the PCC, the date, the queue and the PIC with no separators. `parseQueuePlaceRemark(text)`
+splits it:
+
+```ts
+parseQueuePlaceRemark('MEX25SEP146/015'); // { pcc: 'MEX', date: '25SEP', queue: 146, pic: 15 }
+```
+
+It returns `null` if the text does not have that shape, or if the day, month, queue (0–511) or PIC
+(0–191, 200–254) are out of range. `date` has no year: resolve it with
+`resolveHostDate(date, referenceDate)`. Reading the remarks from the booking is up to you.
 
 ### Testing your queue logic: `sabre-client/testing`
 

@@ -45,6 +45,8 @@ export type { QueueCount, QueueCountOptions, QueueCountRequest, QueueCountRespon
 export { resolveHostDate } from './queue/host-date.js';
 export type { HostDateDirection, ResolveHostDateOptions } from './queue/host-date.js';
 export { parseQueueParagraph } from './queue/queue-paragraph.js';
+export { parseQueuePlaceRemark } from './queue/queue-place-remark.js';
+export type { QueuePlaceRemark } from './queue/queue-place-remark.js';
 export type {
   QueueParagraph,
   QueueParagraphAirSegment,

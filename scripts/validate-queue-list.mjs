@@ -62,7 +62,8 @@ if (send === undefined) {
 }
 
 const NAMESPACE = 'http://webservices.sabre.com/sabreXML/2011/10';
-const queueAttribute = typeof queue === 'number' ? `Number="${queue}"` : `Name="${queue.name}"`;
+// Número y cola alfabética ('S') van en Number; las con nombre, en Name (ADR-028).
+const queueAttribute = typeof queue === 'object' ? `Name="${queue.name}"` : `Number="${queue}"`;
 const rawList = (name, fn, criteria) =>
   session[send]({
     service: 'queueAccess',
@@ -77,7 +78,7 @@ const lineCount = (response) => {
   return line === undefined ? 0 : Array.isArray(line) ? line.length : 1;
 };
 
-const sameQueue = (ref) => (typeof ref === 'number' ? ref === queue : typeof queue === 'object' && ref.name === queue.name);
+const sameQueue = (ref) => (typeof ref !== 'object' ? ref === queue : typeof queue === 'object' && ref.name === queue.name);
 const count = await step('count', () => session.queue.count(pccRequest, options), (r) => ({
   queue: { queue: queueText, count: r.queues.find((q) => sameQueue(q.queue))?.count ?? 0 },
 }));
@@ -124,4 +125,4 @@ const findings = {
   },
 };
 
-writeFixture(`queue.${environment}-list-large`, { environment, queue: typeof queue === 'number' ? queue : { name: 'XXXX' }, date, pic, limit }, findings);
+writeFixture(`queue.${environment}-list-large`, { environment, queue: typeof queue === 'object' ? { name: 'XXXX' } : queue, date, pic, limit }, findings);

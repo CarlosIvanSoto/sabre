@@ -13,6 +13,8 @@ import {
   paragraphLines,
   QUEUE_ACCESS_SERVICE,
   type QueueItem,
+  type QueueSelection,
+  selectionXml,
 } from './queue-access.js';
 import { type QueueRef, queueRefAttribute } from './queue-ref.js';
 
@@ -24,11 +26,24 @@ export interface QueueListRequest {
   pcc?: string;
   /** `true` para pedir también el pasajero principal de cada PNR (`Q/…/LN`). */
   primaryPassenger?: boolean;
+  /**
+   * Hasta 8 filtros, como en `access`, pero Sabre solo acepta `QD` (fecha de colocación en la cola,
+   * p. ej. `{ function: 'QD', criteria: '05NOV' }`) o `AK` en la lista: con otro código responde
+   * `VALID SELECTION CODE FOR QUEUE LIST ARE QD OR AK` (producción, #155). El SDK lo rechaza sin red.
+   */
+  selection?: readonly QueueSelection[];
 }
+
+/** Los únicos códigos de `Selection` que Sabre acepta en la lista (producción, #155). */
+export const LIST_SELECTION_FUNCTIONS: readonly string[] = ['QD', 'AK'];
 
 export type QueueListOptions = RequestOptions;
 
-/** Un PNR de la lista: los campos de su `Line`. */
+/**
+ * Un PNR de la lista: los campos de su `Line`. Su `placedAt` es la **colocación en la cola**, la
+ * fecha por la que filtra `QD`. No es la misma fecha que el `placedAt` de `access`, que es la última
+ * modificación del PNR (producción, #155).
+ */
 export interface QueueListEntry extends Omit<QueueItem, 'paragraph'> {
   /** `Line@Number`: la posición en la lista. */
   position?: number;
@@ -49,9 +64,15 @@ export interface QueueListResponse {
   respondedAt?: string;
 }
 
-export function queueListPayload(queue: QueueRef, pcc: string, primaryPassenger: boolean): string {
+/** `Q/<PCC><cola>/L`. Los `Selection` van después de `QueueIdentifier`, como en `access`. */
+export function queueListPayload(
+  queue: QueueRef,
+  pcc: string,
+  primaryPassenger: boolean,
+  selection: readonly QueueSelection[] = [],
+): string {
   const list = primaryPassenger ? '<List Ind="true" PrimaryPassenger="true"/>' : '<List Ind="true"/>';
-  return `<QueueAccessRQ Version="2.1.1" xmlns="${NAMESPACE}"><QueueIdentifier ${queueRefAttribute(queue)} PseudoCityCode="${xmlEscape(pcc)}">${list}</QueueIdentifier></QueueAccessRQ>`;
+  return `<QueueAccessRQ Version="2.1.1" xmlns="${NAMESPACE}"><QueueIdentifier ${queueRefAttribute(queue)} PseudoCityCode="${xmlEscape(pcc)}">${list}</QueueIdentifier>${selectionXml(selection)}</QueueAccessRQ>`;
 }
 
 /** `list` es una lectura (decisión de la revisión): se reintenta como `count`. */
@@ -71,7 +92,8 @@ export function emptyList(warnings: SabreWarning[], paragraph: string[] = [], ra
 }
 
 /**
- * Lee la lista. Una cola vacía (fin de cola como primera línea o como `stl:Warning`) da una lista
+ * Lee la lista. No pagina: Sabre devuelve la cola entera en una sola respuesta (1221 `Line` en
+ * ~279 KB, producción, #155). Una cola vacía (fin de cola como primera línea o como `stl:Warning`) da una lista
  * vacía. Un `Line` sin `UniqueID` es una respuesta que el SDK no entiende: lanza
  * `SabreGatewayError`.
  */

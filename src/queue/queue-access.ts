@@ -66,9 +66,9 @@ export interface QueueItem {
   locator: string;
   /**
    * `Line/DateTime`, tal cual llegó: con año en las respuestas reales (`"2024-05-15T13:24"`), sin
-   * año en el design (`"12-21T07:00"`). Se toma como la colocación en la cola, pero en producción
-   * el de `list` y el de `access` no coinciden para un mismo PNR (#96): el de `list` es siempre
-   * posterior, y ninguna fuente dice qué fecha es cada uno. Se devuelve tal cual.
+   * año en el design (`"12-21T07:00"`). Al entrar a una cola (`access`, `ignore`, `remove`, `place`)
+   * es la **última modificación del PNR**, no la colocación en la cola: para un mismo PNR no
+   * coincide con el de `list`, que sí es la colocación (producción, #96 y #155). Se devuelve tal cual.
    */
   placedAt?: string;
   /** `Line/POS/Source`: quién colocó el PNR. `agentSine` puede ser `SABRE`. */
@@ -118,12 +118,16 @@ function identifier(queue: QueueRef, pcc: string): string {
   return `<QueueIdentifier ${queueRefAttribute(queue)} PseudoCityCode="${xmlEscape(pcc)}"/>`;
 }
 
-/** `Q/<PCC><cola>`, con los filtros de `Selection` si los hay. */
-export function queueAccessPayload(queue: QueueRef, pcc: string, selection: readonly QueueSelection[] = []): string {
-  const filters = selection
+/** Los `Selection`, hermanos de `QueueIdentifier`. Los usan `access` y `list`. */
+export function selectionXml(selection: readonly QueueSelection[]): string {
+  return selection
     .map((filter) => `<Selection Function="${xmlEscape(filter.function)}" Criteria="${xmlEscape(filter.criteria)}"/>`)
     .join('');
-  return root(`${identifier(queue, pcc)}${filters}`);
+}
+
+/** `Q/<PCC><cola>`, con los filtros de `Selection` si los hay. */
+export function queueAccessPayload(queue: QueueRef, pcc: string, selection: readonly QueueSelection[] = []): string {
+  return root(`${identifier(queue, pcc)}${selectionXml(selection)}`);
 }
 
 /** `Navigation@Action`. Solo `QR` lleva `QueueIdentifier`: las colas de las que sacar el PNR. */

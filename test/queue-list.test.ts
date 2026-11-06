@@ -52,6 +52,32 @@ describe('queue.list: request', () => {
     expect(queueListPayload({ name: 'HOTELS' }, 'ABCD', false)).toContain('<QueueIdentifier Name="HOTELS" PseudoCityCode="ABCD">');
   });
 
+  it('con selection manda los Selection después de QueueIdentifier, como el script de #155', async () => {
+    const { fetch, session } = await openWith(ok(REAL_LIST));
+    await session.queue.list({ queue: 1, selection: [{ function: 'QD', criteria: '05NOV' }] });
+    expect(body(fetch, 1)).toBe(
+      '<QueueAccessRQ Version="2.1.1" xmlns="http://webservices.sabre.com/sabreXML/2011/10"><QueueIdentifier Number="1" PseudoCityCode="H8GI"><List Ind="true"/></QueueIdentifier><Selection Function="QD" Criteria="05NOV"/></QueueAccessRQ>',
+    );
+  });
+
+  it('acepta AK y escapa el criterio', () => {
+    expect(queueListPayload(1, 'ABCD', true, [{ function: 'AK', criteria: 'A&B' }])).toContain(
+      '<List Ind="true" PrimaryPassenger="true"/></QueueIdentifier><Selection Function="AK" Criteria="A&amp;B"/>',
+    );
+  });
+
+  it.each([
+    ['PI', [{ function: 'PI', criteria: '11' }], 'sabre-client: selection[0].function en list solo puede ser QD o AK: Sabre no acepta otro código en la lista'],
+    ['qd en minúsculas', [{ function: 'QD', criteria: '05NOV' }, { function: 'qd', criteria: '06NOV' }], 'sabre-client: selection[1].function en list solo puede ser QD o AK: Sabre no acepta otro código en la lista'],
+    ['un filtro sin criteria', [{ function: 'QD' }], 'sabre-client: selection[0].criteria debe ser un string no vacío'],
+    ['algo que no es lista', { function: 'QD', criteria: '05NOV' }, 'sabre-client: selection debe ser una lista de { function, criteria }'],
+    ['más de 8 filtros', Array.from({ length: 9 }, () => ({ function: 'QD', criteria: '05NOV' })), 'sabre-client: selection admite hasta 8 filtros'],
+  ])('selection con %s lanza TypeError sin red', async (_name, selection, message) => {
+    const { fetch, session } = await openWith();
+    expect(await rejection(session.queue.list({ queue: 1, selection } as never))).toEqual(new TypeError(message));
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ['una cola inválida', { queue: 999 }, 'sabre-client: queue debe ser un número de cola entero de 0 a 511, una cola alfabética (\'S\') o { name }'],
     ['un pcc inválido', { queue: 1, pcc: '!!' }, 'sabre-client: pcc debe tener 3 o 4 caracteres alfanuméricos'],

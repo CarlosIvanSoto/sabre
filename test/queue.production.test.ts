@@ -8,6 +8,7 @@ import walk from './fixtures/queue.production-walk.json';
 import emptyQueueWalk from './fixtures/queue.production-walk-empty-queue.json';
 import place from './fixtures/queue.production-place.json';
 import placeWithoutPic from './fixtures/queue.production-place-sin-pic.json';
+import largeList from './fixtures/queue.production-list-large.json';
 import { mockFetch } from './helpers.js';
 import { legacyClient, queueRS, rejection, soap, success, xml } from './soap-helpers.js';
 
@@ -237,5 +238,30 @@ describe('cola S de producción: count → access (ADR-028)', () => {
     expect(messages).toEqual({ queue: 'S', count: 385 });
     await rejection(session.queue.access({ queue: messages!.queue }));
     expect(String(fetch.mock.calls[2]?.[1]?.body)).toContain('<QueueIdentifier Number="S" PseudoCityCode=');
+  });
+});
+
+describe('cola grande en producción: list sin paginar y con selection (#155, #162)', () => {
+  it('lista las 1221 PNR de la cola 1 en una sola respuesta, en orden y sin repetir', async () => {
+    const { fetch, session } = await open(one(largeList, 'queue.list'));
+    const result = await session.queue.list({ queue: 1 });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(result.locators).toHaveLength(1221);
+    expect(new Set(result.locators).size).toBe(1221);
+    expect(result.entries.map((entry) => entry.position)).toEqual(Array.from({ length: 1221 }, (_, index) => index + 1));
+    expect(result.entries[0]).toEqual({
+      position: 1,
+      locator: 'AAAAAA',
+      placedAt: '2026-01-26T16:05',
+      placedBy: { agentSine: 'AAA', pseudoCityCode: 'XXXX' },
+    });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('con QD-05NOV devuelve solo las 12 colocadas ese día', async () => {
+    const { session } = await open(one(largeList, 'probe.listQD'));
+    const result = await session.queue.list({ queue: 1, selection: [{ function: 'QD', criteria: '05NOV' }] });
+    expect(result.locators).toHaveLength(12);
+    expect(result.entries.every((entry) => entry.placedAt?.startsWith('2026-11-05'))).toBe(true);
   });
 });

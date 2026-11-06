@@ -448,7 +448,7 @@ todavía no hay evidencia de qué hace Sabre con el mensaje.
 | - | - | - |
 | `count({ pcc? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, warnings }` |
 | `activity({ pcc? })` | `QueueAnalysisLLSRQ` | `{ queues: [{ queue, numMessages, ended, ignored, … }], totals, analyzedAt, warnings }` |
-| `list({ queue, pcc?, primaryPassenger? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, sin entrar a la cola |
+| `list({ queue, pcc?, primaryPassenger?, selection? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, sin entrar a la cola |
 | `access({ queue, pcc?, selection? })` | `QueueAccessLLSRQ` | `QueueStep` |
 | `ignore()` | `QueueAccessLLSRQ` (`I`) | `QueueStep` |
 | `remove({ from? })` | `QueueAccessLLSRQ` (`QR`) | `QueueStep` |
@@ -465,6 +465,11 @@ type QueueStep =
 > **Migración desde la 0.4.x**: un paso que no terminó ahora trae `kind`. Comprueba
 > `step.kind === 'pnr'` antes de leer `step.item`. Solo la cola `S` devuelve `kind: 'message'`.
 
+- **`list` devuelve la cola entera en una respuesta**: no pagina, ni con más de 1000 PNR (1221 en
+  unos 279 KB, en producción). `selection` la acota, pero en la lista Sabre solo acepta `QD`
+  (fecha de colocación en la cola, p. ej. `{ function: 'QD', criteria: '05NOV' }`) o `AK`. Otro
+  código lanza `TypeError` sin llamar a Sabre. El `placedAt` de una entrada de la lista es cuándo
+  se colocó el PNR en la cola, la fecha por la que filtra `QD`.
 - **`activity`** devuelve, por cola, los ocho contadores de la pantalla `QA` del host:
   `numMessages` (los que están hoy en la cola), `ended`, `ignored`, `moved`, `removed`,
   `transferred`, `leftMessageToContact` y `unableToReach`, más `totals` para el PCC. Sabre lista
@@ -495,7 +500,9 @@ type QueueStep =
   0–191 o 200–254. Producción rechaza un `place` sin PIC, aunque el design lo dé como opcional.
 - **`QueueItem`** trae `locator`, el `placedAt` y el `placedBy` de `Line`, `primaryPassenger` y
   `group` cuando Sabre los manda, y `paragraph`: el PNR en formato de host, línea por línea y
-  sin tocar. `placedAt` es el texto que llegó, con o sin año. `resolveHostDate` lo convierte en una
+  sin tocar. `placedAt` es el texto que llegó, con o sin año. Dentro de una cola es la última
+  modificación del PNR, no su colocación en la cola: esa es el `placedAt` de `list`, y para un
+  mismo PNR no coinciden. `resolveHostDate` lo convierte en una
   fecha completa.
 - `count` dentro de una cola no cuenta el PNR que está en pantalla.
 
@@ -588,7 +595,7 @@ fake.openSessions; // 0: la sesión se cerró
   obligatorio y una sesión vencida con `fake.expireSessions()`. `fake.calls` lista lo que pidió el
   SDK.
 - **No simula** los PCC (las colas son las mismas para cualquier `pcc`) ni `selection`, que recibe
-  un error en vez de la cola entera.
+  un error en vez de la cola entera, en `access` y en `list`.
 - `queueFixtures` trae las respuestas anonimizadas que se grabaron en producción (`walk`,
   `emptyQueue`, `place`…), como `{ operation, status, body }`.
 

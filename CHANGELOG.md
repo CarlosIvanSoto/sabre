@@ -9,6 +9,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `selection` in `session.queue.list`, as in `access` (up to 8 filters). In the list Sabre only
+  accepts `QD` (date placed on the queue) or `AK`, and answers any other code with `VALID
+  SELECTION CODE FOR QUEUE LIST ARE QD OR AK`, so the SDK throws a `TypeError` without calling
+  Sabre. `list` needs no paging: production returned a queue of 1221 PNRs in one response (#162).
+
 - `session.reservation.history(locator)` (Get Itinerary History, `TravelItineraryHistoryLLSRQ`
   2.4.0, the host's `*H`): the PNR history, one entry per transaction, with who signed it, when
   (`createdAt`, with a year) and from which PCC (`pcc`, `aaaPcc`), `receivedFrom`, and what changed
@@ -55,6 +60,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   end of queue that Sabre sends as an `stl:Error` also carries it (#157).
 
 ### Changed
+
+- The docs of `placedAt` now say what each date is: in `QueueListEntry` (`list`) it is when the PNR
+  was placed on the queue, the date `QD` filters on; in `QueueItem` (`access` and the steps) it is
+  the PNR's last change. The values do not change (#162).
 
 - **BREAKING**: `QueueRef` is now `number | string | { name }` (ADR-028). An alphabetic queue
   (one or two uppercase letters, like `'S'`) is a `string` and is sent as `Number="S"`, as Sabre

@@ -12,13 +12,14 @@ TypeScript SDK for the Sabre APIs.
 
 ## Status
 
-`0.5.0` is published under the `next` dist-tag while it is tested; `latest` stays on `0.4.1`.
+`0.5.1` is published under the `next` dist-tag while it is tested; `latest` stays on `0.4.1`.
 It covers Tier 1 and Tier 2 of the Air Booking flow over REST, Tier 3 (SOAP sessions and queues)
 and Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `list` and
-`onRawRequest`. It has three breaking changes (see [Upgrading from 0.4](#upgrading-from-04)).
+`onRawRequest`. The `0.5` line has three breaking changes (see
+[Upgrading from 0.4](#upgrading-from-04)).
 
 ```sh
-npm install sabre-client@next   # 0.5.0
+npm install sabre-client@next   # 0.5.1
 npm install sabre-client        # 0.4.1
 ```
 

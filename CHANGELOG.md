@@ -7,6 +7,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-09
+
+Fixes from moving sabre-playground to `0.5.0`, with no breaking changes. It is published under the
+`next` dist-tag; `latest` stays on `0.4.1` until `0.5.1` is tested with sabre-playground in CERT.
+
 ### Added
 
 - `sabre-client/anonymize`: a new entry point with only `createAnonymizer`, `isSafeHostLine` and
@@ -339,7 +344,8 @@ and queues). Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 - The whole `0.2.4` API. There is no compatibility layer.
 
-[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.3.0...v0.4.0

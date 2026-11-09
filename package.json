@@ -16,6 +16,10 @@
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
+    },
+    "./anonymize": {
+      "types": "./dist/anonymize.d.ts",
+      "import": "./dist/anonymize.js"
     }
   },
   "main": "./dist/index.js",

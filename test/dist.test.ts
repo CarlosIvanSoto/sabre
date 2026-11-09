@@ -56,3 +56,31 @@ describe.skipIf(dist === undefined || testing === undefined)('build ESM de sabre
     expect(testing!.queueFakePnrs(testing!.queueFixtures.walk).map((pnr) => pnr.locator)).toEqual(['AAAAAA', 'AAAAAB', 'AAAAAC', 'AAAAAD']);
   });
 });
+
+// La subruta `sabre-client/anonymize` (#192): la anonimización sola, para bundles de navegador.
+const anonymizePath = '../dist/anonymize.js';
+const anonymize: typeof import('../src/anonymize/index.js') | undefined = await import(/* @vite-ignore */ anonymizePath).catch(
+  () => undefined,
+);
+
+describe.skipIf(anonymize === undefined || testing === undefined)('build ESM de sabre-client/anonymize (dist/)', () => {
+  it('exporta lo mismo que la anonimización de sabre-client/testing', () => {
+    expect(Object.keys(anonymize!).sort()).toEqual(['createAnonymizer', 'isSafeHostLine']);
+    expect(anonymize!.createAnonymizer().anonymize('<UniqueID ID="QWERTY"/>')).toBe('<UniqueID ID="AAAAAA"/>');
+    expect(anonymize!.isSafeHostLine('REMARKS')).toBe(true);
+    expect(anonymize!.isSafeHostLine('1.1PEREZ/JUAN')).toBe(testing!.isSafeHostLine('1.1PEREZ/JUAN'));
+  });
+
+  it('dist/anonymize.js no importa nada ni trae el fake o las fixtures', async () => {
+    const fsPath = 'node:fs/promises';
+    const { readFile } = (await import(/* @vite-ignore */ fsPath)) as { readFile: (path: URL, encoding: 'utf8') => Promise<string> };
+    const code = await readFile(new URL('../dist/anonymize.js', import.meta.url), 'utf8');
+    const testingCode = await readFile(new URL('../dist/testing.js', import.meta.url), 'utf8');
+    // Sin imports, cualquier bundler mete solo este archivo.
+    expect(code).not.toMatch(/^\s*import\b|\bfrom\s*["']|\bimport\s*\(/m);
+    expect(code).not.toContain('createQueueFake');
+    expect(code).not.toContain('QueueAccessRS');
+    expect(code).not.toContain('recordedAt');
+    expect(code.length).toBeLessThan(testingCode.length / 10);
+  });
+});

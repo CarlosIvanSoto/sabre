@@ -441,7 +441,15 @@ The queues returned by `count` can be passed straight to the other operations. `
 throws a `TypeError` without calling Sabre. Walk it by hand: `access({ queue: 'S' })` returns the
 first message (`kind: 'message'`) and `ignore()` the next one, leaving it in the queue. `process`
 and `place` inside `S` throw a `TypeError` without calling Sabre. `remove()` sends `QR`, but there
-is no evidence yet of what Sabre does with the message.
+is no evidence yet of what Sabre does with the message. To tell it apart, `isMessageQueue(queue)`
+returns `true` only for `'S'`, and `MESSAGE_QUEUE` is `'S'`:
+
+```ts
+import { isMessageQueue } from 'sabre-client';
+
+const { queues } = await session.queue.count();
+const pnrQueues = queues.filter(({ queue }) => !isMessageQueue(queue));
+```
 
 > **Migrating from 0.4.x**: `count` used to return the `S` queue as `{ name: 'S' }`, which Sabre
 > rejects (`INVALID QUEUE NAME FORMAT`). It now returns `'S'`. Code that does

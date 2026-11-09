@@ -445,7 +445,15 @@ mensajes** del PCC: tiene mensajes y no PNR, y Sabre no la lista, así que `list
 lanza un `TypeError` sin llamar a Sabre. Se recorre a mano: `access({ queue: 'S' })` devuelve el
 primer mensaje (`kind: 'message'`) e `ignore()` el siguiente, sin sacarlo de la cola. `process` y
 `place` dentro de la `S` lanzan un `TypeError` sin llamar a Sabre. `remove()` manda `QR`, pero
-todavía no hay evidencia de qué hace Sabre con el mensaje.
+todavía no hay evidencia de qué hace Sabre con el mensaje. Para distinguirla, `isMessageQueue(queue)`
+devuelve `true` solo con `'S'`, y `MESSAGE_QUEUE` es `'S'`:
+
+```ts
+import { isMessageQueue } from 'sabre-client';
+
+const { queues } = await session.queue.count();
+const pnrQueues = queues.filter(({ queue }) => !isMessageQueue(queue));
+```
 
 > **Migración desde la 0.4.x**: `count` devolvía la cola `S` como `{ name: 'S' }`, que Sabre
 > rechaza (`INVALID QUEUE NAME FORMAT`). Ahora devuelve `'S'`. Un código como

@@ -7,6 +7,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `isMessageQueue(queue)` and `MESSAGE_QUEUE` (`'S'`) in the main entry, to tell the PCC's message
+  queue apart from a `QueueRef` without hardcoding `'S'` (#191).
+
 ## [0.5.0] - 2026-11-06
 
 Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `list`, `onRawRequest`

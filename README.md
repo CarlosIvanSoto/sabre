@@ -624,13 +624,20 @@ fake.openSessions; // 0: the session was closed
   `AAAAAG`–`AAAAAH`), and their signature lines keep their shape (`… <alias> H`).
 - `queueFakePnrs(fixture)` turns a recording into the fake's PNRs: those of `list` first, in
   order, with their `Line`, and the paragraph `access`, `ignore`, `remove` or `place` showed for
-  each one. You choose the queue, and you can mix fixtures:
+  each one. You choose the queue, and you can mix fixtures. The PNRs of `queueFixtures` have no
+  `primaryPassenger`: `list` was recorded without `primaryPassenger: true` (`/LN`), so Sabre did
+  not send the name. If you need one, add it with a `map`:
 
   ```ts
   const fake = createQueueFake({
     queues: { '9': queueFakePnrs(queueFixtures.walk), '50': [] },
     pnrs: queueFakePnrs(queueFixtures.place),
   });
+
+  const withPassenger = queueFakePnrs(queueFixtures.walk).map((pnr, index) => ({
+    ...pnr,
+    primaryPassenger: `TEST/PASSENGER${index + 1}`,
+  }));
   ```
 
 `examples/queue-review.mjs` is a full example, and its test runs it against the fake.

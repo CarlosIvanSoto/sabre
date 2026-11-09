@@ -12,6 +12,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `isMessageQueue(queue)` and `MESSAGE_QUEUE` (`'S'`) in the main entry, to tell the PCC's message
   queue apart from a `QueueRef` without hardcoding `'S'` (#191).
 
+### Fixed
+
+- The docs of `queueFakePnrs` and `queueFixtures` now say why the PNRs of `walk` and `place` have no
+  `primaryPassenger`: `list` was recorded without `primaryPassenger: true` (`/LN`), and Sabre only
+  sends `PassengerName` with it. The helper was right, and it does not make up a passenger; the
+  README shows how to add one with a `map` (#193).
+
 ## [0.5.0] - 2026-11-06
 
 Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `list`, `onRawRequest`

@@ -631,13 +631,20 @@ fake.openSessions; // 0: la sesión se cerró
   forma (`… <alias> H`).
 - `queueFakePnrs(fixture)` convierte una grabación en los PNR del fake: primero los de `list`, en
   orden, con su `Line`, y el párrafo que mostró `access`, `ignore`, `remove` o `place` para cada
-  uno. La cola la eliges tú, y puedes juntar fixtures:
+  uno. La cola la eliges tú, y puedes juntar fixtures. Los PNR de `queueFixtures` no traen
+  `primaryPassenger`: el `list` se grabó sin `primaryPassenger: true` (`/LN`), así que Sabre no
+  mandó el nombre. Si necesitas uno, agrégalo con un `map`:
 
   ```ts
   const fake = createQueueFake({
     queues: { '9': queueFakePnrs(queueFixtures.walk), '50': [] },
     pnrs: queueFakePnrs(queueFixtures.place),
   });
+
+  const withPassenger = queueFakePnrs(queueFixtures.walk).map((pnr, index) => ({
+    ...pnr,
+    primaryPassenger: `TEST/PASSENGER${index + 1}`,
+  }));
   ```
 
 `examples/queue-review.mjs` es un ejemplo completo, y su test lo corre contra el fake.

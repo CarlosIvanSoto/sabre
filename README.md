@@ -656,6 +656,14 @@ anonymizer.maskParagraph(item.paragraph); // host-format lines
 if (anonymizer.leaks(safe).length > 0) throw new Error('real data left');
 ```
 
+In a browser bundle, import it from `sabre-client/anonymize` instead. It has only
+`createAnonymizer`, `isSafeHostLine` and their types, without the fake or `queueFixtures`, which
+`sabre-client/testing` carries in a single module (about 230 KB) that bundlers cannot drop:
+
+```ts
+import { isSafeHostLine } from 'sabre-client/anonymize';
+```
+
 - Each locator gets an alias (`AAAAAA`, `AAAAAB`…), the same one everywhere it appears, also in
   later texts passed to the same anonymizer. `PassengerName` becomes `PASAJERO/UNO`, `Group`
   becomes `GRUPO`, `AgentSine` becomes `AAA` (except `SABRE`), `PseudoCityCode` becomes `XXXX`,

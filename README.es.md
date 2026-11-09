@@ -663,6 +663,14 @@ anonymizer.maskParagraph(item.paragraph); // líneas en formato de host
 if (anonymizer.leaks(safe).length > 0) throw new Error('quedan datos reales');
 ```
 
+En un bundle de navegador, impórtalo de `sabre-client/anonymize`. Trae solo `createAnonymizer`,
+`isSafeHostLine` y sus tipos, sin el fake ni las `queueFixtures`, que `sabre-client/testing` lleva
+en un solo módulo (unos 230 KB) que los bundlers no pueden descartar:
+
+```ts
+import { isSafeHostLine } from 'sabre-client/anonymize';
+```
+
 - Cada localizador recibe un alias (`AAAAAA`, `AAAAAB`…), el mismo en todos los lugares donde
   aparece, también en los textos que pasen después por el mismo anonimizador. `PassengerName` pasa
   a `PASAJERO/UNO`, `Group` a `GRUPO`, `AgentSine` a `AAA` (salvo `SABRE`), `PseudoCityCode` a

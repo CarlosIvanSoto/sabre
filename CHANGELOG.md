@@ -9,6 +9,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `sabre-client/anonymize`: a new entry point with only `createAnonymizer`, `isSafeHostLine` and
+  their types, for browser bundles. Importing `isSafeHostLine` from `sabre-client/testing` pulled
+  the queue fake and every `queueFixtures` recording into the bundle (about 230 KB); from
+  `sabre-client/anonymize` it is a few hundred bytes. `sabre-client/testing` exports the same as
+  before (#192).
+
 - `isMessageQueue(queue)` and `MESSAGE_QUEUE` (`'S'`) in the main entry, to tell the PCC's message
   queue apart from a `QueueRef` without hardcoding `'S'` (#191).
 

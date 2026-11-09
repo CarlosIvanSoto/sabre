@@ -42,6 +42,25 @@ describe('queueFakePnrs', () => {
     const placed = queueFixtures.place.responses.filter((response) => response.operation === 'queue.place').slice(0, 1);
     expect(queueFakePnrs({ recordedAt: '2026-11-01', responses: placed })).toEqual([{ locator: 'AAAAAE' }, { locator: 'AAAAAF' }]);
   });
+
+  // #193: el list de las fixtures se grabó sin `primaryPassenger: true` (sin `/LN`), y Sabre no
+  // manda `PassengerName` en esa lista ni en el `Line` de access. No es un error del helper.
+  it('walk y place no traen primaryPassenger: la grabación no lo tiene', () => {
+    for (const fixture of [queueFixtures.walk, queueFixtures.place]) {
+      expect(fixture.responses.some((response) => response.body.includes('PassengerName'))).toBe(false);
+      for (const pnr of queueFakePnrs(fixture)) expect(pnr).not.toHaveProperty('primaryPassenger');
+    }
+  });
+
+  it('con PassengerName en el Line de list, lo copia a primaryPassenger', () => {
+    const responses = queueFixtures.walk.responses.map((response) =>
+      response.operation === 'queue.list'
+        ? { ...response, body: response.body.replace('<UniqueID ID="AAAAAB"/>', '<PassengerName>PASAJERO/DOS</PassengerName><UniqueID ID="AAAAAB"/>') }
+        : response,
+    );
+    const pnrs = queueFakePnrs({ recordedAt: queueFixtures.walk.recordedAt, responses });
+    expect(pnrs.map((pnr) => pnr.primaryPassenger)).toEqual([undefined, 'PASAJERO/DOS', undefined, undefined]);
+  });
 });
 
 describe('queueFixtures: alias propios y firmas con su forma', () => {

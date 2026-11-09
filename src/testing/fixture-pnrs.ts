@@ -17,6 +17,10 @@ const QUEUE_OPERATION = /^queue\.(list|access|ignore|remove|place)$/;
  * - `placedAt`, `placedBy` y `primaryPassenger` salen del `Line` de `list`. Si el PNR no está en la
  *   lista, salen del `Line` del primer `access`, `ignore` o `remove` que lo trae (ahí `placedAt` es
  *   la última modificación del PNR, no su colocación en la cola).
+ * - `primaryPassenger` solo sale si el `Line` trae `PassengerName`, y Sabre solo lo manda en un
+ *   `list` con `primaryPassenger: true` (`/LN`). Las fixtures de `queueFixtures` se grabaron sin
+ *   `/LN`, así que sus PNR van sin pasajero. Si el consumidor necesita uno, lo agrega con un
+ *   `map`; el helper no inventa datos que la grabación no tiene (#193).
  * - `paragraph` es el del primer `access`, `ignore`, `remove` o `place` que muestra el PNR, tal
  *   cual. El localizador del párrafo sale del `Line`, o de la línea de firma si no hay `Line`
  *   (`place` dentro de una cola).

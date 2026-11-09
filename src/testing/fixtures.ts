@@ -45,6 +45,9 @@ function fixture(json: { recordedAt: string; responses: readonly RecordedRespons
  * - `place`: `place` fuera y dentro de una cola, y `remove` hasta el fin de cola;
  * - `placeWithoutInstructionCode` y `placeWithoutInstructionCodeInside`: `place` sin PIC, fuera
  *   (`INSTRUCTION NUMBER NOT IN RANGE`) y dentro de una cola (`NEED INSTRUCTION NUMBER`).
+ *
+ * El `list` de `walk` se grabó sin `primaryPassenger: true` (sin `/LN`), así que ningún `Line`
+ * trae `PassengerName` (#193).
  */
 export const queueFixtures: Readonly<{
   walk: RecordedFixture;

@@ -9,8 +9,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.5.1] - 2026-11-09
 
-Fixes from moving sabre-playground to `0.5.0`, with no breaking changes. It is published under the
-`next` dist-tag; `latest` stays on `0.4.1` until `0.5.1` is tested with sabre-playground in CERT.
+Fixes from moving sabre-playground to `0.5.0`, with no breaking changes. It was published under
+the `next` dist-tag first, and moved to `latest` on 2026-11-09, after sabre-playground tested it in
+CERT. It is the first `0.5` release on `latest`: `0.5.0` stayed on `next`.
 
 ### Added
 

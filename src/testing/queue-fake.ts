@@ -557,21 +557,54 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
   const waiting = (session: Session, key: string, entries: readonly Entry[]): number =>
     entries.length - (session.inside?.key === key && entries[session.inside.index] !== undefined ? 1 : 0);
 
+  const countRS = (inner: string): string =>
+    `<QueueCountRS xmlns="${SWS_NAMESPACE}" xmlns:stl="${STL_NAMESPACE}" Version="2.2.1">${inner}</QueueCountRS>`;
+
+  /**
+   * `count` de todo el PCC, de una cola o de un rango, como en CERT y producción (#213): con una
+   * cola, solo esa y sin `Totals`; con un rango, cada cola, las vacías con `Count="0"`, y los
+   * `Totals` del rango. `selection` todavía no se simula.
+   */
   const count = (session: Session, rq: XmlNode): string => {
-    const pcc = attr(node(node(rq.QueueInfo)?.QueueIdentifier), 'PseudoCityCode') ?? '';
+    const identifier = node(node(rq.QueueInfo)?.QueueIdentifier);
+    const pcc = attr(identifier, 'PseudoCityCode') ?? '';
+    if (nodes(rq.Selection).length > 0) return countRS(results('NotProcessed', hostResult('Error', 'sabre-client/testing: selection no está simulado')));
+    const info = (identifiers: readonly string[]) =>
+      `${results('Complete', success)}<QueueInfo DateTime="${shortDate(now())}" PseudoCityCode="${escape(pcc)}">${identifiers.join('')}</QueueInfo>`;
+    const totalsXml = (messages: number, pnrs: number) =>
+      `<Totals Count="${messages}" Type="MESSAGES"/><Totals Count="0" Type="SPECIALS"/><Totals Count="${pnrs}" Type="PNRS"/>`;
+    // Con un PNR en pantalla, su cola no lo cuenta (producción, #96).
+    const waitingIn = (key: string) => waiting(session, key, queues.get(key) ?? []);
+
+    const range = node(identifier?.Range);
+    if (range !== undefined) {
+      const start = Number(attr(range, 'Start'));
+      const end = Number(attr(range, 'End'));
+      const identifiers: string[] = [];
+      let pnrsTotal = 0;
+      for (let number = start; number <= end; number++) {
+        const total = waitingIn(String(number));
+        identifiers.push(`<QueueIdentifier Count="${total}" Number="${number}"/>`);
+        pnrsTotal += total;
+      }
+      return countRS(`${info(identifiers)}${totalsXml(0, pnrsTotal)}`);
+    }
+
+    const key = requestedKey(identifier);
+    if (key !== undefined) return countRS(info([`<QueueIdentifier Count="${waitingIn(key)}" ${keyAttribute(key)}/>`]));
+
     let pnrsTotal = 0;
     let messages = 0;
     const identifiers: string[] = [];
-    for (const [key, entries] of queues) {
-      // Con un PNR en pantalla, su cola no lo cuenta (producción, #96).
-      const total = waiting(session, key, entries);
+    for (const [queueKey, entries] of queues) {
+      const total = waiting(session, queueKey, entries);
       if (total <= 0) continue;
-      identifiers.push(`<QueueIdentifier Count="${total}" ${keyAttribute(key)}/>`);
+      identifiers.push(`<QueueIdentifier Count="${total}" ${keyAttribute(queueKey)}/>`);
       // Las alfabéticas (la S) son de mensajes; las numéricas y las con nombre, de PNR.
-      if (ALPHA_KEY.test(key)) messages += total;
+      if (ALPHA_KEY.test(queueKey)) messages += total;
       else pnrsTotal += total;
     }
-    return `<QueueCountRS xmlns="${SWS_NAMESPACE}" xmlns:stl="${STL_NAMESPACE}" Version="2.2.1">${results('Complete', success)}<QueueInfo DateTime="${shortDate(now())}" PseudoCityCode="${escape(pcc)}">${identifiers.join('')}</QueueInfo><Totals Count="${messages}" Type="MESSAGES"/><Totals Count="0" Type="SPECIALS"/><Totals Count="${pnrsTotal}" Type="PNRS"/></QueueCountRS>`;
+    return countRS(`${info(identifiers)}${totalsXml(messages, pnrsTotal)}`);
   };
 
   const access = (session: Session, rq: XmlNode): string => {

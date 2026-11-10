@@ -462,7 +462,7 @@ const pnrQueues = queues.filter(({ queue }) => !isMessageQueue(queue));
 
 | Método | Servicio de Sabre | Devuelve |
 | - | - | - |
-| `count({ pcc? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, warnings }` |
+| `count({ pcc?, queue?, range?, selection? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, additionalInfo?, warnings }` |
 | `activity({ pcc? })` | `QueueAnalysisLLSRQ` | `{ queues: [{ queue, numMessages, ended, ignored, … }], totals, analyzedAt, warnings }` |
 | `list({ queue, pcc?, primaryPassenger?, selection? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, sin entrar a la cola |
 | `access({ queue, pcc?, selection? })` | `QueueAccessLLSRQ` | `QueueStep` |
@@ -487,6 +487,21 @@ type QueueStep =
   agente que lo colocó, PCC más firma, p. ej. `'PCC1AAT'`; todavía no se probó en la lista). Otro
   código lanza `TypeError` sin llamar a Sabre. El `placedAt` de una entrada de la lista es cuándo
   se colocó el PNR en la cola, la fecha por la que filtra `QD`.
+- **Filtros de `count`**: `queue` cuenta una sola cola, y `range: { start, end }`, un rango de
+  colas numéricas; no se combinan. Con `range`, Sabre devuelve cada cola del rango, **también las
+  vacías**, con `count: 0` (sin filtros las omite). `selection` admite hasta 8 filtros, como
+  `access`, y cuenta solo los PNR que cumplen: el host acepta cualquier código (`QD`, `AK`, `AL`,
+  `PI`, `AC`… y combinaciones), y con el mismo `QD` la cuenta coincide con `list`. Necesita
+  `queue`: sin cola, Sabre responde `QUEUE SELECTED NOT VALID OR CLOSED`, y con un rango,
+  `KEYS NOT ALLOWED`, así que el SDK lanza `TypeError` antes. Con `selection`, `totals.unfiltered`
+  es cuántos PNR tiene la cola sin filtrar (el `1 MATCHING PNRS OUT OF 80` del host); con `queue`
+  sola, Sabre no manda `totals`. `additionalInfo` lee `AdditionalQueueInfo` (una cola transferida a
+  otra), tipado desde el design: ninguna respuesta real lo trajo todavía.
+
+  ```ts
+  const { queues, totals } = await session.queue.count({ queue: 20, selection: [{ function: 'QD', criteria: '08NOV' }] });
+  // queues: [{ queue: 20, count: 1 }], totals: { unfiltered: 80 }
+  ```
 - **`activity`** devuelve, por cola, los ocho contadores de la pantalla `QA` del host:
   `numMessages` (los que están hoy en la cola), `ended`, `ignored`, `moved`, `removed`,
   `transferred`, `leftMessageToContact` y `unableToReach`, más `totals` para el PCC. Sabre lista
@@ -621,8 +636,10 @@ fake.openSessions; // 0: la sesión se cerró
 - Responde como producción: colas vacías, el fin de cola, `place` que mueve el PNR, el PIC
   obligatorio y una sesión vencida con `fake.expireSessions()`. `fake.calls` lista lo que pidió el
   SDK.
+- `queue.count` con `queue` o `range` responde como producción: una cola sin `totals`, o cada cola
+  del rango, las vacías con `count: 0`.
 - **No simula** los PCC (las colas son las mismas para cualquier `pcc`) ni `selection`, que recibe
-  un error en vez de la cola entera, en `access` y en `list`.
+  un error en vez de la cola entera, en `access`, `list` y `count`.
 - `queueFixtures` trae las respuestas anonimizadas que se grabaron en producción (`walk`,
   `emptyQueue`, `place`…), como `{ operation, status, body }`. Cada una tiene sus propios alias de
   localizador (`walk`: `AAAAAA`–`AAAAAD`, `place`: `AAAAAE`–`AAAAAF`,

@@ -458,7 +458,7 @@ const pnrQueues = queues.filter(({ queue }) => !isMessageQueue(queue));
 
 | Method | Sabre service | Returns |
 | - | - | - |
-| `count({ pcc? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, warnings }` |
+| `count({ pcc?, queue?, range?, selection? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, additionalInfo?, warnings }` |
 | `activity({ pcc? })` | `QueueAnalysisLLSRQ` | `{ queues: [{ queue, numMessages, ended, ignored, … }], totals, analyzedAt, warnings }` |
 | `list({ queue, pcc?, primaryPassenger?, selection? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, without entering the queue |
 | `access({ queue, pcc?, selection? })` | `QueueAccessLLSRQ` | `QueueStep` |
@@ -483,6 +483,22 @@ type QueueStep =
   (the agent who placed it, PCC plus sine, e.g. `'PCC1AAT'`; not tested in the list yet).
   Any other code throws a `TypeError` without calling Sabre. The `placedAt` of a list entry is
   when the PNR was placed on the queue, the date `QD` filters on.
+- **`count` filters**: `queue` counts one queue, and `range: { start, end }` a range of numeric
+  queues; the two do not combine. With `range`, Sabre returns every queue in the range, **empty
+  ones included** with `count: 0` (without filters it leaves them out). `selection` takes up to 8
+  filters, like `access`, and counts only the PNRs that match: the host accepts any code (`QD`,
+  `AK`, `AL`, `PI`, `AC`… and combinations), and with the same `QD` the count matches `list`. It
+  needs `queue`: without a queue Sabre answers `QUEUE SELECTED NOT VALID OR CLOSED`, and with a
+  range, `KEYS NOT ALLOWED`, so the SDK throws a `TypeError` first. With `selection`,
+  `totals.unfiltered` is how many PNRs the queue has before filtering (the host's
+  `1 MATCHING PNRS OUT OF 80`); with `queue` alone Sabre sends no `totals`. `additionalInfo` reads
+  `AdditionalQueueInfo` (a queue transferred elsewhere), typed from the design: no real response
+  has carried it yet.
+
+  ```ts
+  const { queues, totals } = await session.queue.count({ queue: 20, selection: [{ function: 'QD', criteria: '08NOV' }] });
+  // queues: [{ queue: 20, count: 1 }], totals: { unfiltered: 80 }
+  ```
 - **`activity`** returns, per queue, the eight counters of the host's `QA` screen: `numMessages`
   (on the queue now), `ended`, `ignored`, `moved`, `removed`, `transferred`,
   `leftMessageToContact` and `unableToReach`, plus `totals` for the PCC. Sabre also lists empty
@@ -615,8 +631,10 @@ fake.openSessions; // 0: the session was closed
 - It answers like production: empty queues, the end of the queue, `place` moving the PNR, the
   required PIC, and an expired session with `fake.expireSessions()`. `fake.calls` lists what the
   SDK asked for.
+- `queue.count` with `queue` or `range` answers like production: one queue without `totals`, or
+  every queue in the range, empty ones with `count: 0`.
 - **Not simulated**: PCCs (the queues are the same for any `pcc`) and `selection`, which gets an
-  error instead of the whole queue, in `access` and in `list`.
+  error instead of the whole queue, in `access`, `list` and `count`.
 - `queueFixtures` holds the anonymized responses recorded in production (`walk`, `emptyQueue`,
   `place`, …), as `{ operation, status, body }`. Each one has its own locator aliases (`walk`:
   `AAAAAA`–`AAAAAD`, `place`: `AAAAAE`–`AAAAAF`, `placeWithoutInstructionCodeInside`:

@@ -7,6 +7,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `queue.count` takes `queue` (one queue), `range: { start, end }` (a range of numeric queues) and
+  `selection` (up to 8 filters, as in `access`). With `range`, every queue in the range comes back,
+  empty ones with `count: 0`. `selection` counts only the PNRs that match and needs `queue`;
+  `queue` with `range`, or `selection` without `queue`, throws a `TypeError` without calling Sabre,
+  since Sabre rejects both (#212, tested in CERT and production in #213).
+- `QueueCountResponse.totals.unfiltered`: with `selection`, how many PNRs the queue has before
+  filtering, from a `Totals` without `Type` that the design does not mention (#212).
+- `QueueCountResponse.additionalInfo` (`QueueAdditionalInfo`), from `AdditionalQueueInfo`. Typed
+  from the design: no real response has carried it yet (#212).
+- `QueueRange` type. The queue fake answers `count` with `queue` and `range` like production; with
+  `selection` it throws as not simulated, as in `access` and `list` (#212).
+
 ## [0.5.1] - 2026-11-09
 
 Fixes from moving sabre-playground to `0.5.0`, with no breaking changes. It was published under

@@ -41,8 +41,8 @@ export type {
 } from './queue/queue-place.js';
 export type { QueueListEntry, QueueListOptions, QueueListRequest, QueueListResponse } from './queue/queue-list.js';
 export { isMessageQueue, MESSAGE_QUEUE } from './queue/queue-ref.js';
-export type { QueueRef } from './queue/queue-ref.js';
-export type { QueueCount, QueueCountOptions, QueueCountRequest, QueueCountResponse } from './queue/queue-count.js';
+export type { QueueRange, QueueRef } from './queue/queue-ref.js';
+export type { QueueAdditionalInfo, QueueCount, QueueCountOptions, QueueCountRequest, QueueCountResponse } from './queue/queue-count.js';
 export type { SessionReservation } from './reservation/session-reservation.js';
 export type {
   ReservationHistoryAccounting,

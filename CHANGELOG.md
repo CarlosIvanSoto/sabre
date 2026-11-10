@@ -7,6 +7,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-10
+
+Queue filters for sabre-playground, with no breaking changes: every new field is optional, and
+`count` and `activity` without them send and return the same as in `0.5.1`. It is published under
+the `next` dist-tag first, and moves to `latest` after sabre-playground tests it in CERT. The host
+behavior behind these filters was recorded in CERT and production, read-only, in #213.
+
 ### Added
 
 - `queue.count` takes `queue` (one queue), `range: { start, end }` (a range of numeric queues) and
@@ -368,7 +375,8 @@ and queues). Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 - The whole `0.2.4` API. There is no compatibility layer.
 
-[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.0...v0.4.1

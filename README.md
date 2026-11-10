@@ -12,13 +12,16 @@ TypeScript SDK for the Sabre APIs.
 
 ## Status
 
-`0.5.1` is the current release of the rewrite (`latest`). It covers Tier 1 and Tier 2 of the Air
-Booking flow over REST, Tier 3 (SOAP sessions and queues) and Tier 4: queue activity, PNR history,
-the `S` message queue, `selection` in `list` and `onRawRequest`. The `0.5` line has three breaking
-changes (see [Upgrading from 0.4](#upgrading-from-04)).
+`0.6.0` is published under the `next` dist-tag while it is tested; `latest` stays on `0.5.1`.
+It covers Tier 1 and Tier 2 of the Air Booking flow over REST, Tier 3 (SOAP sessions and queues)
+and Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `list` and
+`onRawRequest`. `0.6.0` adds queue filters: `count` with one queue, a range or `selection`,
+`activity` with one queue or a range, and `selection` in the queue fake. It has no breaking
+changes; the `0.5` line has three (see [Upgrading from 0.4](#upgrading-from-04)).
 
 ```sh
-npm install sabre-client
+npm install sabre-client@next   # 0.6.0
+npm install sabre-client        # 0.5.1
 ```
 
 The package is still `0.x`: a minor version may include breaking changes, and the

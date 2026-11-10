@@ -3,10 +3,10 @@
 // wiki/sources/get-queue-activity-v2-0-0-design.md y wiki/entities/queue-management.md.
 import type { RequestOptions } from '../air/bargain-finder-max.js';
 import { SabreGatewayError, type SabreWarning } from '../errors/index.js';
-import { asArray, respondedAtField, type SoapResponse, xmlEscape } from '../http/soap-transport.js';
+import { asArray, respondedAtField, type SoapResponse } from '../http/soap-transport.js';
 import type { SessionRequest } from '../session/session.js';
 import { parseHostCount } from './queue-count.js';
-import { type QueueRef, toQueueRef } from './queue-ref.js';
+import { type QueueRange, type QueueRef, queueIdentifierXml, toQueueRef } from './queue-ref.js';
 
 export const QUEUE_ACTIVITY_SERVICE = 'queueAnalysis';
 const NAMESPACE = 'http://webservices.sabre.com/sabreXML/2011/10';
@@ -14,6 +14,13 @@ const NAMESPACE = 'http://webservices.sabre.com/sabreXML/2011/10';
 export interface QueueActivityRequest {
   /** PCC cuyas colas se analizan. Por defecto, el de la sesión. */
   pcc?: string;
+  /** Analizar solo esta cola (`QA/<PCC><cola>`). No se combina con `range`. */
+  queue?: QueueRef;
+  /**
+   * Analizar un rango de colas (`QA/<PCC>1-25`). No se combina con `queue`. La respuesta trae cada
+   * cola del rango, también las que tienen todos los contadores en 0.
+   */
+  range?: QueueRange;
 }
 
 export type QueueActivityOptions = RequestOptions;
@@ -49,9 +56,16 @@ export interface QueueActivity extends QueueActivityCounters {
 }
 
 export interface QueueActivityResponse {
-  /** Las colas que trae la respuesta, en el orden de Sabre. */
+  /**
+   * Las colas que trae la respuesta, en el orden de Sabre. Sin filtros, Sabre omite las que tienen
+   * todos los contadores en 0; con `range`, trae todas las del rango, y con `queue`, solo esa
+   * (CERT y producción, #213).
+   */
   queues: QueueActivity[];
-  /** `Totals`: los ocho contadores sumados para el PCC. Sin `Totals`, `undefined`. */
+  /**
+   * `Totals`: los ocho contadores sumados para el PCC, o para el rango con `range`. Con `queue`,
+   * Sabre no manda `Totals` y queda en `undefined` (#213).
+   */
   totals?: QueueActivityCounters;
   /**
    * `QueueInfo@DateTime` tal cual llegó, sin año (`"11-06T11:33"`): la hora del host al analizar.
@@ -76,20 +90,20 @@ const COUNTERS: ReadonlyArray<[string, keyof QueueActivityCounters]> = [
   ['UnableToReach', 'unableToReach'],
 ];
 
-/** Cuerpo de `QueueAnalysisRQ`: solo el PCC, para analizar todas sus colas (`QA/<PCC>`). */
-export function queueActivityPayload(pcc: string): string {
-  return `<QueueAnalysisRQ Version="2.0.0" xmlns="${NAMESPACE}"><QueueInfo><QueueIdentifier PseudoCityCode="${xmlEscape(pcc)}"/></QueueInfo></QueueAnalysisRQ>`;
+/** Cuerpo de `QueueAnalysisRQ`: todo el PCC (`QA/<PCC>`), una cola o un rango. */
+export function queueActivityPayload(pcc: string, target: { queue?: QueueRef; range?: QueueRange } = {}): string {
+  return `<QueueAnalysisRQ Version="2.0.0" xmlns="${NAMESPACE}"><QueueInfo>${queueIdentifierXml(pcc, target)}</QueueInfo></QueueAnalysisRQ>`;
 }
 
 /**
  * `QueueAnalysisLLSRQ` es una lectura: se reintenta ante `USG_*_BUSY`, transitorios y red. No pide
  * duty code 9, aunque el sample lo diga (CERT y producción, Q-098).
  */
-export function queueActivityRequest(pcc: string, options: QueueActivityOptions): SessionRequest {
+export function queueActivityRequest(pcc: string, options: QueueActivityOptions, target: { queue?: QueueRef; range?: QueueRange } = {}): SessionRequest {
   return {
     service: QUEUE_ACTIVITY_SERVICE,
     action: 'QueueAnalysisLLSRQ',
-    payload: queueActivityPayload(pcc),
+    payload: queueActivityPayload(pcc, target),
     idempotent: true,
     operation: 'queue.activity',
     ...options,

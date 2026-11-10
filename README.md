@@ -459,7 +459,7 @@ const pnrQueues = queues.filter(({ queue }) => !isMessageQueue(queue));
 | Method | Sabre service | Returns |
 | - | - | - |
 | `count({ pcc?, queue?, range?, selection? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, additionalInfo?, warnings }` |
-| `activity({ pcc? })` | `QueueAnalysisLLSRQ` | `{ queues: [{ queue, numMessages, ended, ignored, … }], totals, analyzedAt, warnings }` |
+| `activity({ pcc?, queue?, range? })` | `QueueAnalysisLLSRQ` | `{ queues: [{ queue, numMessages, ended, ignored, … }], totals, analyzedAt, warnings }` |
 | `list({ queue, pcc?, primaryPassenger?, selection? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, without entering the queue |
 | `access({ queue, pcc?, selection? })` | `QueueAccessLLSRQ` | `QueueStep` |
 | `ignore()` | `QueueAccessLLSRQ` (`I`) | `QueueStep` |
@@ -504,7 +504,9 @@ type QueueStep =
   `leftMessageToContact` and `unableToReach`, plus `totals` for the PCC. Sabre also lists empty
   queues that have counters. No source says since when the counters run, so the SDK returns them
   as they come. Like `count`, it is a read: it is retried, it works inside or outside a queue, and
-  it does not need duty code 9.
+  it does not need duty code 9. It takes the same `queue` or `range` as `count` (not both): with
+  `queue`, only that queue and no `totals`; with `range`, every queue in the range, even those
+  with all counters at 0, and the range's `totals`.
 - **Every queue result carries `respondedAt`**: Sabre's `eb:Timestamp`, in ISO 8601 UTC
   (`'2026-11-06T17:34:16Z'`). Unlike `countedAt` and `placedAt`, which come as the host sends them
   (no year, PCC local time), it has a year and a zone. It is missing only if Sabre does not send it.
@@ -631,8 +633,8 @@ fake.openSessions; // 0: the session was closed
 - It answers like production: empty queues, the end of the queue, `place` moving the PNR, the
   required PIC, and an expired session with `fake.expireSessions()`. `fake.calls` lists what the
   SDK asked for.
-- `queue.count` with `queue` or `range` answers like production: one queue without `totals`, or
-  every queue in the range, empty ones with `count: 0`.
+- `queue.count` and `queue.activity` with `queue` or `range` answer like production: one queue
+  without `totals`, or every queue in the range, empty ones included.
 - **Not simulated**: PCCs (the queues are the same for any `pcc`) and `selection`, which gets an
   error instead of the whole queue, in `access`, `list` and `count`.
 - `queueFixtures` holds the anonymized responses recorded in production (`walk`, `emptyQueue`,

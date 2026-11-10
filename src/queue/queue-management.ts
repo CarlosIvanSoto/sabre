@@ -66,7 +66,7 @@ import {
   queuePlaceRequest,
   type ResolvedPlaceTarget,
 } from './queue-place.js';
-import { isMessageQueue, type QueueRef, validateQueueRange, validateQueueRef } from './queue-ref.js';
+import { isMessageQueue, type QueueRange, type QueueRef, validateQueueRange, validateQueueRef } from './queue-ref.js';
 
 /**
  * Dónde está la sesión respecto de las colas: `'outside'`, `'inside'` (hay un PNR de una cola en
@@ -151,10 +151,7 @@ export class QueueManagement {
   async count(request: QueueCountRequest = {}, options: QueueCountOptions = {}): Promise<QueueCountResponse> {
     if (typeof request !== 'object' || request === null) fail('queue.count recibe { pcc?, queue?, range?, selection? }');
     const pcc = this.#pcc(request.pcc, 'pcc');
-    const { queue, range } = request;
-    if (queue !== undefined) validateQueueRef(queue, 'queue');
-    if (range !== undefined) validateQueueRange(range, 'range');
-    if (queue !== undefined && range !== undefined) fail('queue.count recibe queue o range, no los dos: Sabre no los combina');
+    const { queue, range } = validateQueueTarget(request, 'queue.count');
     const selection = validateSelection(request.selection);
     if (selection.length > 0 && queue === undefined) {
       fail(
@@ -176,13 +173,18 @@ export class QueueManagement {
    * (Q-097): el SDK los devuelve sin interpretar.
    *
    * Se puede llamar dentro o fuera de una cola, y no cambia `state`. Es una lectura: se reintenta
-   * ante fallos transitorios. No pide duty code 9 (CERT y producción, Q-098). Un PCC que no tiene 3
-   * o 4 caracteres alfanuméricos lanza `TypeError` sin red.
+   * ante fallos transitorios. No pide duty code 9 (CERT y producción, Q-098).
+   *
+   * Sin filtros analiza todo el PCC. Con `queue`, solo esa cola; con `range`, cada cola del rango,
+   * también las que tienen todos los contadores en 0. Lanzan `TypeError` sin red: un PCC que no
+   * tiene 3 o 4 caracteres alfanuméricos, una `queue` o un `range` inválidos, y `queue` y `range`
+   * juntos.
    */
   async activity(request: QueueActivityRequest = {}, options: QueueActivityOptions = {}): Promise<QueueActivityResponse> {
-    if (typeof request !== 'object' || request === null) fail('queue.activity recibe { pcc? }');
+    if (typeof request !== 'object' || request === null) fail('queue.activity recibe { pcc?, queue?, range? }');
     const pcc = this.#pcc(request.pcc, 'pcc');
-    const response = await this.#context.send(queueActivityRequest(pcc, options));
+    const target = validateQueueTarget(request, 'queue.activity');
+    const response = await this.#context.send(queueActivityRequest(pcc, options, target));
     return parseQueueActivityResponse(response);
   }
 
@@ -495,6 +497,18 @@ function validateLocators(locators: unknown): string[] {
     if (typeof locator !== 'string' || locator.trim() === '') fail(`locators[${index}] debe ser un string no vacío`);
     return locator;
   });
+}
+
+/**
+ * La cola o el rango de `count` y `activity`, validados. Son excluyentes: con los dos, Sabre
+ * responde `Client.Validation` (#213). Devuelve solo los que vinieron.
+ */
+function validateQueueTarget(request: { queue?: unknown; range?: unknown }, operation: string): { queue?: QueueRef; range?: QueueRange } {
+  const { queue, range } = request;
+  if (queue !== undefined) validateQueueRef(queue, 'queue');
+  if (range !== undefined) validateQueueRange(range, 'range');
+  if (queue !== undefined && range !== undefined) fail(`${operation} recibe queue o range, no los dos: Sabre no los combina`);
+  return { ...(queue === undefined ? {} : { queue }), ...(range === undefined ? {} : { range }) };
 }
 
 function validateSelection(selection: unknown): QueueSelection[] {

@@ -24,6 +24,25 @@ function client(options: QueueFakeOptions) {
 const zero = { ended: 0, ignored: 0, moved: 0, removed: 0, transferred: 0, leftMessageToContact: 0, unableToReach: 0 };
 
 describe('queue.activity contra el fake', () => {
+  it('con queue: solo esa cola, también en cero, y sin totals', async () => {
+    const { legacy } = client({ queues: { '9': [pnr('AAAAAA')] }, activity: { '9': { ignored: 3 }, '300': { ended: 1 } } });
+    const [nine, empty] = await legacy.withSession(async (session) => [await session.queue.activity({ queue: 9 }), await session.queue.activity({ queue: 40 })]);
+    expect(nine.queues).toEqual([{ queue: 9, ...zero, numMessages: 1, ignored: 3 }]);
+    expect(nine).not.toHaveProperty('totals');
+    expect(empty.queues).toEqual([{ queue: 40, ...zero, numMessages: 0 }]);
+  });
+
+  it('con range: cada cola del rango, las que están en cero también, y los totals del rango', async () => {
+    const { legacy } = client({ queues: { '9': [pnr('AAAAAA')], '20': [pnr('BBBBBB')] }, activity: { '11': { ended: 2 } } });
+    const result = await legacy.withSession((session) => session.queue.activity({ range: { start: 9, end: 11 } }));
+    expect(result.queues).toEqual([
+      { queue: 9, ...zero, numMessages: 1 },
+      { queue: 10, ...zero, numMessages: 0 },
+      { queue: 11, ...zero, numMessages: 0, ended: 2 },
+    ]);
+    expect(result.totals).toEqual({ ...zero, numMessages: 1, ended: 2 });
+  });
+
   it('numMessages sale de las colas; los demás contadores, de lo sembrado o 0', async () => {
     const { fake, legacy } = client({
       queues: { '9': [pnr('AAAAAA'), pnr('BBBBBB')], S: [['MENSAJE UNO']], '50': [] },

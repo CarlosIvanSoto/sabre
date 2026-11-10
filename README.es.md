@@ -463,7 +463,7 @@ const pnrQueues = queues.filter(({ queue }) => !isMessageQueue(queue));
 | Método | Servicio de Sabre | Devuelve |
 | - | - | - |
 | `count({ pcc?, queue?, range?, selection? })` | `QueueCountLLSRQ` | `{ queues: [{ queue, count }], totals, countedAt, additionalInfo?, warnings }` |
-| `activity({ pcc? })` | `QueueAnalysisLLSRQ` | `{ queues: [{ queue, numMessages, ended, ignored, … }], totals, analyzedAt, warnings }` |
+| `activity({ pcc?, queue?, range? })` | `QueueAnalysisLLSRQ` | `{ queues: [{ queue, numMessages, ended, ignored, … }], totals, analyzedAt, warnings }` |
 | `list({ queue, pcc?, primaryPassenger?, selection? })` | `QueueAccessLLSRQ` (`List`) | `{ locators, entries, paragraph, warnings }`, sin entrar a la cola |
 | `access({ queue, pcc?, selection? })` | `QueueAccessLLSRQ` | `QueueStep` |
 | `ignore()` | `QueueAccessLLSRQ` (`I`) | `QueueStep` |
@@ -507,7 +507,9 @@ type QueueStep =
   `transferred`, `leftMessageToContact` y `unableToReach`, más `totals` para el PCC. Sabre lista
   también colas vacías con contadores. Ninguna fuente dice desde cuándo cuentan, así que el SDK los
   devuelve tal cual. Como `count`, es una lectura: se reintenta, funciona dentro o fuera de una
-  cola y no pide duty code 9.
+  cola y no pide duty code 9. Acepta los mismos `queue` o `range` que `count` (no los dos): con
+  `queue`, solo esa cola y sin `totals`; con `range`, cada cola del rango, también las que tienen
+  todos los contadores en 0, y los `totals` del rango.
 - **Cada resultado de colas trae `respondedAt`**: el `eb:Timestamp` de Sabre, en ISO 8601 UTC
   (`'2026-11-06T17:34:16Z'`). A diferencia de `countedAt` y `placedAt`, que llegan como los manda
   el host (sin año y en hora local del PCC), trae año y zona. Solo falta si Sabre no lo manda.
@@ -636,8 +638,8 @@ fake.openSessions; // 0: la sesión se cerró
 - Responde como producción: colas vacías, el fin de cola, `place` que mueve el PNR, el PIC
   obligatorio y una sesión vencida con `fake.expireSessions()`. `fake.calls` lista lo que pidió el
   SDK.
-- `queue.count` con `queue` o `range` responde como producción: una cola sin `totals`, o cada cola
-  del rango, las vacías con `count: 0`.
+- `queue.count` y `queue.activity` con `queue` o `range` responden como producción: una cola sin
+  `totals`, o cada cola del rango, también las vacías.
 - **No simula** los PCC (las colas son las mismas para cualquier `pcc`) ni `selection`, que recibe
   un error en vez de la cola entera, en `access`, `list` y `count`.
 - `queueFixtures` trae las respuestas anonimizadas que se grabaron en producción (`walk`,

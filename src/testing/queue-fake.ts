@@ -722,26 +722,49 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
 
   // --- Get Queue Activity y Get Itinerary History ------------------------------------------
 
+  /**
+   * `activity` de todo el PCC, de una cola o de un rango, como en producción (#213): sin filtros,
+   * las colas con algún contador; con una cola, solo esa y sin `Totals`; con un rango, cada cola,
+   * también las que están en cero, y los `Totals` del rango.
+   */
   const analyze = (session: Session, rq: XmlNode): string => {
     calls.push({ command: 'activity' });
-    const pcc = attr(node(node(rq.QueueInfo)?.QueueIdentifier), 'PseudoCityCode') ?? '';
-    const totals: Record<string, number> = { NumMessages: 0 };
-    for (const [, element] of ACTIVITY_COUNTERS) totals[element] = 0;
-    const identifiers: string[] = [];
-    // Las colas del fake y las sembradas, una vez cada una. Como Sabre, se listan también colas
-    // vacías con contadores, y no las que están en cero.
-    for (const key of new Set([...queues.keys(), ...activity.keys()])) {
+    const identifier = node(node(rq.QueueInfo)?.QueueIdentifier);
+    const pcc = attr(identifier, 'PseudoCityCode') ?? '';
+    const countersOf = (key: string): Record<string, number> => {
       const seeded = activity.get(key) ?? {};
       const counters: Record<string, number> = { NumMessages: waiting(session, key, queues.get(key) ?? []) };
       for (const [name, element] of ACTIVITY_COUNTERS) counters[element] = seeded[name] ?? 0;
-      if (Object.values(counters).every((value) => value === 0)) continue;
-      for (const [element, value] of Object.entries(counters)) totals[element] = (totals[element] ?? 0) + value;
-      identifiers.push(
-        `<QueueIdentifier ${keyAttribute(key)}>${Object.entries(counters).map(([element, value]) => `<${element} Count="${value}"/>`).join('')}</QueueIdentifier>`,
-      );
+      return counters;
+    };
+    const countersXml = (counters: Record<string, number>) =>
+      Object.entries(counters).map(([element, value]) => `<${element} Count="${value}"/>`).join('');
+
+    let keys: string[];
+    let withTotals = true;
+    const range = node(identifier?.Range);
+    const requested = requestedKey(identifier);
+    if (range !== undefined) {
+      keys = [];
+      for (let number = Number(attr(range, 'Start')); number <= Number(attr(range, 'End')); number++) keys.push(String(number));
+    } else if (requested !== undefined) {
+      keys = [requested];
+      withTotals = false;
+    } else {
+      // Las colas del fake y las sembradas, una vez cada una. Como Sabre, se listan también colas
+      // vacías con contadores, y no las que están en cero.
+      keys = [...new Set([...queues.keys(), ...activity.keys()])].filter((key) => Object.values(countersOf(key)).some((value) => value !== 0));
     }
-    const totalsXml = Object.entries(totals).map(([element, value]) => `<${element} Count="${value}"/>`).join('');
-    return `<QueueAnalysisRS xmlns="${SWS_NAMESPACE}" xmlns:stl="${STL_NAMESPACE}" Version="2.0.0">${results('Complete', success)}<QueueInfo DateTime="${shortDate(now())}" PseudoCityCode="${escape(pcc)}">${identifiers.join('')}</QueueInfo><Totals>${totalsXml}</Totals></QueueAnalysisRS>`;
+
+    const totals: Record<string, number> = { NumMessages: 0 };
+    for (const [, element] of ACTIVITY_COUNTERS) totals[element] = 0;
+    const identifiers = keys.map((key) => {
+      const counters = countersOf(key);
+      for (const [element, value] of Object.entries(counters)) totals[element] = (totals[element] ?? 0) + value;
+      return `<QueueIdentifier ${keyAttribute(key)}>${countersXml(counters)}</QueueIdentifier>`;
+    });
+    const totalsXml = withTotals ? `<Totals>${countersXml(totals)}</Totals>` : '';
+    return `<QueueAnalysisRS xmlns="${SWS_NAMESPACE}" xmlns:stl="${STL_NAMESPACE}" Version="2.0.0">${results('Complete', success)}<QueueInfo DateTime="${shortDate(now())}" PseudoCityCode="${escape(pcc)}">${identifiers.join('')}</QueueInfo>${totalsXml}</QueueAnalysisRS>`;
   };
 
   const history = (session: Session, rq: XmlNode): string => {

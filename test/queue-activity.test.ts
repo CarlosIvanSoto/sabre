@@ -5,6 +5,7 @@ import { SabreBusinessError, SabreGatewayError, SabreWarning } from '../src/inde
 import { queueActivityPayload } from '../src/queue/queue-activity.js';
 import cert from './fixtures/activity.sandbox-qa.json';
 import production from './fixtures/activity.production-qa.json';
+import filters from './fixtures/queue.production-filters.json';
 import { mockFetch } from './helpers.js';
 import { entry, legacyClient, rejection, SESSION_TOKEN, sentBody, sentTag, sessionOpened, soap, success, xml } from './soap-helpers.js';
 
@@ -156,5 +157,69 @@ describe('queue.activity: formas raras', () => {
     const payload = analysisRS(`${complete}<Totals>${zeros().replace('<Ended Count="0"/>', '')}</Totals>`);
     const { session } = await openWith(xml(200, soap(payload)));
     expect(await rejection(session.queue.activity())).toBeInstanceOf(SabreGatewayError);
+  });
+});
+
+describe('queue.activity: cola y rango (#203)', () => {
+  /** Una respuesta de `QueueAnalysisLLSRQ` de queue.production-filters.json (#213, producción). */
+  const probe = (operation: string) => {
+    const response = (filters as Fixture).responses.find((r) => r.operation === operation);
+    if (response === undefined) throw new Error(`la fixture no tiene ${operation}`);
+    return xml(response.status, response.body);
+  };
+
+  it('con queue manda Number (o Name)', async () => {
+    const { fetch, session } = await openWith(probe('probe.qaNumber'), probe('probe.qaNumber'));
+    await session.queue.activity({ queue: 20 });
+    expect(sentBody(fetch, 1)).toContain(
+      '<QueueAnalysisRQ Version="2.0.0" xmlns="http://webservices.sabre.com/sabreXML/2011/10"><QueueInfo><QueueIdentifier Number="20" PseudoCityCode="H8GI"/></QueueInfo></QueueAnalysisRQ>',
+    );
+    await session.queue.activity({ queue: { name: 'HOTELS' } });
+    expect(sentBody(fetch, 2)).toContain('<QueueIdentifier Name="HOTELS" PseudoCityCode="H8GI"/>');
+  });
+
+  it('con range manda Range como hijo de QueueIdentifier', async () => {
+    const { fetch, session } = await openWith(probe('probe.qaRange'));
+    await session.queue.activity({ range: { start: 1, end: 25 } });
+    expect(sentBody(fetch, 1)).toContain('<QueueInfo><QueueIdentifier PseudoCityCode="H8GI"><Range Start="1" End="25"/></QueueIdentifier></QueueInfo>');
+  });
+
+  it('sin campos nuevos manda lo mismo que en la 0.5.1', () => {
+    expect(queueActivityPayload('H8GI')).toBe(
+      '<QueueAnalysisRQ Version="2.0.0" xmlns="http://webservices.sabre.com/sabreXML/2011/10"><QueueInfo><QueueIdentifier PseudoCityCode="H8GI"/></QueueInfo></QueueAnalysisRQ>',
+    );
+  });
+
+  it.each<[string, unknown, string]>([
+    ['queue y range juntos', { queue: 20, range: { start: 1, end: 25 } }, 'queue.activity recibe queue o range, no los dos: Sabre no los combina'],
+    ['un range con start ≥ end', { range: { start: 9, end: 2 } }, 'range.start debe ser menor que range.end (para una sola cola, usa queue)'],
+    ['un range fuera de 0–511', { range: { start: 1, end: 600 } }, 'range.end debe ser un número de cola entero de 0 a 511'],
+    ['una queue inválida', { queue: { name: 'S' } }, "queue: 'S' es una cola alfabética: pasa 'S', no { name: 'S' }"],
+    ['un request que no es objeto', 'QA', 'queue.activity recibe { pcc?, queue?, range? }'],
+  ])('%s lanza TypeError sin red', async (_name, request, message) => {
+    const { fetch, session } = await openWith();
+    const error = await rejection(session.queue.activity(request as never));
+    expect(error).toBeInstanceOf(TypeError);
+    expect((error as Error).message).toBe(`sabre-client: ${message}`);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('con queue (producción): solo esa cola, sin Totals', async () => {
+    const { session } = await openWith(probe('probe.qaNumber'));
+    const result = await session.queue.activity({ queue: 20 });
+    expect(result.queues).toEqual([
+      { queue: 20, numMessages: 80, ended: 26, ignored: 21990, moved: 6, removed: 4493, transferred: 7486, leftMessageToContact: 0, unableToReach: 0 },
+    ]);
+    expect(result).not.toHaveProperty('totals');
+    expect(result.analyzedAt).toBe('11-10T09:41');
+  });
+
+  it('con range (producción): cada cola del rango, también las que están en cero, y los Totals del rango', async () => {
+    const { session } = await openWith(probe('probe.qaRange'));
+    const result = await session.queue.activity({ range: { start: 1, end: 25 } });
+    expect(result.queues.map((q) => q.queue)).toEqual(Array.from({ length: 25 }, (_, i) => i + 1));
+    // La 3 está vacía (`ON Q 0`) y aun así viene, con sus contadores.
+    expect(result.queues.find((q) => q.queue === 3)).toMatchObject({ queue: 3, numMessages: 0 });
+    expect(result.totals?.numMessages).toBe(result.queues.reduce((sum, q) => sum + q.numMessages, 0));
   });
 });

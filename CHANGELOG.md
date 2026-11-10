@@ -20,6 +20,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   from the design: no real response has carried it yet (#212).
 - `QueueRange` type. The queue fake answers `count` with `queue` and `range` like production; with
   `selection` it throws as not simulated, as in `access` and `list` (#212).
+- `queue.activity` takes the same `queue` or `range` as `count` (not both, `TypeError` without
+  calling Sabre). With `queue`, Sabre returns only that queue and no `totals`; with `range`, every
+  queue in the range, even with all counters at 0, and the range's `totals`. The queue fake does
+  the same (#203, recorded in production in #213).
 
 ## [0.5.1] - 2026-11-09
 

@@ -271,3 +271,125 @@ describe('QueueRef', () => {
     expect(queueRefAttribute({ name: 'A&B' })).toBe('Name="A&amp;B"');
   });
 });
+
+describe('queue.count: cola, rango y selection (#212)', () => {
+  const body = (fetch: ReturnType<typeof mockFetch>) => sentBody(fetch, 1);
+
+  it('con queue manda Number (o Name) y nada más', async () => {
+    const { fetch, session } = await openWith(counted(), counted());
+    await session.queue.count({ queue: 20 });
+    expect(body(fetch)).toContain('<QueueCountRQ Version="2.2.1" xmlns="http://webservices.sabre.com/sabreXML/2011/10"><QueueInfo><QueueIdentifier Number="20" PseudoCityCode="H8GI"/></QueueInfo></QueueCountRQ>');
+    await session.queue.count({ queue: { name: 'HOTELS' } });
+    expect(sentBody(fetch, 2)).toContain('<QueueIdentifier Name="HOTELS" PseudoCityCode="H8GI"/>');
+  });
+
+  it('con range manda Range como hijo de QueueIdentifier, sin Number', async () => {
+    const { fetch, session } = await openWith(counted());
+    await session.queue.count({ range: { start: 1, end: 25 } });
+    expect(body(fetch)).toContain('<QueueInfo><QueueIdentifier PseudoCityCode="H8GI"><Range Start="1" End="25"/></QueueIdentifier></QueueInfo></QueueCountRQ>');
+  });
+
+  it('con selection manda los Selection como hermanos de QueueInfo', async () => {
+    const { fetch, session } = await openWith(counted());
+    await session.queue.count({
+      queue: 20,
+      selection: [
+        { function: 'QD', criteria: '08NOV' },
+        { function: 'PI', criteria: '11' },
+      ],
+    });
+    expect(body(fetch)).toContain(
+      '<QueueInfo><QueueIdentifier Number="20" PseudoCityCode="H8GI"/></QueueInfo><Selection Function="QD" Criteria="08NOV"/><Selection Function="PI" Criteria="11"/></QueueCountRQ>',
+    );
+  });
+
+  it('sin campos nuevos manda lo mismo que en la 0.5.1', () => {
+    expect(queueCountPayload('H8GI')).toBe(
+      '<QueueCountRQ Version="2.2.1" xmlns="http://webservices.sabre.com/sabreXML/2011/10"><QueueInfo><QueueIdentifier PseudoCityCode="H8GI"/></QueueInfo></QueueCountRQ>',
+    );
+  });
+
+  it.each<[string, unknown, string]>([
+    ['queue y range juntos', { queue: 20, range: { start: 1, end: 25 } }, 'queue.count recibe queue o range, no los dos: Sabre no los combina'],
+    ['selection sin queue', { selection: [{ function: 'QD', criteria: '08NOV' }] }, 'selection en count necesita queue: sin cola, Sabre responde QUEUE SELECTED NOT VALID OR CLOSED'],
+    [
+      'selection con range',
+      { range: { start: 1, end: 25 }, selection: [{ function: 'QD', criteria: '08NOV' }] },
+      'selection en count necesita queue, no range: con un rango, Sabre responde KEYS NOT ALLOWED',
+    ],
+    ['un range que no es objeto', { range: '1-25' }, 'range debe ser { start, end }'],
+    ['un range con start fuera de 0–511', { range: { start: -1, end: 25 } }, 'range.start debe ser un número de cola entero de 0 a 511'],
+    ['un range con end no entero', { range: { start: 1, end: 2.5 } }, 'range.end debe ser un número de cola entero de 0 a 511'],
+    ['un range con start ≥ end', { range: { start: 25, end: 25 } }, 'range.start debe ser menor que range.end (para una sola cola, usa queue)'],
+    ['una queue inválida', { queue: '20' }, 'queue: una cola numérica va como número (20), no como string'],
+    ['más de 8 filtros', { queue: 20, selection: Array.from({ length: 9 }, () => ({ function: 'QD', criteria: '08NOV' })) }, 'selection admite hasta 8 filtros'],
+    ['un filtro vacío', { queue: 20, selection: [{ function: 'QD', criteria: ' ' }] }, 'selection[0].criteria debe ser un string no vacío'],
+    ['un request que no es objeto', null, 'queue.count recibe { pcc?, queue?, range?, selection? }'],
+  ])('%s lanza TypeError sin red', async (_name, request, message) => {
+    const { fetch, session } = await openWith();
+    const error = await rejection(session.queue.count(request as never));
+    expect(error).toBeInstanceOf(TypeError);
+    expect((error as Error).message).toBe(`sabre-client: ${message}`);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('queue.count: respuestas con cola, rango y selection (#213)', () => {
+  const ok = `<stl:ApplicationResults status="Complete">${success}</stl:ApplicationResults>`;
+
+  it('con queue: solo esa cola y sin Totals (producción)', async () => {
+    const { session } = await openWith(counted(countRS(`${ok}<QueueInfo DateTime="11-10T00:43" PseudoCityCode="XXXX"><QueueIdentifier Count="80" Number="20"/></QueueInfo>`)));
+    expect(await session.queue.count({ queue: 20 })).toMatchObject({ queues: [{ queue: 20, count: 80 }], totals: {}, countedAt: '11-10T00:43' });
+  });
+
+  it('con range: las colas vacías llegan con count 0, y los Totals son del rango (producción)', async () => {
+    const payload = countRS(
+      `${ok}<QueueInfo DateTime="11-10T00:43" PseudoCityCode="XXXX"><QueueIdentifier Count="1229" Number="1"/><QueueIdentifier Count="4" Number="2"/><QueueIdentifier Count="0" Number="3"/></QueueInfo><Totals Count="0" Type="MESSAGES"/><Totals Count="0" Type="SPECIALS"/><Totals Count="1233" Type="PNRS"/>`,
+    );
+    const { session } = await openWith(counted(payload));
+    const result = await session.queue.count({ range: { start: 1, end: 3 } });
+    expect(result.queues).toEqual([
+      { queue: 1, count: 1229 },
+      { queue: 2, count: 4 },
+      { queue: 3, count: 0 },
+    ]);
+    expect(result.totals).toEqual({ messages: 0, specials: 0, pnrs: 1233 });
+  });
+
+  it('con selection: el Totals sin Type es cuántos tiene la cola sin filtrar (producción)', async () => {
+    const payload = countRS(`${ok}<QueueInfo DateTime="11-10T00:43" PseudoCityCode="XXXX"><QueueIdentifier Count="1" Number="20"/></QueueInfo><Totals Count="80"/>`);
+    const { session } = await openWith(counted(payload));
+    const result = await session.queue.count({ queue: 20, selection: [{ function: 'QD', criteria: '08NOV' }] });
+    expect(result.queues).toEqual([{ queue: 20, count: 1 }]);
+    expect(result.totals).toEqual({ unfiltered: 80 });
+  });
+
+  it('un criterio que no vale es un SabreBusinessError (INVALID PLACING AGENT, producción)', async () => {
+    const payload = countRS(`<stl:ApplicationResults status="NotProcessed">${entry('Error', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', 'INVALID PLACING AGENT')}</stl:ApplicationResults>`);
+    const { session } = await openWith(counted(payload));
+    const error = await rejection(session.queue.count({ queue: 20, selection: [{ function: 'AK', criteria: 'XXXXSABRE' }] }));
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect(error).toMatchObject({ service: 'queueCount', code: 'ERR.SWS.HOST.ERROR_IN_RESPONSE' });
+  });
+
+  it('AdditionalQueueInfo se lee como hijo de QueueIdentifier y como hermano (design, no visto)', async () => {
+    const payload = countRS(
+      `${ok}<QueueInfo DateTime="06-25T09:46" PseudoCityCode="7TZA"><QueueIdentifier Count="3" Number="9"><AdditionalQueueInfo FreeText="IS TRANSFERRED TO" PseudoCityCode="ABCD" QueueNumber="10"/></QueueIdentifier><QueueIdentifier Count="1" Number="20"/><AdditionalQueueInfo FreeText="IS TRANSFERRED TO" QueueNumber="30"/></QueueInfo>`,
+    );
+    const { session } = await openWith(counted(payload));
+    const result = await session.queue.count();
+    expect(result.queues).toEqual([
+      { queue: 9, count: 3 },
+      { queue: 20, count: 1 },
+    ]);
+    expect(result.additionalInfo).toEqual([
+      { freeText: 'IS TRANSFERRED TO', queueNumber: '30' },
+      { queue: 9, freeText: 'IS TRANSFERRED TO', pseudoCityCode: 'ABCD', queueNumber: '10' },
+    ]);
+  });
+
+  it('sin AdditionalQueueInfo no hay additionalInfo', async () => {
+    const { session } = await openWith(counted());
+    expect(await session.queue.count()).not.toHaveProperty('additionalInfo');
+  });
+});

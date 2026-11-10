@@ -66,7 +66,7 @@ import {
   queuePlaceRequest,
   type ResolvedPlaceTarget,
 } from './queue-place.js';
-import { isMessageQueue, type QueueRef, validateQueueRef } from './queue-ref.js';
+import { isMessageQueue, type QueueRef, validateQueueRange, validateQueueRef } from './queue-ref.js';
 
 /**
  * Dónde está la sesión respecto de las colas: `'outside'`, `'inside'` (hay un PNR de una cola en
@@ -139,13 +139,32 @@ export class QueueManagement {
    * más los totales. Cada `queue` de la respuesta se puede pasar tal cual a las demás operaciones
    * de cola.
    *
+   * Sin filtros cuenta todo el PCC. Con `queue`, solo esa cola; con `range`, cada cola del rango,
+   * también las vacías. Con `selection` (que necesita `queue`), solo los PNR que cumplen: con el
+   * mismo `QD`, da lo mismo que `list` (CERT y producción, #213).
+   *
    * Se puede llamar dentro o fuera de una cola, y no cambia `state`. Es una lectura: se reintenta
-   * ante fallos transitorios. Un PCC que no tiene 3 o 4 caracteres alfanuméricos lanza
-   * `TypeError` sin red.
+   * ante fallos transitorios. Lanzan `TypeError` sin red: un PCC que no tiene 3 o 4 caracteres
+   * alfanuméricos, una `queue` o un `range` inválidos, `queue` y `range` juntos, una `selection`
+   * inválida (como en `access`) o una `selection` sin `queue`.
    */
   async count(request: QueueCountRequest = {}, options: QueueCountOptions = {}): Promise<QueueCountResponse> {
+    if (typeof request !== 'object' || request === null) fail('queue.count recibe { pcc?, queue?, range?, selection? }');
     const pcc = this.#pcc(request.pcc, 'pcc');
-    const response = await this.#context.send(queueCountRequest(pcc, options));
+    const { queue, range } = request;
+    if (queue !== undefined) validateQueueRef(queue, 'queue');
+    if (range !== undefined) validateQueueRange(range, 'range');
+    if (queue !== undefined && range !== undefined) fail('queue.count recibe queue o range, no los dos: Sabre no los combina');
+    const selection = validateSelection(request.selection);
+    if (selection.length > 0 && queue === undefined) {
+      fail(
+        range === undefined
+          ? 'selection en count necesita queue: sin cola, Sabre responde QUEUE SELECTED NOT VALID OR CLOSED'
+          : 'selection en count necesita queue, no range: con un rango, Sabre responde KEYS NOT ALLOWED',
+      );
+    }
+    const target = { ...(queue === undefined ? {} : { queue }), ...(range === undefined ? {} : { range }), ...(selection.length === 0 ? {} : { selection }) };
+    const response = await this.#context.send(queueCountRequest(pcc, options, target));
     return parseQueueCountResponse(response);
   }
 

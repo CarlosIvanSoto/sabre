@@ -212,6 +212,31 @@ describe('primitivas', () => {
     expect((error as Error).message).toContain('selection no está simulado');
   });
 
+  it('count con queue: solo esa cola, también vacía, y sin Totals', async () => {
+    const { legacy } = client({ queues: { '12': [pnr('AAAAAA'), pnr('BBBBBB')], '13': [pnr('CCCCCC')] } });
+    const [full, empty] = await legacy.withSession(async (session) => [await session.queue.count({ queue: 12 }), await session.queue.count({ queue: 40 })]);
+    expect(full).toMatchObject({ queues: [{ queue: 12, count: 2 }], totals: {} });
+    expect(empty).toMatchObject({ queues: [{ queue: 40, count: 0 }], totals: {} });
+  });
+
+  it('count con range: cada cola del rango, las vacías con 0, y los Totals del rango', async () => {
+    const { legacy } = client({ queues: { '12': [pnr('AAAAAA'), pnr('BBBBBB')], '14': [pnr('CCCCCC')], '20': [pnr('DDDDDD')] } });
+    const result = await legacy.withSession((session) => session.queue.count({ range: { start: 12, end: 14 } }));
+    expect(result.queues).toEqual([
+      { queue: 12, count: 2 },
+      { queue: 13, count: 0 },
+      { queue: 14, count: 1 },
+    ]);
+    expect(result.totals).toEqual({ messages: 0, specials: 0, pnrs: 3 });
+  });
+
+  it('count con selection no está simulado: lanza en vez de contar la cola entera', async () => {
+    const { legacy } = client({ queues: { '12': [pnr('AAAAAA')] } });
+    const error = await legacy.withSession((session) => rejection(session.queue.count({ queue: 12, selection: [{ function: 'QD', criteria: '02NOV' }] })));
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect((error as Error).message).toContain('selection no está simulado');
+  });
+
   it('ping responde Success', async () => {
     const { fake, legacy } = client({});
     await legacy.withSession((session) => session.ping());

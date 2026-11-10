@@ -65,6 +65,44 @@ export function queueRefAttribute(queue: QueueRef): string {
   return `Name="${xmlEscape(queue.name)}"`;
 }
 
+/**
+ * Un rango de colas numéricas, de `start` a `end`, las dos incluidas: `{ start: 1, end: 25 }` es el
+ * `QC/<PCC>1-25` del host. Lo usan `count` y `activity`. A diferencia de pedir todo el PCC, Sabre
+ * devuelve cada cola del rango, también las vacías, con cuenta `0` (CERT y producción, #213).
+ *
+ * El design también acepta rangos de colas con nombre (`TEST1-TEST2`), pero ninguna prueba los vio:
+ * por ahora solo van números.
+ */
+export interface QueueRange {
+  start: number;
+  end: number;
+}
+
+/** Valida un `QueueRange` de la entrada, sin red. `label` es el nombre del campo en el mensaje. */
+export function validateQueueRange(value: unknown, label: string): asserts value is QueueRange {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) fail(`${label} debe ser { start, end }`);
+  const { start, end } = value as { start?: unknown; end?: unknown };
+  for (const [name, bound] of [['start', start], ['end', end]] as const) {
+    if (typeof bound !== 'number' || !Number.isInteger(bound) || bound < MIN_QUEUE_NUMBER || bound > MAX_QUEUE_NUMBER) {
+      fail(`${label}.${name} debe ser un número de cola entero de ${MIN_QUEUE_NUMBER} a ${MAX_QUEUE_NUMBER}`);
+    }
+  }
+  if ((start as number) >= (end as number)) fail(`${label}.start debe ser menor que ${label}.end (para una sola cola, usa queue)`);
+}
+
+/**
+ * `QueueIdentifier` de `QueueCountRQ` y `QueueAnalysisRQ`: todo el PCC, una cola o un rango. `Range`
+ * va como hijo y sin `Number` ni `Name`: con los dos, Sabre responde `Client.Validation` (#213).
+ */
+export function queueIdentifierXml(pcc: string, target: { queue?: QueueRef; range?: QueueRange } = {}): string {
+  const pccAttribute = `PseudoCityCode="${xmlEscape(pcc)}"`;
+  if (target.range !== undefined) {
+    return `<QueueIdentifier ${pccAttribute}><Range Start="${target.range.start}" End="${target.range.end}"/></QueueIdentifier>`;
+  }
+  if (target.queue !== undefined) return `<QueueIdentifier ${queueRefAttribute(target.queue)} ${pccAttribute}/>`;
+  return `<QueueIdentifier ${pccAttribute}/>`;
+}
+
 /** Si la cola es la de mensajes (`'S'`). */
 export function isMessageQueue(queue: QueueRef): boolean {
   return queue === MESSAGE_QUEUE;

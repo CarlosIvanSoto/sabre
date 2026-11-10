@@ -7,6 +7,7 @@
 // mueve el PNR y devuelve el siguiente, y los errores de host con el código en `ShortText`.
 import { XMLParser } from 'fast-xml-parser';
 import { END_OF_DISPLAY, OFF_QUEUE, QUEUE_EMPTY } from '../queue/queue-access.js';
+import { parseQueueParagraph } from '../queue/queue-paragraph.js';
 import { signatureLocator } from '../queue/queue-place.js';
 import type { QueueActivityCounters } from '../queue/queue-activity.js';
 import { MAX_QUEUE_NUMBER, MESSAGE_QUEUE, MIN_QUEUE_NUMBER, type QueueRef, toQueueRef } from '../queue/queue-ref.js';
@@ -24,12 +25,14 @@ export interface QueueFakePnr {
   /**
    * Las líneas del PNR en formato de host, como el `Paragraph` de Access Queue. Si no termina en
    * una línea de firma (`… HHMM/DDMMMYY <localizador> H`), el fake agrega una: `place` dentro de
-   * una cola saca el localizador de ahí, igual que con Sabre.
+   * una cola saca el localizador de ahí, igual que con Sabre. `selection` `AL` y `AC` filtran por
+   * los segmentos del párrafo, y `PI` por su aviso de PIC (`011  SEE REMARKS`), como los lee
+   * `parseQueueParagraph`.
    */
   paragraph?: readonly string[];
-  /** `Line/DateTime`, tal cual. */
+  /** `Line/DateTime`, tal cual. Es la fecha por la que filtra `selection` `QD`. */
   placedAt?: string;
-  /** `Line/POS/Source`. */
+  /** `Line/POS/Source`. `selection` `AK` filtra por el PCC más la firma (`'ABCDAAT'`). */
   placedBy?: { agentSine?: string; pseudoCityCode?: string };
   /** `Line/PassengerName`. Solo llega en `list` con `primaryPassenger: true`. */
   primaryPassenger?: string;
@@ -154,12 +157,34 @@ interface Entry {
   message?: readonly string[];
   placedAt: string | undefined;
   placedBy: { agentSine?: string; pseudoCityCode?: string } | undefined;
+  /** El PIC con que se colocó con `place`. Los PNR sembrados lo sacan del aviso de su párrafo. */
+  instructionCode?: number;
 }
 
 interface Session {
   conversationId: string;
-  /** La cola en la que está la sesión y la posición del PNR en pantalla. */
-  inside: { key: string; index: number } | undefined;
+  /**
+   * La cola en la que está la sesión y la posición del PNR en pantalla. Con `selection`, `matches`
+   * dice qué PNR cumplen: el recorrido salta los demás.
+   */
+  inside: { key: string; index: number; matches?: (entry: Entry) => boolean } | undefined;
+}
+
+/**
+ * Las funciones de `selection` que simula el fake (#202). En `list`, Sabre acepta solo `QD` y `AK`
+ * (producción, #155); en `access` y `count`, cualquiera (#213), pero el fake simula solo estas.
+ * Las demás dan un error de host marcado como no simulado.
+ */
+export const QUEUE_FAKE_SELECTION_FUNCTIONS = ['QD', 'AK', 'AL', 'PI', 'AC'] as const;
+const LIST_SELECTION_FUNCTIONS = ['QD', 'AK'];
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+/** `05NOV` o `5NOV` contra un `placedAt` `2026-11-05T…` (o `11-05T…`, sin año). */
+function placedOn(placedAt: string | undefined, criteria: string): boolean {
+  const date = /^(\d{1,2})([A-Z]{3})$/.exec(criteria.toUpperCase());
+  const placed = /(\d{2})-(\d{2})T/.exec(placedAt ?? '');
+  if (date === null || placed === null) return false;
+  return Number(placed[1]) === MONTHS.indexOf(date[2]!) + 1 && Number(placed[2]) === Number(date[1]);
 }
 
 interface Reply {
@@ -539,7 +564,55 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
   const placeError = (message: string): string => placeRS(results('NotProcessed', hostResult('Error', message)));
 
   /** El paso en el que queda la sesión: el PNR en pantalla o el fin de cola. */
+  /**
+   * Si un PNR cumple un filtro de `selection`. `undefined` si la función no se simula. `AC` acepta
+   * una sola letra (todos los estados que empiezan con ella), como el host.
+   */
+  const matchesFilter = (entry: Entry, fn: string, criteria: string): boolean | undefined => {
+    if (entry.message !== undefined) return false;
+    const wanted = criteria.trim().toUpperCase();
+    const paragraph = () => parseQueueParagraph(pnrs.get(entry.locator)?.paragraph ?? [], { referenceDate: now() });
+    switch (fn.toUpperCase()) {
+      case 'QD':
+        return placedOn(entry.placedAt, wanted);
+      case 'AK':
+        return `${entry.placedBy?.pseudoCityCode ?? ''}${entry.placedBy?.agentSine ?? ''}`.toUpperCase() === wanted;
+      case 'AL':
+        return paragraph().segments.some((segment) => segment.kind === 'air' && segment.airlineCode === wanted);
+      case 'AC':
+        return paragraph().segments.some((segment) => segment.status.startsWith(wanted));
+      case 'PI': {
+        const code = Number(wanted);
+        if (entry.instructionCode !== undefined) return entry.instructionCode === code;
+        return paragraph().messages.some((message) => message.instructionCode === code);
+      }
+      default:
+        return undefined;
+    }
+  };
+
+  /**
+   * Los filtros de un request, como predicado. Un código que el fake no simula da el mensaje del
+   * error de host, en vez de ignorarlo.
+   */
+  const selectionOf = (rq: XmlNode, allowed: readonly string[]): { matches?: (entry: Entry) => boolean; error?: string } => {
+    const filters = nodes(rq.Selection).map((selection) => ({ fn: (attr(selection, 'Function') ?? '').toUpperCase(), criteria: attr(selection, 'Criteria') ?? '' }));
+    if (filters.length === 0) return {};
+    const unsupported = filters.find((filter) => !allowed.includes(filter.fn));
+    if (unsupported !== undefined) return { error: `sabre-client/testing: selection ${unsupported.fn} no está simulado (simula ${allowed.join(', ')})` };
+    return { matches: (entry) => filters.every((filter) => matchesFilter(entry, filter.fn, filter.criteria) === true) };
+  };
+
+  /** Con `selection`, deja el cursor en el próximo PNR que cumple. */
+  const advance = (session: Session): void => {
+    const inside = session.inside;
+    if (inside?.matches === undefined) return;
+    const entries = queue(inside.key);
+    while (inside.index < entries.length && !inside.matches(entries[inside.index]!)) inside.index += 1;
+  };
+
   const step = (session: Session): string => {
+    advance(session);
     const inside = session.inside;
     const entry = inside === undefined ? undefined : queue(inside.key)[inside.index];
     if (entry === undefined) {
@@ -563,12 +636,22 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
   /**
    * `count` de todo el PCC, de una cola o de un rango, como en CERT y producción (#213): con una
    * cola, solo esa y sin `Totals`; con un rango, cada cola, las vacías con `Count="0"`, y los
-   * `Totals` del rango. `selection` todavía no se simula.
+   * `Totals` del rango. Con `selection` y una cola, cuenta los que cumplen y manda un `Totals` sin
+   * `Type` con el total de la cola; sin cola o con un rango, da los errores de Sabre.
    */
   const count = (session: Session, rq: XmlNode): string => {
     const identifier = node(node(rq.QueueInfo)?.QueueIdentifier);
     const pcc = attr(identifier, 'PseudoCityCode') ?? '';
-    if (nodes(rq.Selection).length > 0) return countRS(results('NotProcessed', hostResult('Error', 'sabre-client/testing: selection no está simulado')));
+    const countError = (message: string) => countRS(results('NotProcessed', hostResult('Error', message)));
+    const range = node(identifier?.Range);
+    const requested = requestedKey(identifier);
+    const { matches, error } = selectionOf(rq, QUEUE_FAKE_SELECTION_FUNCTIONS);
+    if (matches !== undefined || error !== undefined) {
+      // Sin cola, o con un rango, Sabre rechaza selection (CERT y producción, #213).
+      if (range !== undefined) return countError('KEYS NOT ALLOWED');
+      if (requested === undefined) return countError('QUEUE SELECTED NOT VALID OR CLOSED');
+      if (error !== undefined) return countError(error);
+    }
     const info = (identifiers: readonly string[]) =>
       `${results('Complete', success)}<QueueInfo DateTime="${shortDate(now())}" PseudoCityCode="${escape(pcc)}">${identifiers.join('')}</QueueInfo>`;
     const totalsXml = (messages: number, pnrs: number) =>
@@ -576,7 +659,6 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     // Con un PNR en pantalla, su cola no lo cuenta (producción, #96).
     const waitingIn = (key: string) => waiting(session, key, queues.get(key) ?? []);
 
-    const range = node(identifier?.Range);
     if (range !== undefined) {
       const start = Number(attr(range, 'Start'));
       const end = Number(attr(range, 'End'));
@@ -590,8 +672,13 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
       return countRS(`${info(identifiers)}${totalsXml(0, pnrsTotal)}`);
     }
 
-    const key = requestedKey(identifier);
-    if (key !== undefined) return countRS(info([`<QueueIdentifier Count="${waitingIn(key)}" ${keyAttribute(key)}/>`]));
+    if (requested !== undefined) {
+      if (matches === undefined) return countRS(info([`<QueueIdentifier Count="${waitingIn(requested)}" ${keyAttribute(requested)}/>`]));
+      // Con selection: los que cumplen, y un Totals sin Type con el total de la cola (#213).
+      const onScreen = session.inside?.key === requested ? queue(requested)[session.inside.index] : undefined;
+      const matching = (queues.get(requested) ?? []).filter((entry) => entry !== onScreen && matches(entry)).length;
+      return countRS(`${info([`<QueueIdentifier Count="${matching}" ${keyAttribute(requested)}/>`])}<Totals Count="${waitingIn(requested)}"/>`);
+    }
 
     let pnrsTotal = 0;
     let messages = 0;
@@ -617,16 +704,26 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     const isList = node(identifier?.List) !== undefined;
     calls.push({ command: isList ? 'list' : 'access', queue: refOfKey(key) });
 
-    if (nodes(rq.Selection).length > 0) return accessError('sabre-client/testing: selection no está simulado');
+    // En la lista, Sabre acepta solo QD o AK, con este mensaje (producción, #155).
+    if (isList && nodes(rq.Selection).some((selection) => !LIST_SELECTION_FUNCTIONS.includes((attr(selection, 'Function') ?? '').toUpperCase()))) {
+      return accessError('VALID SELECTION CODE FOR QUEUE LIST ARE QD OR AK');
+    }
+    const { matches, error } = selectionOf(rq, QUEUE_FAKE_SELECTION_FUNCTIONS);
+    if (error !== undefined) return accessError(error);
     const entries = queue(key);
     if (entries.length === 0) return accessError(QUEUE_EMPTY);
 
     if (isList) {
       const passenger = attr(identifier?.List, 'PrimaryPassenger') === 'true';
-      const lines = entries.map((entry, index) => lineXml(entry, { number: index + 1, passenger })).join('');
+      // Con selection, las Line que cumplen, renumeradas desde 1. Si ninguna cumple, la respuesta
+      // va sin Line (supuesto del fake: no se grabó una lista filtrada vacía).
+      const listed = matches === undefined ? entries : entries.filter(matches);
+      const lines = listed.map((entry, index) => lineXml(entry, { number: index + 1, passenger })).join('');
       return accessRS(`${results('Complete', success)}${lines}`);
     }
-    session.inside = { key, index: 0 };
+    // Con selection, el recorrido salta los PNR que no cumplen y termina en END OF DISPLAY, como en
+    // producción (#155). Si ninguno cumple, END OF DISPLAY al entrar: supuesto del fake.
+    session.inside = { key, index: 0, ...(matches === undefined ? {} : { matches }) };
     return step(session);
   };
 
@@ -684,10 +781,12 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     const add = (locator: string, target: (typeof targets)[number]): void => {
       const entries = queue(target.key);
       if (entries.some((entry) => entry.locator === locator)) return;
+      const code = Number(target.instructionCode);
       entries.push({
         locator,
         placedAt: longDate(at),
         placedBy: target.pcc === undefined ? undefined : { pseudoCityCode: target.pcc },
+        ...(Number.isInteger(code) ? { instructionCode: code } : {}),
       });
     };
 
@@ -697,6 +796,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
       // El PNR se mueve: sale de la cola en curso y queda en las de destino (#97).
       queue(inside.key).splice(inside.index, 1);
       for (const target of targets) add(current.locator, target);
+      advance(session);
       const next = queue(inside.key)[inside.index];
       if (next === undefined) {
         session.inside = undefined;

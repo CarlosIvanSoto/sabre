@@ -15,7 +15,7 @@
 //  1. `session.queue.count()`: la cuenta sin filtro, para comparar.
 //  2. `QueueCountLLSRQ` crudo: con `Number` (SABRE_QUEUE), con `Range` (SABRE_QUEUE_RANGE), y con
 //     `Selection` sobre SABRE_QUEUE: `QD`, `AK`, `AL`, `PI`, `AC`, y dos juntos (`QD` + `PI`).
-//     También `QD` sin `Number` (todo el PCC).
+//     También `Range` con `QD` y con `AL` (#212), y `QD` sin `Number` (todo el PCC).
 //  3. Los mismos por `session.command()`: `QC/<PCC><cola>`, `QC/<PCC><a>-<b>`, `QC/<PCC><cola>¥QD-…`…
 //  4. `QueueAnalysisLLSRQ` crudo con `Number` y con `Range`, y `QA/<PCC><cola>`, `QA/<PCC><a>-<b>`.
 //  5. `list` crudo de SABRE_QUEUE con `Selection QD-<fecha>`: cuántas `Line`, para compararlo con
@@ -167,6 +167,9 @@ try {
   for (const [name, selection] of FILTERS) {
     counts.selection[name] = await step(`QC xml ${name}`, () => raw('queueCount', 'QueueCountLLSRQ', `qc${name}`, countPayload({ number: queue }, selection)), xmlSummary);
   }
+  // Range con Selection (#212): ¿filtra cada cola del rango?
+  counts.rangeQd = await step(`QC xml Range ${range.start}-${range.end} con QD`, () => raw('queueCount', 'QueueCountLLSRQ', 'qcRangeQD', countPayload({ range }, FILTERS[0][1])), xmlSummary);
+  counts.rangeAl = await step(`QC xml Range ${range.start}-${range.end} con AL`, () => raw('queueCount', 'QueueCountLLSRQ', 'qcRangeAL', countPayload({ range }, FILTERS.find(([n]) => n === 'AL')[1])), xmlSummary);
   counts.qdAllPcc = await step('QC xml QD sin Number', () => raw('queueCount', 'QueueCountLLSRQ', 'qcQDAll', countPayload({}, FILTERS[0][1])), xmlSummary);
 
   // 3. Los mismos por el host.
@@ -176,6 +179,7 @@ try {
     await commandStep(`QC host ${name}`, `QC/${pcc}${queue}${hostFilter(selection)}`);
     if (selection.length > 1) await commandStep(`QC host ${name} con /`, `QC/${pcc}${queue}${hostFilterSlash(selection)}`);
   }
+  await commandStep('QC host rango con QD', `QC/${pcc}${range.start}-${range.end}${hostFilter(FILTERS[0][1])}`);
   await commandStep('QC host QD sin cola', `QC/${pcc}${hostFilter(FILTERS[0][1])}`);
 
   // 4. QueueAnalysisLLSRQ y QA.
@@ -233,6 +237,13 @@ const findings = {
   count: {
     number: accepted(counts.number, `QC xml Number=${queue}`),
     range: counts.range === undefined ? { ok: false, error: describeFailure(`QC xml Range ${range.start}-${range.end}`) } : { ok: true, queues: rangeQueues, includesEmpty: rangeQueues.some((q) => /^[.\s]*0$/.test(String(q.count))) },
+    rangeWithSelection: Object.fromEntries(
+      [['QD', counts.rangeQd, `QC xml Range ${range.start}-${range.end} con QD`], ['AL', counts.rangeAl, `QC xml Range ${range.start}-${range.end} con AL`]].map(([name, r, stepName]) => [
+        name,
+        r === undefined ? { ok: false, error: describeFailure(stepName) } : { ok: true, queues: queuesOf(r.payload).filter((q) => !/^[.\s]*0$/.test(String(q.count))), returned: queuesOf(r.payload).length },
+      ]),
+    ),
+    rangeWithSelectionHost: firstLines('QC host rango con QD'),
     numberAndRange: counts.numberAndRange === undefined ? { ok: false, error: describeFailure('QC xml Number y Range juntos') } : { ok: true, queues: queuesOf(counts.numberAndRange.payload) },
     host: { number: firstLines(`QC host ${queue}`), range: firstLines(`QC host ${range.start}-${range.end}`) },
   },

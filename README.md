@@ -635,8 +635,22 @@ fake.openSessions; // 0: the session was closed
   SDK asked for.
 - `queue.count` and `queue.activity` with `queue` or `range` answer like production: one queue
   without `totals`, or every queue in the range, empty ones included.
-- **Not simulated**: PCCs (the queues are the same for any `pcc`) and `selection`, which gets an
-  error instead of the whole queue, in `access`, `list` and `count`.
+- `selection` is simulated for `QD`, `AK`, `AL`, `PI` and `AC` (`QUEUE_FAKE_SELECTION_FUNCTIONS`),
+  in `access`, `list` and `count`, combined with AND:
+  - `QD` filters on `placedAt` (`'05NOV'` or `'5NOV'`);
+  - `AK` filters on `placedBy`, PCC plus sine (`'ABCDAAT'`);
+  - `AL` filters on the airline of the paragraph's air segments, and `AC` on their status (one
+    letter matches every status that starts with it);
+  - `PI` filters on the PIC `place` used, or else on the paragraph's PIC notice (`011  SEE REMARKS`).
+
+  `access` walks only the PNRs that match and ends with `END OF DISPLAY`, also on entering when
+  none match (an assumption of the fake), and `ignore`, `remove` and `place` skip the rest. `list`
+  returns only the matching `Line`s and, like Sabre, rejects any code other than `QD` or `AK`.
+  `count` with `queue` counts the matches and returns `totals.unfiltered`; with `range` or without
+  a queue it gives Sabre's errors. Any other code gets a host error marked as not simulated,
+  never the whole queue.
+- **Not simulated**: PCCs (the queues are the same for any `pcc`) and the host's combination rules
+  for `selection`.
 - `queueFixtures` holds the anonymized responses recorded in production (`walk`, `emptyQueue`,
   `place`, …), as `{ operation, status, body }`. Each one has its own locator aliases (`walk`:
   `AAAAAA`–`AAAAAD`, `place`: `AAAAAE`–`AAAAAF`, `placeWithoutInstructionCodeInside`:

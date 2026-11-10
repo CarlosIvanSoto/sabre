@@ -640,8 +640,23 @@ fake.openSessions; // 0: la sesión se cerró
   SDK.
 - `queue.count` y `queue.activity` con `queue` o `range` responden como producción: una cola sin
   `totals`, o cada cola del rango, también las vacías.
-- **No simula** los PCC (las colas son las mismas para cualquier `pcc`) ni `selection`, que recibe
-  un error en vez de la cola entera, en `access`, `list` y `count`.
+- `selection` se simula para `QD`, `AK`, `AL`, `PI` y `AC` (`QUEUE_FAKE_SELECTION_FUNCTIONS`), en
+  `access`, `list` y `count`, combinados con Y:
+  - `QD` filtra por `placedAt` (`'05NOV'` o `'5NOV'`);
+  - `AK` filtra por `placedBy`, PCC más firma (`'ABCDAAT'`);
+  - `AL` filtra por la aerolínea de los segmentos aéreos del párrafo, y `AC` por su estado (una
+    letra cubre todos los estados que empiezan con ella);
+  - `PI` filtra por el PIC con que lo colocó `place` o, si no, por el aviso de PIC del párrafo
+    (`011  SEE REMARKS`).
+
+  `access` recorre solo los PNR que cumplen y termina en `END OF DISPLAY`, también al entrar si
+  ninguno cumple (un supuesto del fake), e `ignore`, `remove` y `place` saltan los demás. `list`
+  devuelve solo las `Line` que cumplen y, como Sabre, rechaza un código que no sea `QD` ni `AK`.
+  `count` con `queue` cuenta los que cumplen y devuelve `totals.unfiltered`; con `range` o sin
+  cola, da los errores de Sabre. Otro código recibe un error de host marcado como no simulado,
+  nunca la cola entera.
+- **No simula** los PCC (las colas son las mismas para cualquier `pcc`) ni las reglas de
+  combinación de `selection` del host.
 - `queueFixtures` trae las respuestas anonimizadas que se grabaron en producción (`walk`,
   `emptyQueue`, `place`…), como `{ operation, status, body }`. Cada una tiene sus propios alias de
   localizador (`walk`: `AAAAAA`–`AAAAAD`, `place`: `AAAAAE`–`AAAAAF`,

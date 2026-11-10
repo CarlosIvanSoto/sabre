@@ -204,14 +204,6 @@ describe('primitivas', () => {
     expect(fake.locators(13)).toEqual([]);
   });
 
-  it('selection no está simulado: lanza en vez de abrir la cola entera', async () => {
-    const { legacy } = client({ queues: { '12': [pnr('AAAAAA')] } });
-    const error = await legacy.withSession((session) => rejection(session.queue.access({ queue: 12, selection: [{ function: 'AL', criteria: 'DL' }] })));
-
-    expect(error).toBeInstanceOf(SabreBusinessError);
-    expect((error as Error).message).toContain('selection no está simulado');
-  });
-
   it('count con queue: solo esa cola, también vacía, y sin Totals', async () => {
     const { legacy } = client({ queues: { '12': [pnr('AAAAAA'), pnr('BBBBBB')], '13': [pnr('CCCCCC')] } });
     const [full, empty] = await legacy.withSession(async (session) => [await session.queue.count({ queue: 12 }), await session.queue.count({ queue: 40 })]);
@@ -230,17 +222,139 @@ describe('primitivas', () => {
     expect(result.totals).toEqual({ messages: 0, specials: 0, pnrs: 3 });
   });
 
-  it('count con selection no está simulado: lanza en vez de contar la cola entera', async () => {
-    const { legacy } = client({ queues: { '12': [pnr('AAAAAA')] } });
-    const error = await legacy.withSession((session) => rejection(session.queue.count({ queue: 12, selection: [{ function: 'QD', criteria: '02NOV' }] })));
-    expect(error).toBeInstanceOf(SabreBusinessError);
-    expect((error as Error).message).toContain('selection no está simulado');
-  });
-
   it('ping responde Success', async () => {
     const { fake, legacy } = client({});
     await legacy.withSession((session) => session.ping());
     expect(fake.calls.map((call) => call.command)).toEqual(['open', 'ping', 'close']);
+  });
+});
+
+describe('selection contra el fake (#202)', () => {
+  /** Un PNR con fecha de colocación, quién lo colocó, un segmento y, si se pide, el aviso de PIC. */
+  const seeded = (locator: string, placedAt: string, airline: string, status: string, pic?: string) => ({
+    locator,
+    placedAt,
+    placedBy: { pseudoCityCode: 'ABCD', agentSine: airline === 'AM' ? 'AAT' : 'BBT' },
+    paragraph: [
+      ...(pic === undefined ? [] : [`${pic}  SEE REMARKS`]),
+      ' 1.1PEREZ/JUAN',
+      ` 1 ${airline} 401Y 15DEC 1 MEXCUN ${status}1  0700  0900`,
+      `ABCD.ABCD*AAA 1200/01NOV26 ${locator} H`,
+    ],
+  });
+  const QUEUE = [
+    seeded('AAAAAA', '2026-11-01T10:00', 'AM', 'HK', '011'),
+    seeded('BBBBBB', '2026-11-02T09:00', 'DL', 'HK'),
+    seeded('CCCCCC', '2026-11-02T11:00', 'AM', 'HL', '011'),
+    seeded('DDDDDD', '2026-11-03T08:00', 'AM', 'HK'),
+  ];
+  const walk = async (legacy: SabreLegacy, selection: Array<{ function: string; criteria: string }>) =>
+    legacy.withSession(async (session) => {
+      const seen: string[] = [];
+      let step = await session.queue.access({ queue: 12, selection });
+      while (!step.done && step.kind === 'pnr') {
+        seen.push(step.item.locator);
+        step = await session.queue.ignore();
+      }
+      return { seen, last: step };
+    });
+
+  it('list con QD devuelve solo las Line de esa fecha, renumeradas', async () => {
+    const { legacy } = client({ queues: { '12': QUEUE } });
+    const result = await legacy.withSession((session) => session.queue.list({ queue: 12, selection: [{ function: 'QD', criteria: '02NOV' }] }));
+    expect(result.locators).toEqual(['BBBBBB', 'CCCCCC']);
+  });
+
+  it('list con AK devuelve solo los que colocó ese agente', async () => {
+    const { legacy } = client({ queues: { '12': QUEUE } });
+    const result = await legacy.withSession((session) => session.queue.list({ queue: 12, selection: [{ function: 'AK', criteria: 'ABCDBBT' }] }));
+    expect(result.locators).toEqual(['BBBBBB']);
+  });
+
+  it('list con otro código responde lo que responde Sabre (el SDK lo frena antes)', async () => {
+    const { fake } = client({ queues: { '12': QUEUE } });
+    const { send } = await rawSession(fake);
+    const body = await send(
+      'QueueAccessLLSRQ',
+      '<QueueAccessRQ Version="2.1.1"><QueueIdentifier Number="12" PseudoCityCode="ABCD"><List Ind="true"/></QueueIdentifier><Selection Function="PI" Criteria="11"/></QueueAccessRQ>',
+    );
+    expect(body).toContain('VALID SELECTION CODE FOR QUEUE LIST ARE QD OR AK');
+  });
+
+  it('access con QD recorre solo los que cumplen y termina en END OF DISPLAY', async () => {
+    const { legacy } = client({ queues: { '12': QUEUE } });
+    const { seen, last } = await walk(legacy, [{ function: 'QD', criteria: '2NOV' }]);
+    expect(seen).toEqual(['BBBBBB', 'CCCCCC']);
+    expect(last).toMatchObject({ done: true, reason: 'end-of-display' });
+  });
+
+  it.each<[string, Array<{ function: string; criteria: string }>, string[]]>([
+    ['AL: la aerolínea de un segmento', [{ function: 'AL', criteria: 'AM' }], ['AAAAAA', 'CCCCCC', 'DDDDDD']],
+    ['PI: el aviso de PIC del párrafo', [{ function: 'PI', criteria: '11' }], ['AAAAAA', 'CCCCCC']],
+    ['AC: el estado de un segmento', [{ function: 'AC', criteria: 'HL' }], ['CCCCCC']],
+    ['AC con una letra: los estados que empiezan con ella', [{ function: 'AC', criteria: 'H' }], ['AAAAAA', 'BBBBBB', 'CCCCCC', 'DDDDDD']],
+    ['dos filtros: los que cumplen los dos', [{ function: 'AL', criteria: 'AM' }, { function: 'QD', criteria: '02NOV' }], ['CCCCCC']],
+    ['ninguno cumple: END OF DISPLAY al entrar', [{ function: 'AL', criteria: 'UA' }], []],
+  ])('access con %s', async (_name, selection, expected) => {
+    const { legacy } = client({ queues: { '12': QUEUE } });
+    const { seen, last } = await walk(legacy, selection);
+    expect(seen).toEqual(expected);
+    expect(last).toMatchObject({ done: true, reason: 'end-of-display' });
+  });
+
+  it('PI usa el PIC con que place colocó el PNR', async () => {
+    const { legacy } = client({ queues: { '12': [] }, pnrs: [seeded('EEEEEE', '2026-11-01T10:00', 'AM', 'HK')] });
+    const seen = await legacy.withSession(async (session) => {
+      await session.queue.place({ to: [{ queue: 12, instructionCode: 25 }], locators: ['EEEEEE'] });
+      const hit = await session.queue.access({ queue: 12, selection: [{ function: 'PI', criteria: '25' }] });
+      if (!hit.done) await session.queue.exit();
+      const miss = await session.queue.access({ queue: 12, selection: [{ function: 'PI', criteria: '11' }] });
+      return [hit.done ? undefined : hit.kind === 'pnr' ? hit.item.locator : undefined, miss.done];
+    });
+    expect(seen).toEqual(['EEEEEE', true]);
+  });
+
+  it('remove con selection sigue en el próximo que cumple', async () => {
+    const { fake, legacy } = client({ queues: { '12': QUEUE } });
+    const next = await legacy.withSession(async (session) => {
+      await session.queue.access({ queue: 12, selection: [{ function: 'AL', criteria: 'AM' }] });
+      const step = await session.queue.remove();
+      await session.queue.exit();
+      return step;
+    });
+    expect(next).toMatchObject({ done: false, item: { locator: 'CCCCCC' } });
+    expect(fake.locators(12)).toEqual(['BBBBBB', 'CCCCCC', 'DDDDDD']);
+  });
+
+  it('un código que no simula da un error de host, no la cola entera', async () => {
+    const { legacy } = client({ queues: { '12': QUEUE } });
+    const error = await legacy.withSession((session) => rejection(session.queue.access({ queue: 12, selection: [{ function: 'NA', criteria: 'PEREZ' }] })));
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect((error as Error).message).toContain('selection NA no está simulado (simula QD, AK, AL, PI, AC)');
+  });
+
+  it('count con selection: los que cumplen y totals.unfiltered con el total de la cola', async () => {
+    const { legacy } = client({ queues: { '12': QUEUE } });
+    const result = await legacy.withSession((session) => session.queue.count({ queue: 12, selection: [{ function: 'QD', criteria: '02NOV' }] }));
+    expect(result.queues).toEqual([{ queue: 12, count: 2 }]);
+    expect(result.totals).toEqual({ unfiltered: 4 });
+  });
+
+  it('count con selection y un código que no simula da un error de host', async () => {
+    const { legacy } = client({ queues: { '12': QUEUE } });
+    const error = await legacy.withSession((session) => rejection(session.queue.count({ queue: 12, selection: [{ function: 'NA', criteria: 'PEREZ' }] })));
+    expect(error).toBeInstanceOf(SabreBusinessError);
+    expect((error as Error).message).toContain('selection NA no está simulado');
+  });
+
+  it.each([
+    ['con un rango', '<QueueIdentifier PseudoCityCode="ABCD"><Range Start="1" End="20"/></QueueIdentifier>', 'KEYS NOT ALLOWED'],
+    ['sin cola', '<QueueIdentifier PseudoCityCode="ABCD"/>', 'QUEUE SELECTED NOT VALID OR CLOSED'],
+  ])('count con selection %s responde lo que responde Sabre (el SDK lo frena antes)', async (_name, identifier, message) => {
+    const { fake } = client({ queues: { '12': QUEUE } });
+    const { send } = await rawSession(fake);
+    const body = await send('QueueCountLLSRQ', `<QueueCountRQ Version="2.2.1"><QueueInfo>${identifier}</QueueInfo><Selection Function="QD" Criteria="02NOV"/></QueueCountRQ>`);
+    expect(body).toContain(message);
   });
 });
 

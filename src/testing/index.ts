@@ -1,5 +1,5 @@
 // Subruta `sabre-client/testing`: herramientas para que los consumidores prueben su lógica de
-// colas sin red, y la anonimización de las respuestas grabadas. No entra en el bundle principal. Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md
+// colas y de ventas del día sin red, y la anonimización de las respuestas grabadas. No entra en el bundle principal. Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md
 // (punto 7) y wiki/sdk/configuracion-logging-y-build.md.
 export { createQueueFake, QUEUE_FAKE_SELECTION_FUNCTIONS } from './queue-fake.js';
 export type {
@@ -7,6 +7,7 @@ export type {
   QueueFakeActivity,
   QueueFakeCall,
   QueueFakeCommand,
+  QueueFakeDailySalesDay,
   QueueFakeHistoryTransaction,
   QueueFakeItem,
   QueueFakeOptions,

@@ -1,5 +1,5 @@
 // Fake de colas para los tests de los consumidores: un `fetch` que responde como Sabre a la sesión
-// SOAP y a Queue Management, sin red. Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md
+// SOAP, a Queue Management y a las ventas del día (ADR-030), sin red. Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md
 // (punto 7 y su decisión). Se publica en `sabre-client/testing`, fuera del bundle principal.
 //
 // Las respuestas imitan lo observado en producción (#95, #96 y #97): la cola vacía como
@@ -11,6 +11,7 @@ import { parseQueueParagraph } from '../queue/queue-paragraph.js';
 import { signatureLocator } from '../queue/queue-place.js';
 import type { QueueActivityCounters } from '../queue/queue-activity.js';
 import { MAX_QUEUE_NUMBER, MESSAGE_QUEUE, MIN_QUEUE_NUMBER, type QueueRef, toQueueRef } from '../queue/queue-ref.js';
+import type { DailySalesTransaction } from '../reporting/daily-sales-summary.js';
 import type {
   ReservationHistoryAccounting,
   ReservationHistoryFlightSegment,
@@ -58,6 +59,23 @@ export type QueueFakeHistoryTransaction = Omit<
   accounting?: readonly ReservationHistoryAccounting[];
 };
 
+/**
+ * Un día de ventas para `reporting.dailySalesSummary`: las transacciones, y lo que se quiera forzar.
+ * Sin `status`, el reporte sale `complete`.
+ */
+export interface QueueFakeDailySalesDay {
+  transactions: readonly DailySalesTransaction[];
+  /** `incomplete` agrega `Error status="Incomplete"` con `failedDocuments`; `deferred`, `reportId` y `isQueryStillRunning`. */
+  status?: 'complete' | 'incomplete' | 'deferred';
+  /** Los documentos que fallaron, con `status: 'incomplete'`. */
+  failedDocuments?: readonly string[];
+  /** Con `status: 'deferred'`. Por defecto, `reportId: 'FAKE-REPORT'` y `queryStillRunning: true`. */
+  deferred?: { reportId?: string; chunkNumber?: number; maxChunks?: number; queryStillRunning?: boolean };
+  /** Un error forzado, p. ej. `'45100'` (Branch Access) o `'21212'` (versión): el SDK lanza `SabreBusinessError`. */
+  errorCode?: string;
+  agencyName?: string;
+}
+
 /** Un PNR: sus campos, o solo el párrafo. Con solo el párrafo, el localizador sale de la línea de firma. */
 export type QueueFakeItem = QueueFakePnr | readonly string[];
 
@@ -89,6 +107,17 @@ export interface QueueFakeOptions {
    * el fake no conoce da un error de host marcado como no simulado.
    */
   histories?: Readonly<Record<string, readonly QueueFakeHistoryTransaction[]>>;
+  /**
+   * Las ventas de `reporting.dailySalesSummary`, por PCC y fecha (`'YYYY-MM-DD'`): las
+   * transacciones del día, o un `QueueFakeDailySalesDay` para forzar `incomplete`, `deferred` o un
+   * error. Sin `pcc` en el request vale el PCC de la sesión, y sin `date`, el día de `now()` en UTC
+   * (Sabre usa la hora local del PCC: para simular otra zona, ajusta `now`). Un PCC o un día sin
+   * sembrar da un reporte `complete` vacío, como un PCC que no emite (producción, 2026-11-12).
+   * Las transacciones se devuelven en el orden sembrado; el filtro `documentType` se simula
+   * (con `RFND` también entran las `RFD`, el código real del reembolso), los demás no. Los
+   * `totals` salen vacíos.
+   */
+  dailySales?: Readonly<Record<string, Readonly<Record<string, readonly DailySalesTransaction[] | QueueFakeDailySalesDay>>>>;
   /** Reloj de las fechas de `count` y de `place`. Por defecto, `new Date()`. Las fechas van en UTC. */
   now?: () => Date;
 }
@@ -106,7 +135,8 @@ export type QueueFakeCommand =
   | 'exit'
   | 'place'
   | 'activity'
-  | 'history';
+  | 'history'
+  | 'dailySalesSummary';
 
 export interface QueueFakeCall {
   command: QueueFakeCommand;
@@ -114,6 +144,9 @@ export interface QueueFakeCall {
   queue?: QueueRef;
   /** El localizador de `history`. */
   locator?: string;
+  /** El PCC y la fecha que pidió `dailySalesSummary`, si los mandó. */
+  pcc?: string;
+  date?: string;
 }
 
 export interface QueueFake {
@@ -456,6 +489,61 @@ function historicalInfo(t: QueueFakeHistoryTransaction): string {
   ].join('');
 }
 
+const DAILY_SALES_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function toDailySalesDay(value: unknown, label: string): QueueFakeDailySalesDay {
+  const day = (Array.isArray(value) ? { transactions: value } : value) as QueueFakeDailySalesDay;
+  if (typeof day !== 'object' || day === null || !Array.isArray(day.transactions)) fail(`${label} debe ser una lista de transacciones o { transactions }`);
+  if (day.status !== undefined && !['complete', 'incomplete', 'deferred'].includes(day.status)) fail(`${label}.status debe ser complete, incomplete o deferred`);
+  for (const [index, t] of day.transactions.entries()) {
+    const at = `${label}.transactions[${index}]`;
+    if (typeof t !== 'object' || t === null) fail(`${at} debe ser un objeto`);
+    for (const field of ['documentType', 'transactionCode', 'settlementType', 'documentNumber', 'agentSine', 'transactionDateTime'] as const) {
+      if (typeof t[field] !== 'string') fail(`${at}.${field} debe ser un string`);
+    }
+    if (typeof t.airline?.code !== 'string') fail(`${at}.airline.code debe ser un string`);
+  }
+  return day;
+}
+
+/** Una `Transaction` de `DailySalesSummaryRS`, como la lee el SDK. */
+function transactionXml(t: DailySalesTransaction): string {
+  const el = (name: string, value: string | undefined): string => (value === undefined ? '' : `<asr:${name}>${escape(value)}</asr:${name}>`);
+  const payments =
+    t.payments === undefined
+      ? ''
+      : `<asr:Payments>${el('CurrencyCode', t.payments.currencyCode)}<asr:DocumentPayment>${el('PaymentTotal', t.payments.total)}${t.payments.details
+          .map((d) => `<asr:PaymentDetail${attrs([['fop', d.fop], ['category', d.category], ['cardType', d.cardType]])}>${el('PaymentAmount', d.amount)}</asr:PaymentDetail>`)
+          .join('')}</asr:DocumentPayment></asr:Payments>`;
+  const flags = attrs([
+    ['nonInteractive', t.nonInteractive === undefined ? undefined : String(t.nonInteractive)],
+    ['electronicDocument', t.electronicDocument === undefined ? undefined : String(t.electronicDocument)],
+    ['itineraryType', t.itineraryType],
+    ['automatedRefund', t.automatedRefund === undefined ? undefined : String(t.automatedRefund)],
+  ]);
+  return [
+    `<asr:Transaction${flags}>`,
+    el('DocumentType', t.documentType),
+    el('SettlementType', t.settlementType),
+    el('PnrLocator', t.pnrLocator),
+    el('PassengerName', t.passengerName),
+    '<asr:DocumentDetails>',
+    el('DocumentNumber', t.documentNumber),
+    el('LastConjunctiveDocumentNumber', t.lastConjunctiveDocumentNumber),
+    el('StockType', t.stockType),
+    el('DocumentStatusCode', t.documentStatusCode),
+    el('TransactionCode', t.transactionCode),
+    '</asr:DocumentDetails>',
+    `<asr:AirlineCode${attrs([['AirlineNumber', t.airline.number]])}>${escape(t.airline.code)}</asr:AirlineCode>`,
+    t.commission === undefined ? '' : `<asr:Commission>${el('Amount', t.commission.amount)}${el('Percent', t.commission.percent)}</asr:Commission>`,
+    payments,
+    el('AgentSine', t.agentSine),
+    el('AgentPseudoCity', t.agentPseudoCity),
+    el('TransactionDateTime', t.transactionDateTime),
+    '</asr:Transaction>',
+  ].join('');
+}
+
 /** Lo que Sabre responde al historial de otro PNR con la sesión dentro de una cola (CERT, Q-102). */
 const NOT_ALLOWED_INSIDE_QUEUE = 'NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY';
 
@@ -505,6 +593,15 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     const key = optionKey(optionName);
     validateKey(key);
     activity.set(key, toActivity(counters, `activity['${key}']`));
+  }
+  const dailySales = new Map<string, QueueFakeDailySalesDay>();
+  for (const [pccKey, days] of Object.entries(options.dailySales ?? {})) {
+    if (!/^[A-Z0-9]{3,4}$/.test(pccKey)) fail(`dailySales['${pccKey}']: la clave debe ser un PCC de 3 o 4 letras mayúsculas o dígitos`);
+    if (typeof days !== 'object' || days === null) fail(`dailySales['${pccKey}'] debe ser un objeto con las fechas`);
+    for (const [date, day] of Object.entries(days)) {
+      if (!DAILY_SALES_DATE.test(date)) fail(`dailySales['${pccKey}']['${date}']: la fecha debe tener la forma 'YYYY-MM-DD'`);
+      dailySales.set(`${pccKey} ${date}`, toDailySalesDay(day, `dailySales['${pccKey}']['${date}']`));
+    }
   }
   const histories = new Map<string, QueueFakeHistoryTransaction[]>();
   for (const [locator, transactions] of Object.entries(options.histories ?? {})) {
@@ -887,6 +984,49 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     return historyRS(`${results('Complete', success)}${historicalInfo(created)}`);
   };
 
+  // --- Ventas del día ---------------------------------------------------------------------
+
+  /**
+   * `DailySalesSummaryRS`. Los errores forzados van en `Header/Results/Error` con `ErrorCode` y
+   * `Message`: es la forma que lee el SDK, armada desde el STL. Ningún error real se grabó todavía.
+   */
+  const dailySalesSummary = (rq: XmlNode, sessionPcc: string): string => {
+    const criteria = node(rq.SelectionCriteria) ?? {};
+    const requestedPcc = text(criteria.PseudoCityCode);
+    const requestedDate = text(criteria.ReportDate);
+    calls.push({ command: 'dailySalesSummary', ...(requestedPcc === undefined ? {} : { pcc: requestedPcc }), ...(requestedDate === undefined ? {} : { date: requestedDate }) });
+    const pcc = requestedPcc ?? sessionPcc;
+    const date = requestedDate ?? now().toISOString().slice(0, 10);
+    const day = dailySales.get(`${pcc} ${date}`) ?? { transactions: [] };
+    const namespaces = 'xmlns:asr="http://www.sabre.com/ns/Ticketing/AsrServices/1.0" xmlns:stl="http://services.sabre.com/STL/v01"';
+    const resultsXml = (inner: string) => `<asr:Header><stl:Results>${inner}</stl:Results></asr:Header>`;
+    const errorXml = (status: string, code: string, message: string) =>
+      `<stl:Error type="BusinessLogic" status="${escape(status)}"><stl:System>SABRE-CLIENT-TESTING</stl:System><stl:ErrorCode>${escape(code)}</stl:ErrorCode><stl:Message>${escape(message)}</stl:Message></stl:Error>`;
+    if (day.errorCode !== undefined) {
+      return `<asr:DailySalesSummaryRS ${namespaces} version="1.2.2">${resultsXml(errorXml('NotProcessed', day.errorCode, `sabre-client/testing: error ${day.errorCode} forzado`))}</asr:DailySalesSummaryRS>`;
+    }
+    const wanted = text(criteria.DocumentType);
+    const transactions = day.transactions.filter(
+      (t) => wanted === undefined || t.documentType === wanted || (wanted === 'RFND' && t.documentType === 'RFD'),
+    );
+    const deferred = day.status === 'deferred' ? { reportId: 'FAKE-REPORT', queryStillRunning: true, ...day.deferred } : undefined;
+    const rootAttrs = attrs([
+      ['isQueryStillRunning', String(deferred?.queryStillRunning ?? false)],
+      ['reportId', deferred?.reportId],
+      ['chunkNumber', deferred?.chunkNumber],
+      ['maxChunks', deferred?.maxChunks],
+    ]);
+    const incomplete =
+      day.status === 'incomplete' ? errorXml('Incomplete', '0', `The following are the failed transactions : [${(day.failedDocuments ?? []).join(', ')}]`) : '';
+    return [
+      `<asr:DailySalesSummaryRS ${namespaces} version="1.2.2"${rootAttrs}>`,
+      resultsXml(`<stl:Success><stl:System>SABRE-CLIENT-TESTING</stl:System></stl:Success>${incomplete}`),
+      `<asr:DSHeader><asr:PseudoCityCode>${escape(pcc)}</asr:PseudoCityCode>${day.agencyName === undefined ? '' : `<asr:AgencyName>${escape(day.agencyName)}</asr:AgencyName>`}</asr:DSHeader>`,
+      `<asr:DailySalesReport><asr:ReportDate>${escape(date)}</asr:ReportDate>${transactions.map(transactionXml).join('')}</asr:DailySalesReport>`,
+      '</asr:DailySalesSummaryRS>',
+    ].join('');
+  };
+
   // --- Despacho --------------------------------------------------------------------------
 
   const handle = (raw: string): Reply => {
@@ -951,6 +1091,8 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
         return reply('QueueAnalysisLLSRS', session, token, analyze(session, rq));
       case 'TravelItineraryHistoryLLSRQ':
         return reply('TravelItineraryHistoryLLSRS', session, token, history(session, rq));
+      case 'TKT_TravelAgencyReportsRQ':
+        return reply('TKT_TravelAgencyReportsRS', session, token, dailySalesSummary(rq, text(messageHeader?.CPAId) ?? ''));
       default:
         return {
           status: 500,

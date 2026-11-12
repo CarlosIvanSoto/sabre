@@ -110,14 +110,20 @@ export interface QueueFakeOptions {
   /**
    * Las ventas de `reporting.dailySalesSummary`, por PCC y fecha (`'YYYY-MM-DD'`): las
    * transacciones del día, o un `QueueFakeDailySalesDay` para forzar `incomplete`, `deferred` o un
-   * error. Sin `pcc` en el request vale el PCC de la sesión, y sin `date`, el día de `now()` en UTC
-   * (Sabre usa la hora local del PCC: para simular otra zona, ajusta `now`). Un PCC o un día sin
+   * error. Sin `pcc` en el request vale el PCC de la sesión, y sin `date`, el día de `now()` en
+   * `dailySalesTimeZone`. Un PCC o un día sin
    * sembrar da un reporte `complete` vacío, como un PCC que no emite (producción, 2026-11-12).
    * Las transacciones se devuelven en el orden sembrado; el filtro `documentType` se simula
    * (con `RFND` también entran las `RFD`, el código real del reembolso), los demás no. Los
    * `totals` salen vacíos.
    */
   dailySales?: Readonly<Record<string, Readonly<Record<string, readonly DailySalesTransaction[] | QueueFakeDailySalesDay>>>>;
+  /**
+   * La zona IANA del «día en curso» de `dailySalesSummary` sin `date`, p. ej. `'America/Mexico_City'`.
+   * Sabre usa el día local del PCC (producción, 2026-11-12, y Q-106 con `QD`): con México, entre
+   * las 18:00 y las 24:00 locales el día UTC ya es el siguiente. Por defecto, `'UTC'`.
+   */
+  dailySalesTimeZone?: string;
   /** Reloj de las fechas de `count` y de `place`. Por defecto, `new Date()`. Las fechas van en UTC. */
   now?: () => Date;
 }
@@ -594,6 +600,14 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     validateKey(key);
     activity.set(key, toActivity(counters, `activity['${key}']`));
   }
+  const dailySalesTimeZone = options.dailySalesTimeZone ?? 'UTC';
+  let dailySalesDay: Intl.DateTimeFormat;
+  try {
+    // `en-CA` da la fecha como `YYYY-MM-DD`.
+    dailySalesDay = new Intl.DateTimeFormat('en-CA', { timeZone: dailySalesTimeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+  } catch {
+    fail(`dailySalesTimeZone: '${dailySalesTimeZone}' no es una zona IANA válida`);
+  }
   const dailySales = new Map<string, QueueFakeDailySalesDay>();
   for (const [pccKey, days] of Object.entries(options.dailySales ?? {})) {
     if (!/^[A-Z0-9]{3,4}$/.test(pccKey)) fail(`dailySales['${pccKey}']: la clave debe ser un PCC de 3 o 4 letras mayúsculas o dígitos`);
@@ -996,7 +1010,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     const requestedDate = text(criteria.ReportDate);
     calls.push({ command: 'dailySalesSummary', ...(requestedPcc === undefined ? {} : { pcc: requestedPcc }), ...(requestedDate === undefined ? {} : { date: requestedDate }) });
     const pcc = requestedPcc ?? sessionPcc;
-    const date = requestedDate ?? now().toISOString().slice(0, 10);
+    const date = requestedDate ?? dailySalesDay.format(now());
     const day = dailySales.get(`${pcc} ${date}`) ?? { transactions: [] };
     const namespaces = 'xmlns:asr="http://www.sabre.com/ns/Ticketing/AsrServices/1.0" xmlns:stl="http://services.sabre.com/STL/v01"';
     const resultsXml = (inner: string) => `<asr:Header><stl:Results>${inner}</stl:Results></asr:Header>`;

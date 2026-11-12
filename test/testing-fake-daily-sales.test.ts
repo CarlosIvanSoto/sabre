@@ -58,6 +58,24 @@ describe('reporting.dailySalesSummary contra el fake', () => {
     expect(result.transactions.map((t) => t.documentNumber)).toEqual(['1390000000001']);
   });
 
+  it('con dailySalesTimeZone, el día en curso es el local: a las 20:00 de México sigue siendo hoy', async () => {
+    const evening = new Date('2026-11-13T02:00:00Z'); // 2026-11-12 20:00 en México (UTC−6)
+    const days = { P8X1: { '2026-11-12': [sale('1390000000001')], '2026-11-13': [sale('1390000000002')] } };
+    const mexico = createQueueFake({ now: () => evening, dailySales: days, dailySalesTimeZone: 'America/Mexico_City' });
+    const utc = createQueueFake({ now: () => evening, dailySales: days });
+    const read = (fake: ReturnType<typeof createQueueFake>) =>
+      new SabreLegacy({ environment: 'production', authVersion: 'v2', credentials: { username: 'V1:7971:ABCD:AA', password: 'epr-pass' }, fetch: fake.fetch, retry: { maxRetries: 0 } }).withSession(
+        (session) => session.reporting.dailySalesSummary({ pcc: 'P8X1' }),
+      );
+
+    expect((await read(mexico)).reportDate).toBe('2026-11-12');
+    expect((await read(utc)).reportDate).toBe('2026-11-13');
+  });
+
+  it('una zona que no existe falla al crear el fake', () => {
+    expect(() => createQueueFake({ dailySalesTimeZone: 'Mexico/Nowhere' })).toThrow('dailySalesTimeZone');
+  });
+
   it('un PCC o un día sin sembrar da un reporte complete vacío', async () => {
     const { legacy } = client({ dailySales: { P8X1: { '2026-11-12': [sale('1390000000001')] } } });
     const [otherPcc, otherDay] = await legacy.withSession(async (session) => [

@@ -44,6 +44,18 @@ export { isMessageQueue, MESSAGE_QUEUE } from './queue/queue-ref.js';
 export type { QueueRange, QueueRef } from './queue/queue-ref.js';
 export type { QueueAdditionalInfo, QueueCount, QueueCountOptions, QueueCountRequest, QueueCountResponse } from './queue/queue-count.js';
 export type { SessionReservation } from './reservation/session-reservation.js';
+export type { SessionReporting } from './reporting/session-reporting.js';
+export type {
+  DailySalesDocumentType,
+  DailySalesPaymentDetail,
+  DailySalesPayments,
+  DailySalesSettlementType,
+  DailySalesSummaryOptions,
+  DailySalesSummaryRequest,
+  DailySalesSummaryResult,
+  DailySalesTotal,
+  DailySalesTransaction,
+} from './reporting/daily-sales-summary.js';
 export type {
   ReservationHistoryAccounting,
   ReservationHistoryFlightSegment,

@@ -13,6 +13,7 @@ import {
   xmlEscape,
 } from '../http/soap-transport.js';
 import { QueueManagement } from '../queue/queue-management.js';
+import { SessionReporting } from '../reporting/session-reporting.js';
 import { SessionReservation } from '../reservation/session-reservation.js';
 import {
   commandToken,
@@ -99,6 +100,8 @@ export class SabreSession {
   readonly queue: QueueManagement;
   /** La reserva: el historial de un PNR, dentro de esta sesión. */
   readonly reservation: SessionReservation;
+  /** Reportes del PCC: las ventas del día (`dailySalesSummary`), dentro de esta sesión. */
+  readonly reporting: SessionReporting;
   readonly #transport: SoapTransport;
   readonly #pcc: string;
   readonly #conversationId: string;
@@ -137,6 +140,7 @@ export class SabreSession {
       log: internal.transport.log,
     });
     this.reservation = new SessionReservation({ send: (request) => this[sessionSend](request) });
+    this.reporting = new SessionReporting({ send: (request) => this[sessionSend](request), pcc: internal.pcc });
     if (internal.keepAlive) this.#scheduleKeepAlive(KEEP_ALIVE_IDLE_MS);
   }
 

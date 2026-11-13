@@ -1,11 +1,13 @@
 // Fake de colas para los tests de los consumidores: un `fetch` que responde como Sabre a la sesión
-// SOAP, a Queue Management y a las ventas del día (ADR-030), sin red. Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md
+// SOAP, a Queue Management y a las ventas del día (ADR-030), y en REST a la reserva y la emisión
+// (F3.1, ADR-031; ver booking-fake.ts), sin red. Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md
 // (punto 7 y su decisión). Se publica en `sabre-client/testing`, fuera del bundle principal.
 //
 // Las respuestas imitan lo observado en producción (#95, #96 y #97): la cola vacía como
 // `QUEUE SELECTED WAS EMPTY`, el fin de cola en el `Paragraph`, `place` dentro de una cola que
 // mueve el PNR y devuelve el siguiente, y los errores de host con el código en `ShortText`.
 import { XMLParser } from 'fast-xml-parser';
+import { type BookingFakeCommand, createBookingHandler, type QueueFakeBooking, type QueueFakeTicketing } from './booking-fake.js';
 import { END_OF_DISPLAY, OFF_QUEUE, QUEUE_EMPTY } from '../queue/queue-access.js';
 import { parseQueueParagraph } from '../queue/queue-paragraph.js';
 import { signatureLocator } from '../queue/queue-place.js';
@@ -124,6 +126,17 @@ export interface QueueFakeOptions {
    * las 18:00 y las 24:00 locales el día UTC ya es el siguiente. Por defecto, `'UTC'`.
    */
   dailySalesTimeZone?: string;
+  /**
+   * Reservas para el cliente REST (`Sabre`), por localizador, sin pasar por `booking.create`. Las
+   * que crea `booking.create` se suman solas, con localizadores `FAKEAA`, `FAKEAB`…
+   */
+  bookings?: Readonly<Record<string, QueueFakeBooking>>;
+  /**
+   * Desenlaces forzados de `tickets.fulfill` y de `booking.cancel` con `VOID`, en orden. Sin
+   * forzar, Fulfill emite un boleto `TE` (y `BOOKING_FULFILLED` si ya hay uno vigente), y el void
+   * lo deja en `TV` y, con `cancelAll`, cancela la reserva.
+   */
+  ticketing?: QueueFakeTicketing;
   /** Reloj de las fechas de `count` y de `place`. Por defecto, `new Date()`. Las fechas van en UTC. */
   now?: () => Date;
 }
@@ -142,13 +155,14 @@ export type QueueFakeCommand =
   | 'place'
   | 'activity'
   | 'history'
-  | 'dailySalesSummary';
+  | 'dailySalesSummary'
+  | BookingFakeCommand;
 
 export interface QueueFakeCall {
   command: QueueFakeCommand;
   /** La cola de `access` y `list`. */
   queue?: QueueRef;
-  /** El localizador de `history`. */
+  /** El localizador de `history` y de las llamadas REST de reserva y emisión. */
   locator?: string;
   /** El PCC y la fecha que pidió `dailySalesSummary`, si los mandó. */
   pcc?: string;
@@ -156,7 +170,7 @@ export interface QueueFakeCall {
 }
 
 export interface QueueFake {
-  /** Se pasa como `config.fetch` de `SabreLegacy`. */
+  /** Se pasa como `config.fetch` de `SabreLegacy` y de `Sabre`: el mismo atiende SOAP y REST. */
   readonly fetch: typeof fetch;
   /** Los localizadores de una cola, en orden, con lo que el recorrido haya sacado o colocado. */
   locators(queue: QueueRef): string[];
@@ -1120,10 +1134,21 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     }
   };
 
+  const rest = createBookingHandler(
+    { ...(options.bookings === undefined ? {} : { bookings: options.bookings }), ...(options.ticketing === undefined ? {} : { ticketing: options.ticketing }) },
+    now,
+    (command, locator) => calls.push({ command, ...(locator === undefined ? {} : { locator }) }),
+  );
+
   const fakeFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
     signal?.throwIfAborted();
     const raw = typeof init?.body === 'string' ? init.body : input instanceof Request ? await input.text() : String(init?.body ?? '');
+    const url = input instanceof Request ? input.url : String(input);
+    const restReply = rest(url, raw);
+    if (restReply === 'transport') throw new TypeError('fetch failed (sabre-client/testing: fallo de red forzado)');
+    if (restReply === 'abort') throw new DOMException('The operation was aborted. (sabre-client/testing: abort forzado)', 'AbortError');
+    if (restReply !== undefined) return restReply;
     const { status, body } = handle(raw);
     return new Response(body, { status, headers: { 'Content-Type': 'text/xml;charset=UTF-8' } });
   };

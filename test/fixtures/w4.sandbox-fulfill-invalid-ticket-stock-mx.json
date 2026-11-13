@@ -1,0 +1,177 @@
+{
+  "recordedAt": "2026-11-12",
+  "environment": "sandbox",
+  "steps": {
+    "1.itinerario": {
+      "segments": [
+        "AA2974 DFW-LAX"
+      ],
+      "currency": "MXN"
+    },
+    "2.create": {
+      "ok": true,
+      "warnings": [],
+      "errors": [],
+      "echo": [
+        {
+          "isMarriageGroup": false,
+          "marriageGroup": "(ausente)"
+        }
+      ]
+    },
+    "3.get-antes": {
+      "isTicketed": false,
+      "tickets": 0
+    },
+    "4.fulfill": {
+      "httpStatus": 200,
+      "ms": 1339,
+      "transportError": null,
+      "tickets": [],
+      "errors": [
+        "APPLICATION_ERROR:DOWNLINE_SERVICE_ERROR"
+      ],
+      "errorDescriptions": [
+        "The AirTicketRQ service returned an error: (DesignatePrinterLLSRQ: INVALID TICKET STOCK-0096)."
+      ],
+      "requestEcho": {
+        "acceptPriceChanges": false,
+        "priceQuoteExpirationMethod": "Quit",
+        "errorHandlingPolicy": null
+      },
+      "uncertain": true
+    },
+    "5.get-despues": {
+      "polls": [
+        {
+          "afterSeconds": 1,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 3,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 6,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 12,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 22,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 42,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        }
+      ],
+      "sameAsFulfill": false
+    },
+    "6.fulfill-repetido": {
+      "omitido": "el primer Fulfill no dejó boletos visibles"
+    },
+    "7.cancel-void": {
+      "ok": true,
+      "voidedTickets": 0,
+      "warnings": [],
+      "echo": {
+        "errorHandlingPolicy": "HALT_ON_ERROR"
+      }
+    },
+    "8.get-final": {
+      "flights": 0,
+      "isTicketed": false,
+      "tickets": []
+    },
+    "9.void-repetido": {
+      "omitido": "no hubo boletos"
+    }
+  },
+  "first": {
+    "request": {
+      "confirmationId": "SUKDXE",
+      "fulfillments": [
+        {
+          "payment": {
+            "primaryFormOfPayment": 1
+          }
+        }
+      ],
+      "formsOfPayment": [
+        {
+          "type": "CASH"
+        }
+      ],
+      "designatePrinters": [
+        {
+          "ticket": {
+            "countryCode": "MX"
+          }
+        }
+      ],
+      "acceptPriceChanges": false,
+      "priceQuoteExpirationMethod": "Quit"
+    },
+    "ms": 1339,
+    "response": {
+      "status": 200,
+      "body": {
+        "timestamp": "2026-11-12T23:39:02",
+        "request": {
+          "confirmationId": "SUKDXE",
+          "retainAccounting": false,
+          "fulfillments": [
+            {
+              "payment": {
+                "primaryFormOfPayment": 1
+              }
+            }
+          ],
+          "receivedFrom": "Fulfill Flight Tickets",
+          "designatePrinters": [
+            {
+              "ticket": {
+                "countryCode": "MX"
+              }
+            }
+          ],
+          "formsOfPayment": [
+            {
+              "type": "CASH"
+            }
+          ],
+          "generateSingleInvoice": false,
+          "commitTicketToBookingWaitTime": 0,
+          "acceptNegotiatedFare": true,
+          "acceptPriceChanges": false,
+          "backDatePriceQuoteMethod": "Reprice",
+          "priceQuoteExpirationMethod": "Quit",
+          "returnRequest": true
+        },
+        "errors": [
+          {
+            "category": "APPLICATION_ERROR",
+            "type": "DOWNLINE_SERVICE_ERROR",
+            "description": "The AirTicketRQ service returned an error: (DesignatePrinterLLSRQ: INVALID TICKET STOCK-0096)."
+          }
+        ]
+      }
+    }
+  },
+  "again": null
+}

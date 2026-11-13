@@ -1,0 +1,3566 @@
+{
+  "recordedAt": "2026-11-13",
+  "environment": "sandbox",
+  "steps": {
+    "1.itinerario": {
+      "segments": [
+        "DL948 DFW-LAX"
+      ],
+      "currency": "MXN"
+    },
+    "2.create": {
+      "ok": true,
+      "warnings": [],
+      "errors": [],
+      "echo": [
+        {
+          "isMarriageGroup": false,
+          "marriageGroup": "(ausente)"
+        }
+      ]
+    },
+    "3.get-antes": {
+      "isTicketed": false,
+      "tickets": 0
+    },
+    "4.fulfill": {
+      "httpStatus": 200,
+      "ms": 8248,
+      "transportError": null,
+      "tickets": [
+        {
+          "ticket": "…0001",
+          "ticketStatusCode": "TE",
+          "ticketStatusName": "Issued",
+          "isCommitted": true,
+          "fields": [
+            "date",
+            "isCommitted",
+            "number",
+            "payment",
+            "ticketStatusCode",
+            "ticketStatusName",
+            "ticketingPcc",
+            "travelerGivenName",
+            "travelerSurname"
+          ]
+        }
+      ],
+      "responseFields": [
+        "request",
+        "tickets",
+        "timestamp"
+      ],
+      "errors": [],
+      "errorDescriptions": [],
+      "requestEcho": {
+        "acceptPriceChanges": false,
+        "priceQuoteExpirationMethod": "Quit",
+        "errorHandlingPolicy": null
+      },
+      "uncertain": false
+    },
+    "5.get-despues": {
+      "polls": [
+        {
+          "afterSeconds": 2,
+          "isTicketed": true,
+          "newTickets": 1,
+          "codes": [
+            "TE"
+          ]
+        }
+      ],
+      "sameAsFulfill": true
+    },
+    "6.fulfill-repetido": {
+      "omitido": "un solo intento de emisión (SABRE_W4_REPEAT no es 1)"
+    },
+    "7.cancel-void": {
+      "ok": true,
+      "ms": 3919,
+      "voidedTickets": [
+        "…0001"
+      ],
+      "voidedTicketsShape": [
+        "string"
+      ],
+      "tickets": null,
+      "responseFields": [
+        "booking",
+        "request",
+        "timestamp",
+        "voidedTickets"
+      ],
+      "bookingFlightsAfter": null,
+      "bookingTicketsAfter": null,
+      "warnings": [],
+      "echo": {
+        "errorHandlingPolicy": "HALT_ON_ERROR"
+      }
+    },
+    "7.get-despues-del-cancel": {
+      "flights": 0,
+      "isTicketed": true,
+      "tickets": [
+        {
+          "ticket": "…0001",
+          "code": "TV",
+          "name": "Voided"
+        }
+      ]
+    },
+    "8.get-despues-del-void": {
+      "flights": 0,
+      "isTicketed": true,
+      "tickets": [
+        {
+          "ticket": "…0001",
+          "code": "TV",
+          "name": "Voided"
+        }
+      ]
+    },
+    "9.cancel": {
+      "omitido": "la reserva ya no tiene vuelos"
+    },
+    "9.get-final": {
+      "flights": 0,
+      "isTicketed": true,
+      "tickets": [
+        {
+          "code": "TV",
+          "name": "Voided"
+        }
+      ]
+    }
+  },
+  "search": {
+    "request": {
+      "OTA_AirLowFareSearchRQ": {
+        "Version": "5",
+        "POS": {
+          "Source": [
+            {
+              "PseudoCityCode": "XXXX",
+              "RequestorID": {
+                "Type": "1",
+                "ID": "1",
+                "CompanyName": {
+                  "Code": "TN"
+                }
+              }
+            }
+          ]
+        },
+        "OriginDestinationInformation": [
+          {
+            "DepartureDateTime": "2026-12-13T10:00:00",
+            "OriginLocation": {
+              "LocationCode": "DFW"
+            },
+            "DestinationLocation": {
+              "LocationCode": "LAX"
+            }
+          }
+        ],
+        "TravelPreferences": {
+          "MaxStopsQuantity": 0
+        },
+        "TravelerInfoSummary": {
+          "AirTravelerAvail": [
+            {
+              "PassengerTypeQuantity": [
+                {
+                  "Code": "ADT",
+                  "Quantity": 1
+                }
+              ]
+            }
+          ]
+        },
+        "TPA_Extensions": {
+          "IntelliSellTransaction": {
+            "RequestType": {
+              "Name": "50ITINS"
+            }
+          }
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "groupedItineraryResponse": {
+          "version": "7.2.3",
+          "messages": [
+            {
+              "severity": "Info",
+              "type": "SERVER",
+              "code": "GCA14-ISELL-TN-00-3CQT",
+              "text": "27131"
+            },
+            {
+              "severity": "Info",
+              "type": "WORKERTHREAD",
+              "code": "TRANSACTIONID",
+              "text": "7703395999249692176"
+            },
+            {
+              "severity": "Info",
+              "type": "DRE",
+              "code": "RULEID",
+              "text": "21728"
+            },
+            {
+              "severity": "Info",
+              "type": "DEFAULT",
+              "code": "RULEID",
+              "text": "25238"
+            }
+          ],
+          "statistics": {
+            "itineraryCount": 15
+          },
+          "scheduleDescs": [
+            {
+              "id": 1,
+              "dotRating": "7",
+              "frequency": "SMTW***",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 204,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "21:43:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "23:07:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 1777,
+                "operating": "AA",
+                "operatingFlightNumber": 1777,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "321",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 2,
+              "dotRating": "8",
+              "onTimePerformance": 87,
+              "frequency": "S******",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 206,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "07:30:00-06:00",
+                "terminal": "E"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "08:56:00-08:00",
+                "terminal": "3"
+              },
+              "carrier": {
+                "marketing": "DL",
+                "marketingFlightNumber": 439,
+                "operating": "DL",
+                "operatingFlightNumber": 439,
+                "equipment": {
+                  "code": "319",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 3,
+              "dotRating": "6",
+              "frequency": "SMTWTFS",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 210,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "10:45:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "12:15:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 2793,
+                "operating": "AA",
+                "operatingFlightNumber": 2793,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "321",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 4,
+              "dotRating": "8",
+              "frequency": "SMTWTFS",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 210,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "09:38:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "11:08:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 1996,
+                "operating": "AA",
+                "operatingFlightNumber": 1996,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "32Q",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 5,
+              "dotRating": "5",
+              "onTimePerformance": 55,
+              "frequency": "S******",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 204,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "16:05:00-06:00",
+                "terminal": "E"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "17:29:00-08:00",
+                "terminal": "3"
+              },
+              "carrier": {
+                "marketing": "DL",
+                "marketingFlightNumber": 948,
+                "operating": "DL",
+                "operatingFlightNumber": 948,
+                "equipment": {
+                  "code": "319",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 6,
+              "dotRating": "9",
+              "frequency": "S*T*T**",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 209,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "07:00:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "08:29:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 1495,
+                "operating": "AA",
+                "operatingFlightNumber": 1495,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "32Q",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 7,
+              "dotRating": "5",
+              "frequency": "SMTW***",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 207,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "18:46:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "20:13:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 3301,
+                "operating": "AA",
+                "operatingFlightNumber": 3301,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "321",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 8,
+              "dotRating": "9",
+              "frequency": "S*T*T**",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 215,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "08:20:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "09:55:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 859,
+                "operating": "AA",
+                "operatingFlightNumber": 859,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "321",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 9,
+              "dotRating": "5",
+              "frequency": "SM*WTFS",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 204,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "15:16:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "16:40:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 1687,
+                "operating": "AA",
+                "operatingFlightNumber": 1687,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "321",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 10,
+              "dotRating": "6",
+              "frequency": "SM**TF*",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 204,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "22:34:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "23:58:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 3120,
+                "operating": "AA",
+                "operatingFlightNumber": 3120,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "321",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 11,
+              "dotRating": "6",
+              "frequency": "SMTW***",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 206,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "17:45:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "19:11:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 1526,
+                "operating": "AA",
+                "operatingFlightNumber": 1526,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "321",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 12,
+              "dotRating": "6",
+              "frequency": "SMTWTFS",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 205,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "11:33:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "12:58:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 1854,
+                "operating": "AA",
+                "operatingFlightNumber": 1854,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "738",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 13,
+              "dotRating": "5",
+              "frequency": "SM*****",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 205,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "16:24:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "17:49:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 1759,
+                "operating": "AA",
+                "operatingFlightNumber": 1759,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "738",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 14,
+              "dotRating": "5",
+              "frequency": "SMTWTFS",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 209,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "20:14:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "21:43:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 854,
+                "operating": "AA",
+                "operatingFlightNumber": 854,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "321",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            },
+            {
+              "id": 15,
+              "dotRating": "8",
+              "frequency": "SMTWTFS",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 202,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "13:05:00-06:00",
+                "terminal": "0"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "14:27:00-08:00",
+                "terminal": "0"
+              },
+              "carrier": {
+                "marketing": "AA",
+                "marketingFlightNumber": 2974,
+                "operating": "AA",
+                "operatingFlightNumber": 2974,
+                "alliances": "OW ",
+                "equipment": {
+                  "code": "32Q",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            }
+          ],
+          "taxDescs": [
+            {
+              "id": 1,
+              "code": "XF",
+              "amount": 83.79,
+              "currency": "MXN",
+              "description": "PASSENGER FACILITY CHARGE",
+              "publishedAmount": 4.5,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            },
+            {
+              "id": 2,
+              "code": "US1",
+              "amount": 1469.18,
+              "currency": "MXN",
+              "description": "TRANSPORTATION TAX DOMESTIC WHOLLY WITHIN US AND 225 MILE BUFFER ZONE",
+              "publishedAmount": 78.9,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            },
+            {
+              "id": 3,
+              "code": "AY",
+              "amount": 104.27,
+              "currency": "MXN",
+              "description": "PASSENGER CIVIL AVIATION SECURITY SERVICE FEE",
+              "publishedAmount": 5.6,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            },
+            {
+              "id": 4,
+              "code": "US1",
+              "amount": 289.73,
+              "currency": "MXN",
+              "description": "TRANSPORTATION TAX DOMESTIC WHOLLY WITHIN US AND 225 MILE BUFFER ZONE",
+              "publishedAmount": 15.6,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            },
+            {
+              "id": 5,
+              "code": "US1",
+              "amount": 185.78,
+              "currency": "MXN",
+              "description": "TRANSPORTATION TAX DOMESTIC WHOLLY WITHIN US AND 225 MILE BUFFER ZONE",
+              "publishedAmount": 10,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            },
+            {
+              "id": 6,
+              "code": "ZP",
+              "amount": 98.69,
+              "currency": "MXN",
+              "description": "FLIGHT SEGMENT TAX DOMESTIC",
+              "publishedAmount": 5.3,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            },
+            {
+              "id": 7,
+              "code": "US1",
+              "amount": 257.25,
+              "currency": "MXN",
+              "description": "TRANSPORTATION TAX DOMESTIC WHOLLY WITHIN US AND 225 MILE BUFFER ZONE",
+              "publishedAmount": 13.8,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            }
+          ],
+          "taxSummaryDescs": [
+            {
+              "id": 1,
+              "code": "US1",
+              "amount": 1469.18,
+              "currency": "MXN",
+              "description": "TRANSPORTATION TAX DOMESTIC WHOLLY WITHIN US AND 225 MILE BUFFER ZONE",
+              "publishedAmount": 0.075,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US"
+            },
+            {
+              "id": 2,
+              "code": "US1",
+              "amount": 257.25,
+              "currency": "MXN",
+              "description": "TRANSPORTATION TAX DOMESTIC WHOLLY WITHIN US AND 225 MILE BUFFER ZONE",
+              "publishedAmount": 0.075,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US"
+            },
+            {
+              "id": 3,
+              "code": "US1",
+              "amount": 185.78,
+              "currency": "MXN",
+              "description": "TRANSPORTATION TAX DOMESTIC WHOLLY WITHIN US AND 225 MILE BUFFER ZONE",
+              "publishedAmount": 0.075,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US"
+            },
+            {
+              "id": 4,
+              "code": "US1",
+              "amount": 289.73,
+              "currency": "MXN",
+              "description": "TRANSPORTATION TAX DOMESTIC WHOLLY WITHIN US AND 225 MILE BUFFER ZONE",
+              "publishedAmount": 0.075,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US"
+            },
+            {
+              "id": 5,
+              "code": "XF",
+              "amount": 83.79,
+              "currency": "MXN",
+              "description": "PASSENGER FACILITY CHARGE",
+              "publishedAmount": 4.5,
+              "publishedCurrency": "USD",
+              "country": "US"
+            },
+            {
+              "id": 6,
+              "code": "AY",
+              "amount": 104.27,
+              "currency": "MXN",
+              "description": "PASSENGER CIVIL AVIATION SECURITY SERVICE FEE",
+              "publishedAmount": 5.6,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US"
+            },
+            {
+              "id": 7,
+              "code": "ZP",
+              "amount": 98.69,
+              "currency": "MXN",
+              "description": "FLIGHT SEGMENT TAX DOMESTIC",
+              "publishedAmount": 5.3,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US"
+            }
+          ],
+          "fareComponentDescs": [
+            {
+              "id": 1,
+              "governingCarrier": "AA",
+              "fareAmount": 184.19,
+              "fareCurrency": "USD",
+              "fareBasisCode": "OWAIZTM3",
+              "farePassengerType": "ADT",
+              "publishedFareAmount": 184.19,
+              "publishedFareCurrency": "USD",
+              "directionality": "FROM",
+              "applicablePricingCategories": "2 4 5 8 9 10 11 12 15 16 23 31 33",
+              "vendorCode": "ATP",
+              "fareTypeBitmap": "00",
+              "fareType": "SIP",
+              "fareTariff": "0",
+              "fareRule": "M11I",
+              "cabinCode": "Y",
+              "segments": [
+                {
+                  "segment": {
+                    "stopover": true
+                  }
+                }
+              ]
+            },
+            {
+              "id": 2,
+              "governingCarrier": "AA",
+              "fareAmount": 1052.09,
+              "fareCurrency": "USD",
+              "fareBasisCode": "YA2AA",
+              "farePassengerType": "ADT",
+              "publishedFareAmount": 1052.09,
+              "publishedFareCurrency": "USD",
+              "directionality": "FROM",
+              "applicablePricingCategories": "4 5 8 9 10 11 12 15 16 23 31 33",
+              "vendorCode": "ATP",
+              "fareTypeBitmap": "00",
+              "fareType": "EU",
+              "fareTariff": "0",
+              "fareRule": "2000",
+              "cabinCode": "Y",
+              "segments": [
+                {
+                  "segment": {
+                    "stopover": true
+                  }
+                }
+              ]
+            },
+            {
+              "id": 3,
+              "governingCarrier": "AA",
+              "fareAmount": 207.44,
+              "fareCurrency": "USD",
+              "fareBasisCode": "QWAIZTM3",
+              "farePassengerType": "ADT",
+              "publishedFareAmount": 207.44,
+              "publishedFareCurrency": "USD",
+              "directionality": "FROM",
+              "applicablePricingCategories": "2 4 5 8 9 10 11 12 15 16 23 31 33",
+              "vendorCode": "ATP",
+              "fareTypeBitmap": "00",
+              "fareType": "SIP",
+              "fareTariff": "0",
+              "fareRule": "M11I",
+              "cabinCode": "Y",
+              "segments": [
+                {
+                  "segment": {
+                    "stopover": true
+                  }
+                }
+              ]
+            },
+            {
+              "id": 4,
+              "governingCarrier": "DL",
+              "fareAmount": 133.02,
+              "fareCurrency": "USD",
+              "fareBasisCode": "VAWSA0BD",
+              "farePassengerType": "ADT",
+              "publishedFareAmount": 133.02,
+              "publishedFareCurrency": "USD",
+              "directionality": "FROM",
+              "applicablePricingCategories": "4 5 8 9 10 11 12 15 16 31 33",
+              "vendorCode": "ATP",
+              "fareTypeBitmap": "00",
+              "fareType": "EOU",
+              "fareTariff": "0",
+              "fareRule": "8B07",
+              "cabinCode": "Y",
+              "segments": [
+                {
+                  "segment": {
+                    "stopover": true
+                  }
+                }
+              ]
+            }
+          ],
+          "validatingCarrierDescs": [
+            {
+              "id": 1,
+              "settlementMethod": "BSP",
+              "newVcxProcess": true,
+              "default": {
+                "code": "AA"
+              }
+            },
+            {
+              "id": 2,
+              "settlementMethod": "BSP",
+              "newVcxProcess": true,
+              "default": {
+                "code": "DL"
+              }
+            }
+          ],
+          "baggageAllowanceDescs": [
+            {
+              "id": 1,
+              "pieceCount": 0
+            },
+            {
+              "id": 2,
+              "pieceCount": 0
+            }
+          ],
+          "legDescs": [
+            {
+              "id": 1,
+              "elapsedTime": 205,
+              "schedules": [
+                {
+                  "ref": 12
+                }
+              ]
+            },
+            {
+              "id": 2,
+              "elapsedTime": 209,
+              "schedules": [
+                {
+                  "ref": 14
+                }
+              ]
+            },
+            {
+              "id": 3,
+              "elapsedTime": 205,
+              "schedules": [
+                {
+                  "ref": 13
+                }
+              ]
+            },
+            {
+              "id": 4,
+              "elapsedTime": 206,
+              "schedules": [
+                {
+                  "ref": 11
+                }
+              ]
+            },
+            {
+              "id": 5,
+              "elapsedTime": 215,
+              "schedules": [
+                {
+                  "ref": 8
+                }
+              ]
+            },
+            {
+              "id": 6,
+              "elapsedTime": 204,
+              "schedules": [
+                {
+                  "ref": 9
+                }
+              ]
+            },
+            {
+              "id": 7,
+              "elapsedTime": 204,
+              "schedules": [
+                {
+                  "ref": 10
+                }
+              ]
+            },
+            {
+              "id": 8,
+              "elapsedTime": 202,
+              "schedules": [
+                {
+                  "ref": 15
+                }
+              ]
+            },
+            {
+              "id": 9,
+              "elapsedTime": 210,
+              "schedules": [
+                {
+                  "ref": 4
+                }
+              ]
+            },
+            {
+              "id": 10,
+              "elapsedTime": 210,
+              "schedules": [
+                {
+                  "ref": 3
+                }
+              ]
+            },
+            {
+              "id": 11,
+              "elapsedTime": 204,
+              "schedules": [
+                {
+                  "ref": 1
+                }
+              ]
+            },
+            {
+              "id": 12,
+              "elapsedTime": 206,
+              "schedules": [
+                {
+                  "ref": 2
+                }
+              ]
+            },
+            {
+              "id": 13,
+              "elapsedTime": 207,
+              "schedules": [
+                {
+                  "ref": 7
+                }
+              ]
+            },
+            {
+              "id": 14,
+              "elapsedTime": 204,
+              "schedules": [
+                {
+                  "ref": 5
+                }
+              ]
+            },
+            {
+              "id": 15,
+              "elapsedTime": 209,
+              "schedules": [
+                {
+                  "ref": 6
+                }
+              ]
+            }
+          ],
+          "itineraryGroups": [
+            {
+              "groupDescription": {
+                "legDescriptions": [
+                  {
+                    "departureDate": "2026-12-13",
+                    "departureLocation": "DFW",
+                    "arrivalLocation": "LAX"
+                  }
+                ]
+              },
+              "itineraries": [
+                {
+                  "id": 1,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 14
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "DL",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "DL",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 4,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "E",
+                                        "dualInventoryCode": "V",
+                                        "cabinCode": "Y",
+                                        "mealCode": "V",
+                                        "seatsAvailable": 9,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 2949.53,
+                                "totalTaxAmount": 472.53,
+                                "currency": "MXN",
+                                "baseFareAmount": 133.02,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 2477,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 133.02,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "DL",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 2
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 2949.53,
+                          "totalTaxAmount": 472.53,
+                          "currency": "MXN",
+                          "baseFareAmount": 133.02,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 133.02,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 2477,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 2
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 910.884
+                  }
+                },
+                {
+                  "id": 2,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 12
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "DL",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "DL",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 4,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "E",
+                                        "dualInventoryCode": "V",
+                                        "cabinCode": "Y",
+                                        "mealCode": "V",
+                                        "seatsAvailable": 9,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 2949.53,
+                                "totalTaxAmount": 472.53,
+                                "currency": "MXN",
+                                "baseFareAmount": 133.02,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 2477,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 133.02,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "DL",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 2
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 2949.53,
+                          "totalTaxAmount": 472.53,
+                          "currency": "MXN",
+                          "baseFareAmount": 133.02,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 133.02,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 2477,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 2
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 1378.834
+                  }
+                },
+                {
+                  "id": 3,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 6
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 1227.265
+                  }
+                },
+                {
+                  "id": 4,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 11
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "R",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 1823.365
+                  }
+                },
+                {
+                  "id": 5,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 7
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "R",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 2419.465
+                  }
+                },
+                {
+                  "id": 6,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 3
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 2436.74
+                  }
+                },
+                {
+                  "id": 7,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 4
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 2453.849
+                  }
+                },
+                {
+                  "id": 8,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 13
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 2470.791
+                  }
+                },
+                {
+                  "id": 9,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 15
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 2504.19
+                  }
+                },
+                {
+                  "id": 10,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 2
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 2504.19
+                  }
+                },
+                {
+                  "id": 11,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 9
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 2520.651
+                  }
+                },
+                {
+                  "id": 12,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 10
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 2520.651
+                  }
+                },
+                {
+                  "id": 13,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 5
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "O",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 7
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 3974,
+                                "totalTaxAmount": 544,
+                                "currency": "MXN",
+                                "baseFareAmount": 184.19,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3430,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 184.19,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 3974,
+                          "totalTaxAmount": 544,
+                          "currency": "MXN",
+                          "baseFareAmount": 184.19,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 184.19,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3430,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 2600.66
+                  }
+                },
+                {
+                  "id": 14,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 8
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 3,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "Q",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 4
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 4
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 4439.48,
+                                "totalTaxAmount": 576.48,
+                                "currency": "MXN",
+                                "baseFareAmount": 207.44,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 3863,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 207.44,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 4439.48,
+                          "totalTaxAmount": 576.48,
+                          "currency": "MXN",
+                          "baseFareAmount": 207.44,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 207.44,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 3863,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 2663.688
+                  }
+                },
+                {
+                  "id": 15,
+                  "pricingSource": "ADVJR1",
+                  "legs": [
+                    {
+                      "ref": 1
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "HPIS",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "AA",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-12-13",
+                        "lastTicketTime": "11:33",
+                        "governingCarriers": "AA",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": false,
+                              "fareComponents": [
+                                {
+                                  "ref": 2,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "Y",
+                                        "cabinCode": "Y",
+                                        "mealCode": "F",
+                                        "seatsAvailable": 7,
+                                        "availabilityBreak": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 1
+                                },
+                                {
+                                  "ref": 2
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 6
+                                },
+                                {
+                                  "ref": 5
+                                },
+                                {
+                                  "ref": 7
+                                },
+                                {
+                                  "ref": 1
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "passengerTotalFare": {
+                                "totalFare": 21344.93,
+                                "totalTaxAmount": 1755.93,
+                                "currency": "MXN",
+                                "baseFareAmount": 1052.09,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 19589,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 1052.09,
+                                "constructionCurrency": "USD",
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "AA",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 21344.93,
+                          "totalTaxAmount": 1755.93,
+                          "currency": "MXN",
+                          "baseFareAmount": 1052.09,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 1052.09,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 19589,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "diversitySwapper": {
+                    "weighedPrice": 13088.086
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "revalidate": {
+    "response": {
+      "status": 200,
+      "body": {
+        "groupedItineraryResponse": {
+          "version": "7.2.3",
+          "messages": [
+            {
+              "severity": "Info",
+              "type": "SERVER",
+              "code": "GCA14-ISELL-TN-00-3CQT",
+              "text": "27131"
+            },
+            {
+              "severity": "Info",
+              "type": "WORKERTHREAD",
+              "code": "TRANSACTIONID",
+              "text": "7703395835966682661"
+            },
+            {
+              "severity": "Info",
+              "type": "DRE",
+              "code": "RULEID",
+              "text": "25961"
+            },
+            {
+              "severity": "Info",
+              "type": "DEFAULT",
+              "code": "RULEID",
+              "text": "25959"
+            }
+          ],
+          "statistics": {
+            "itineraryCount": 1
+          },
+          "scheduleDescs": [
+            {
+              "id": 1,
+              "dotRating": "5",
+              "onTimePerformance": 55,
+              "frequency": "S******",
+              "stopCount": 0,
+              "eTicketable": true,
+              "totalMilesFlown": 1235,
+              "elapsedTime": 204,
+              "departure": {
+                "airport": "DFW",
+                "city": "QDF",
+                "state": "TX",
+                "country": "US",
+                "time": "16:05:00-06:00",
+                "terminal": "E"
+              },
+              "arrival": {
+                "airport": "LAX",
+                "city": "LAX",
+                "state": "CA",
+                "country": "US",
+                "time": "17:29:00-08:00",
+                "terminal": "3"
+              },
+              "carrier": {
+                "marketing": "DL",
+                "marketingFlightNumber": 948,
+                "operating": "DL",
+                "operatingFlightNumber": 948,
+                "equipment": {
+                  "code": "319",
+                  "typeForFirstLeg": "N",
+                  "typeForLastLeg": "N"
+                }
+              }
+            }
+          ],
+          "taxDescs": [
+            {
+              "id": 1,
+              "code": "XF",
+              "amount": 83.79,
+              "currency": "MXN",
+              "description": "PASSENGER FACILITY CHARGE",
+              "publishedAmount": 4.5,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            },
+            {
+              "id": 2,
+              "code": "US1",
+              "amount": 185.78,
+              "currency": "MXN",
+              "description": "TRANSPORTATION TAX DOMESTIC WHOLLY WITHIN US AND 225 MILE BUFFER ZONE",
+              "publishedAmount": 10,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            },
+            {
+              "id": 3,
+              "code": "AY",
+              "amount": 104.27,
+              "currency": "MXN",
+              "description": "PASSENGER CIVIL AVIATION SECURITY SERVICE FEE",
+              "publishedAmount": 5.6,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            },
+            {
+              "id": 4,
+              "code": "ZP",
+              "amount": 98.69,
+              "currency": "MXN",
+              "description": "FLIGHT SEGMENT TAX DOMESTIC",
+              "publishedAmount": 5.3,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US",
+              "taxReissue": {
+                "refundable": true
+              }
+            }
+          ],
+          "taxSummaryDescs": [
+            {
+              "id": 1,
+              "code": "XF",
+              "amount": 83.79,
+              "currency": "MXN",
+              "description": "PASSENGER FACILITY CHARGE",
+              "publishedAmount": 4.5,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US"
+            },
+            {
+              "id": 2,
+              "code": "US1",
+              "amount": 185.78,
+              "currency": "MXN",
+              "description": "TRANSPORTATION TAX DOMESTIC WHOLLY WITHIN US AND 225 MILE BUFFER ZONE",
+              "publishedAmount": 0.075,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US"
+            },
+            {
+              "id": 3,
+              "code": "AY",
+              "amount": 104.27,
+              "currency": "MXN",
+              "description": "PASSENGER CIVIL AVIATION SECURITY SERVICE FEE",
+              "publishedAmount": 5.6,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US"
+            },
+            {
+              "id": 4,
+              "code": "ZP",
+              "amount": 98.69,
+              "currency": "MXN",
+              "description": "FLIGHT SEGMENT TAX DOMESTIC",
+              "publishedAmount": 5.3,
+              "publishedCurrency": "USD",
+              "station": "DFW",
+              "country": "US"
+            }
+          ],
+          "fareComponentDescs": [
+            {
+              "id": 1,
+              "governingCarrier": "DL",
+              "fareAmount": 133.02,
+              "fareCurrency": "USD",
+              "fareBasisCode": "VAWSA0BD",
+              "farePassengerType": "ADT",
+              "publishedFareAmount": 133.02,
+              "publishedFareCurrency": "USD",
+              "oneWayFare": true,
+              "directionality": "FROM",
+              "direction": "WH",
+              "notValidBefore": "2026-12-13",
+              "notValidAfter": "2026-12-13",
+              "applicablePricingCategories": "2 4 5 6 7 8 9 10 11 12 16 18",
+              "vendorCode": "ATP",
+              "fareTypeBitmap": "00",
+              "fareType": "EOU",
+              "fareTariff": "0",
+              "fareRule": "8B07",
+              "cabinCode": "Y",
+              "segments": [
+                {
+                  "segment": {}
+                }
+              ]
+            }
+          ],
+          "validatingCarrierDescs": [
+            {
+              "id": 1,
+              "settlementMethod": "BSP",
+              "newVcxProcess": true,
+              "default": {
+                "code": "DL"
+              }
+            }
+          ],
+          "baggageAllowanceDescs": [
+            {
+              "id": 1,
+              "pieceCount": 0
+            }
+          ],
+          "legDescs": [
+            {
+              "id": 1,
+              "elapsedTime": 204,
+              "schedules": [
+                {
+                  "ref": 1
+                }
+              ]
+            }
+          ],
+          "itineraryGroups": [
+            {
+              "groupDescription": {
+                "legDescriptions": [
+                  {
+                    "departureDate": "2026-12-13",
+                    "departureLocation": "DFW",
+                    "arrivalLocation": "LAX"
+                  }
+                ]
+              },
+              "itineraries": [
+                {
+                  "id": 1,
+                  "pricingSource": "WPNI1_ITIN",
+                  "currentItinerary": true,
+                  "legs": [
+                    {
+                      "ref": 1
+                    }
+                  ],
+                  "pricingInformation": [
+                    {
+                      "pricingSubsource": "MIP",
+                      "distributionModel": "ATPCO",
+                      "fare": {
+                        "validatingCarrierCode": "DL",
+                        "vita": true,
+                        "eTicketable": true,
+                        "lastTicketDate": "2026-11-13",
+                        "lastTicketTime": "23:59",
+                        "governingCarriers": "DL",
+                        "passengerInfoList": [
+                          {
+                            "passengerInfo": {
+                              "passengerType": "ADT",
+                              "passengerNumber": 1,
+                              "nonRefundable": true,
+                              "fareComponents": [
+                                {
+                                  "ref": 1,
+                                  "beginAirport": "DFW",
+                                  "endAirport": "LAX",
+                                  "segments": [
+                                    {
+                                      "segment": {
+                                        "bookingCode": "E",
+                                        "cabinCode": "Y",
+                                        "mealCode": "V",
+                                        "seatsAvailable": 9,
+                                        "availabilityBreak": true,
+                                        "fareBreakPoint": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "taxes": [
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 2
+                                },
+                                {
+                                  "ref": 4
+                                },
+                                {
+                                  "ref": 1
+                                }
+                              ],
+                              "taxSummaries": [
+                                {
+                                  "ref": 2
+                                },
+                                {
+                                  "ref": 4
+                                },
+                                {
+                                  "ref": 3
+                                },
+                                {
+                                  "ref": 1
+                                }
+                              ],
+                              "currencyConversion": {
+                                "from": "USD",
+                                "to": "MXN",
+                                "exchangeRateUsed": 18.6192
+                              },
+                              "fareMessages": [
+                                {
+                                  "type": "N",
+                                  "code": "0",
+                                  "carrier": "DL",
+                                  "info": "NONREF/NOPRE RSVDSEAT"
+                                },
+                                {
+                                  "type": "W",
+                                  "code": "0",
+                                  "info": "VALIDATING CARRIER - DL"
+                                }
+                              ],
+                              "passengerTotalFare": {
+                                "totalFare": 2949.53,
+                                "totalTaxAmount": 472.53,
+                                "currency": "MXN",
+                                "baseFareAmount": 133.02,
+                                "baseFareCurrency": "USD",
+                                "equivalentAmount": 2477,
+                                "equivalentCurrency": "MXN",
+                                "constructionAmount": 133.02,
+                                "constructionCurrency": "USD",
+                                "commissionPercentage": 0,
+                                "commissionAmount": 0,
+                                "exchangeRateOne": 1
+                              },
+                              "baggageInformation": [
+                                {
+                                  "provisionType": "A",
+                                  "airlineCode": "DL",
+                                  "segments": [
+                                    {
+                                      "id": 0
+                                    }
+                                  ],
+                                  "allowance": {
+                                    "ref": 1
+                                  }
+                                }
+                              ],
+                              "fareCalcLine": {
+                                "info": "DFW DL LAX133.02USD133.02END ZPDFW XFDFW4.5"
+                              }
+                            }
+                          }
+                        ],
+                        "totalFare": {
+                          "totalPrice": 2949.53,
+                          "totalTaxAmount": 472.53,
+                          "currency": "MXN",
+                          "baseFareAmount": 133.02,
+                          "baseFareCurrency": "USD",
+                          "constructionAmount": 133.02,
+                          "constructionCurrency": "USD",
+                          "equivalentAmount": 2477,
+                          "equivalentCurrency": "MXN"
+                        },
+                        "validatingCarriers": [
+                          {
+                            "ref": 1
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

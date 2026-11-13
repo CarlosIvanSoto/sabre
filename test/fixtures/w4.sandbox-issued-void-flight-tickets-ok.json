@@ -1,0 +1,30 @@
+{
+  "recordedAt": "2026-11-13",
+  "environment": "sandbox",
+  "request": {
+    "targetPcc": "XXXX",
+    "tickets": [
+      "0060000000001"
+    ],
+    "receivedFrom": "SABRE CLIENT W4"
+  },
+  "ms": 3418,
+  "response": {
+    "status": 200,
+    "body": {
+      "timestamp": "2026-11-13T04:55:45",
+      "request": {
+        "errorHandlingPolicy": "HALT_ON_ERROR",
+        "targetPcc": "XXXX",
+        "tickets": [
+          "0060000000001"
+        ],
+        "receivedFrom": "SABRE CLIENT W4",
+        "voidNonElectronicTickets": false
+      },
+      "voidedTickets": [
+        "0060000000001"
+      ]
+    }
+  }
+}

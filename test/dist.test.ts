@@ -49,6 +49,11 @@ describe.skipIf(dist === undefined || testing === undefined)('build ESM de sabre
     expect(Object.keys(testing!.queueFixtures)).toContain('walk');
   });
 
+  it('dist/index.js exporta sabreCommandLength y MAX_COMMAND_LENGTH (#233)', () => {
+    expect(dist!.MAX_COMMAND_LENGTH).toBe(1023);
+    expect(dist!.sabreCommandLength('¥A')).toBe(3);
+  });
+
   it('dist/testing.js exporta la anonimización y queueFakePnrs, y el bundle principal no', () => {
     expect(testing!.createAnonymizer().anonymize('<UniqueID ID="QWERTY"/>')).toBe('<UniqueID ID="AAAAAA"/>');
     expect(testing!.isSafeHostLine('REMARKS')).toBe(true);

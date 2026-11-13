@@ -11,6 +11,7 @@ export type {
   BuiltCredentialsV3,
 } from './auth/credentials.js';
 export type { OpenSessionOptions, SabreSession } from './session/session.js';
+export { MAX_COMMAND_LENGTH, sabreCommandLength } from './session/command.js';
 export type { SabreCommandOptions, SabreCommandResponse } from './session/command.js';
 export type {
   QueueManagement,

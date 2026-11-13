@@ -55,6 +55,15 @@ export class BookingManagement {
    * Nunca se reintenta automáticamente. Lanza `SabreBusinessError` si algo falló o si Sabre
    * responde `NO_ITEMS_CANCELLED` (no se canceló nada), aunque llegue como aviso. Con
    * `END_TRANSACTION_PROBLEM` en `warnings`, la confirmación quedó pendiente: verifica con `get`.
+   *
+   * **Void** (`flightTicketOperation: 'VOID'`, ADR-031): anula los boletos y es **irreversible**.
+   * Con `cancelAll` y `HALT_ON_ERROR`, una sola llamada anula y cancela la reserva; `voidedTickets`
+   * trae los números anulados (CERT, 2026-11-13). Un fallo de red, un 5xx, un cuerpo ilegible, un
+   * abort con el request ya mandado o `END_TRANSACTION_PROBLEM` lanzan `SabreUncertainOutcomeError`:
+   * no se sabe si se anuló. Verifica con `sabre.tickets.verify` (un boleto anulado queda en `TV`) o
+   * con `get` antes de reintentar. `VOID` sobre una reserva sin boletos lanza `NO_ITEMS_CANCELLED`
+   * con `UNABLE_TO_VOID_TICKET` y **no cancela nada**: para una reserva sin emitir, cancela sin
+   * `VOID`.
    */
   cancel(request: CancelBookingRequest, options?: CancelBookingOptions): Promise<CancelBookingResponse> {
     return cancelBooking(this.#transport, request, options);

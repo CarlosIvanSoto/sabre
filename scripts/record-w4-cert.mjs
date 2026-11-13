@@ -15,7 +15,8 @@
 // SABRE_W4_COMMISSION_PERCENT (`ticketingQualifiers.commissionPercentage`), SABRE_W4_REPEAT=1
 // (segundo Fulfill), SABRE_W4_LABEL (prefijo de las fixtures) y SABRE_W4_PRINTER_PROFILE
 // (`designatePrinters: [{ profileNumber }]`, en lugar de `ticket.countryCode`) y
-// SABRE_W4_SECURE_FLIGHT=1 (birthDate y SECURE_FLIGHT_PASSENGER_DATA sintéticos en el traveler).
+// SABRE_W4_SECURE_FLIGHT=1 (birthDate y SECURE_FLIGHT_PASSENGER_DATA sintéticos en el traveler) y
+// SABRE_W4_VOID=cancel (anula por Cancel Booking con VOID, el camino de W4).
 //
 // Corridas del 2026-11-12: Fulfill con US y con MX, y Enhanced Air Ticket con MX, fallan en
 // DesignatePrinterLLSRQ (`INVALID TICKET STOCK-0001`/`-0096`, «No printer designated»): el PCC de
@@ -81,12 +82,13 @@ const destination = process.env.SABRE_BOOKING_DESTINATION ?? 'LAX';
 
 // --- captura: bodies crudos por servicio y el último Authorization que mandó el SDK ---
 const SERVICES = [
+  ['/v5/offers/shop', 'shop'],
   ['/v5/shop/flights/revalidate', 'revalidate'],
   ['/v1/trip/orders/createBooking', 'create'],
   ['/v1/trip/orders/getBooking', 'get'],
   ['/v1/trip/orders/cancelBooking', 'cancel'],
 ];
-const captured = { revalidate: [], create: [], get: [], cancel: [] };
+const captured = { shop: [], revalidate: [], create: [], get: [], cancel: [] };
 let authorization;
 const recordingFetch = async (input, init) => {
   const header = new Headers(init?.headers).get('Authorization');
@@ -327,12 +329,14 @@ try {
   step('error', describe(error));
 } finally {
   const mask = (number) => `…${String(number).slice(-4)}`;
-  // --- 7. Void Flight Tickets, solo si hay boletos. Si falla, el script para sin cancelar: el PNR
-  // queda vivo (y en .sabre-sandbox-pnr.json) para no perder el boleto sin anular ---
-  let voidOk = issuedNumbers.length === 0;
-  if (issuedNumbers.length > 0) {
+  // --- 7. Void, solo si hay boletos. Con SABRE_W4_VOID=cancel, por Cancel Booking (cancelAll +
+  // flightTicketOperation VOID), el camino de W4 y del SDK; si falla no se reintenta: se lee la
+  // reserva y, si el boleto sigue en TE, se anula con Void Flight Tickets. Sin SABRE_W4_VOID, directo
+  // con Void Flight Tickets. Si el void falla, el script para sin cancelar: el PNR queda vivo (y en
+  // .sabre-sandbox-pnr.json) para no perder el boleto sin anular ---
+  const voidByTickets = async (numbers, name) => {
     // Sin confirmationId: con tickets da INVALID_FLAGS_COMBINATION y no anula nada (CERT, 2026-11-12).
-    const body = { ...context, tickets: issuedNumbers, receivedFrom: 'SABRE CLIENT W4' };
+    const body = { ...context, tickets: numbers, receivedFrom: 'SABRE CLIENT W4' };
     const startedAt = Date.now();
     let result;
     try {
@@ -348,19 +352,53 @@ try {
     }
     const parsed = parse(result.response?.body ?? '');
     const voided = Array.isArray(parsed?.voidedTickets) ? parsed.voidedTickets : [];
-    voidOk = issuedNumbers.every((n) => voided.includes(n));
-    step('7.void-flight-tickets', {
+    const ok = numbers.every((n) => voided.includes(n));
+    step(name, {
       httpStatus: result.response?.status ?? null,
       ms: result.ms,
       transportError: result.transportError ?? null,
       voidedTickets: voided.map(mask),
       errors: codes(parsed),
-      errorDescriptions: Array.isArray(parsed?.errors) ? parsed.errors.map((e) => String(e.description ?? e.descriptionText ?? '').replace(/\b\d{13}\b/g, mask)) : [],
-      ok: voidOk,
+      errorDescriptions: Array.isArray(parsed?.errors) ? parsed.errors.map((e) => String(e.description ?? e.descriptionText ?? '').replace(/\d{13}/g, mask)) : [],
+      ok,
     });
     exchanges.voidTickets = result;
+    return ok;
+  };
+  let voidOk = issuedNumbers.length === 0;
+  if (issuedNumbers.length > 0 && process.env.SABRE_W4_VOID === 'cancel') {
+    const cancelVoidRequest = { confirmationId, ...context, cancelAll: true, flightTicketOperation: 'VOID', retrieveBooking: true };
+    const cancelIndex = captured.cancel.length;
+    const startedAt = Date.now();
+    try {
+      const cancelled = await sabre.booking.cancel(cancelVoidRequest);
+      const raw = parse(captured.cancel[cancelIndex]?.body ?? '');
+      step('7.cancel-void', {
+        ok: true,
+        ms: Date.now() - startedAt,
+        voidedTickets: (cancelled.voidedTickets ?? []).map(mask),
+        voidedTicketsShape: Array.isArray(raw?.voidedTickets) ? raw.voidedTickets.map((v) => typeof v) : null,
+        tickets: Array.isArray(raw?.tickets) ? raw.tickets.map((t) => ({ fields: Object.keys(t).sort(), ticketStatusCode: t.ticketStatusCode ?? null })) : null,
+        responseFields: raw && typeof raw === 'object' ? Object.keys(raw).sort() : null,
+        bookingFlightsAfter: Array.isArray(raw?.booking?.flights) ? raw.booking.flights.length : null,
+        bookingTicketsAfter: Array.isArray(raw?.booking?.flightTickets) ? raw.booking.flightTickets.map((t) => t.ticketStatusCode ?? null) : null,
+        warnings: cancelled.warnings.map((w) => w.code),
+        echo: { errorHandlingPolicy: cancelled.request?.errorHandlingPolicy ?? null },
+      });
+    } catch (error) {
+      step('7.cancel-void', { ok: false, ms: Date.now() - startedAt, error: describe(error), errors: codes(parse(captured.cancel[cancelIndex]?.body ?? '')) });
+    }
+    exchanges.cancelVoid = { request: cancelVoidRequest, response: captured.cancel[cancelIndex] };
+    // Sin reintentar el Cancel: se lee la reserva y, si queda un boleto en TE, plan B por tickets.
+    const check = await sabre.booking.get(getRequest);
+    const stillLive = ticketsOf(check).filter((t) => issuedNumbers.includes(t.number) && t.ticketStatusCode === 'TE').map((t) => t.number);
+    step('7.get-despues-del-cancel', { flights: (check.flights ?? []).length, isTicketed: check.isTicketed ?? null, tickets: ticketsOf(check).map((t) => ({ ticket: mask(t.number), code: t.ticketStatusCode, name: t.ticketStatusName })) });
+    exchanges.getAfterCancelVoid = { request: getRequest, response: captured.get.at(-1) };
+    voidOk = stillLive.length === 0 ? true : await voidByTickets(stillLive, '7.void-flight-tickets-plan-b');
+  } else if (issuedNumbers.length > 0) {
+    voidOk = await voidByTickets(issuedNumbers, '7.void-flight-tickets');
   } else {
-    step('7.void-flight-tickets', { omitido: 'no hubo boletos' });
+    step('7.void', { omitido: 'no hubo boletos' });
   }
 
   // --- 8. Get: isTicketed y estado de los boletos después del void ---
@@ -380,15 +418,20 @@ try {
   if (!voidOk) {
     step('9.cancel', { omitido: 'el void falló: el PNR queda vivo para revisarlo, sin reintentar' });
   } else {
-    const cancelRequest = { confirmationId, ...context, cancelAll: true, retrieveBooking: true };
-    const cancelIndex = captured.cancel.length;
-    try {
-      const cancelled = await sabre.booking.cancel(cancelRequest);
-      step('9.cancel', { ok: true, warnings: cancelled.warnings.map((w) => w.code) });
-    } catch (error) {
-      step('9.cancel', { ok: false, error: describe(error), errors: codes(parse(captured.cancel[cancelIndex]?.body ?? '')) });
+    const current = await sabre.booking.get(getRequest);
+    if ((current.flights ?? []).length === 0) {
+      step('9.cancel', { omitido: 'la reserva ya no tiene vuelos' });
+    } else {
+      const cancelRequest = { confirmationId, ...context, cancelAll: true, retrieveBooking: true };
+      const cancelIndex = captured.cancel.length;
+      try {
+        const cancelled = await sabre.booking.cancel(cancelRequest);
+        step('9.cancel', { ok: true, warnings: cancelled.warnings.map((w) => w.code) });
+      } catch (error) {
+        step('9.cancel', { ok: false, error: describe(error), errors: codes(parse(captured.cancel[cancelIndex]?.body ?? '')) });
+      }
+      exchanges.cancel = { request: cancelRequest, response: captured.cancel[cancelIndex] };
     }
-    exchanges.cancel = { request: cancelRequest, response: captured.cancel[cancelIndex] };
     try {
       const final = await sabre.booking.get(getRequest);
       step('9.get-final', { flights: (final.flights ?? []).length, isTicketed: final.isTicketed ?? null, tickets: ticketsOf(final).map((t) => ({ code: t.ticketStatusCode, name: t.ticketStatusName })) });
@@ -487,10 +530,12 @@ function save() {
   // SABRE_W4_LABEL separa las fixtures de una corrida (p. ej. `issued`): w4.sandbox-<label>-*.json.
   const label = process.env.SABRE_W4_LABEL ? `${process.env.SABRE_W4_LABEL}-` : '';
   const toSave = {
+    [`w4.sandbox-${label}shop.json`]: captured.shop[0] && { search: { request: search, response: captured.shop[0] }, revalidate: { response: captured.revalidate.at(-1) } },
     [`w4.sandbox-${label}create.json`]: exchanges.create,
     [`w4.sandbox-${label}${process.env.SABRE_W4_ISSUER === 'enhanced' ? 'enhanced-air-ticket' : 'fulfill'}.json`]: exchanges.fulfill && { first: exchanges.fulfill, again: exchanges.fulfillAgain },
     [`w4.sandbox-${label}get-booking.json`]: exchanges.getBefore && { before: exchanges.getBefore, afterFulfill: exchanges.getAfter, afterVoid: exchanges.getAfterVoid, final: exchanges.getFinal },
     [`w4.sandbox-${label}void-flight-tickets.json`]: exchanges.voidTickets,
+    [`w4.sandbox-${label}cancel-void.json`]: exchanges.cancelVoid && { cancelVoid: exchanges.cancelVoid, getAfter: exchanges.getAfterCancelVoid },
     [`w4.sandbox-${label}cancel.json`]: exchanges.cancel,
     'w4.sandbox-create-marriage-group.json': exchanges.createMarriageGroup,
   };

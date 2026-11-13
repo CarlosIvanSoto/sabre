@@ -1,0 +1,770 @@
+{
+  "recordedAt": "2026-11-13",
+  "environment": "sandbox",
+  "steps": {
+    "1.itinerario": {
+      "segments": [
+        "DL948 DFW-LAX"
+      ],
+      "currency": "MXN"
+    },
+    "2.create": {
+      "ok": true,
+      "warnings": [],
+      "errors": [],
+      "echo": [
+        {
+          "isMarriageGroup": false,
+          "marriageGroup": "(ausente)"
+        }
+      ]
+    },
+    "3.get-antes": {
+      "isTicketed": false,
+      "tickets": 0
+    },
+    "4.fulfill": {
+      "httpStatus": 200,
+      "ms": 8248,
+      "transportError": null,
+      "tickets": [
+        {
+          "ticket": "…0001",
+          "ticketStatusCode": "TE",
+          "ticketStatusName": "Issued",
+          "isCommitted": true,
+          "fields": [
+            "date",
+            "isCommitted",
+            "number",
+            "payment",
+            "ticketStatusCode",
+            "ticketStatusName",
+            "ticketingPcc",
+            "travelerGivenName",
+            "travelerSurname"
+          ]
+        }
+      ],
+      "responseFields": [
+        "request",
+        "tickets",
+        "timestamp"
+      ],
+      "errors": [],
+      "errorDescriptions": [],
+      "requestEcho": {
+        "acceptPriceChanges": false,
+        "priceQuoteExpirationMethod": "Quit",
+        "errorHandlingPolicy": null
+      },
+      "uncertain": false
+    },
+    "5.get-despues": {
+      "polls": [
+        {
+          "afterSeconds": 2,
+          "isTicketed": true,
+          "newTickets": 1,
+          "codes": [
+            "TE"
+          ]
+        }
+      ],
+      "sameAsFulfill": true
+    },
+    "6.fulfill-repetido": {
+      "omitido": "un solo intento de emisión (SABRE_W4_REPEAT no es 1)"
+    },
+    "7.cancel-void": {
+      "ok": true,
+      "ms": 3919,
+      "voidedTickets": [
+        "…0001"
+      ],
+      "voidedTicketsShape": [
+        "string"
+      ],
+      "tickets": null,
+      "responseFields": [
+        "booking",
+        "request",
+        "timestamp",
+        "voidedTickets"
+      ],
+      "bookingFlightsAfter": null,
+      "bookingTicketsAfter": null,
+      "warnings": [],
+      "echo": {
+        "errorHandlingPolicy": "HALT_ON_ERROR"
+      }
+    },
+    "7.get-despues-del-cancel": {
+      "flights": 0,
+      "isTicketed": true,
+      "tickets": [
+        {
+          "ticket": "…0001",
+          "code": "TV",
+          "name": "Voided"
+        }
+      ]
+    },
+    "8.get-despues-del-void": {
+      "flights": 0,
+      "isTicketed": true,
+      "tickets": [
+        {
+          "ticket": "…0001",
+          "code": "TV",
+          "name": "Voided"
+        }
+      ]
+    },
+    "9.cancel": {
+      "omitido": "la reserva ya no tiene vuelos"
+    },
+    "9.get-final": {
+      "flights": 0,
+      "isTicketed": true,
+      "tickets": [
+        {
+          "code": "TV",
+          "name": "Voided"
+        }
+      ]
+    }
+  },
+  "request": {
+    "targetPcc": "XXXX",
+    "flightDetails": {
+      "flights": [
+        {
+          "flightNumber": 948,
+          "airlineCode": "DL",
+          "fromAirportCode": "DFW",
+          "toAirportCode": "LAX",
+          "departureDate": "2026-12-13",
+          "departureTime": "16:05",
+          "bookingClass": "E",
+          "flightStatusCode": "NN",
+          "isMarriageGroup": false
+        }
+      ],
+      "flightPricing": [
+        {
+          "qualifiers": {
+            "passengersPricing": [
+              {
+                "passengerCode": "ADT",
+                "numberOfpassengers": 1
+              }
+            ],
+            "validatingAirlineCode": "DL"
+          }
+        }
+      ]
+    },
+    "travelers": [
+      {
+        "givenName": "TEST",
+        "surname": "PASSENGER",
+        "passengerCode": "ADT",
+        "emails": [
+          "test@example.com"
+        ],
+        "phones": [
+          {
+            "number": "5550000000",
+            "label": "M"
+          }
+        ],
+        "birthDate": "1980-01-01",
+        "identityDocuments": [
+          {
+            "documentType": "SECURE_FLIGHT_PASSENGER_DATA",
+            "givenName": "TEST",
+            "surname": "PASSENGER",
+            "birthDate": "1980-01-01",
+            "gender": "MALE"
+          }
+        ]
+      }
+    ],
+    "contactInfo": {
+      "emails": [
+        "test@example.com"
+      ],
+      "phones": [
+        "5550000000"
+      ]
+    },
+    "agency": {
+      "ticketingPolicy": "TODAY",
+      "agencyCustomerNumber": "XXXX"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "timestamp": "2026-11-13T16:10:19",
+      "confirmationId": "PGOUGE",
+      "booking": {
+        "bookingId": "PGOUGE",
+        "startDate": "2026-12-13",
+        "endDate": "2026-12-13",
+        "isCancelable": false,
+        "isTicketed": false,
+        "agencyCustomerNumber": "XXXX",
+        "creationDetails": {
+          "creationUserSine": "AAA",
+          "creationDate": "2026-11-13",
+          "creationTime": "10:10",
+          "userWorkPcc": "XXXX",
+          "userHomePcc": "XXXX",
+          "primeHostId": "1S",
+          "lastUpdateDate": "2026-11-13",
+          "lastUpdateTime": "10:10",
+          "numberOfUpdates": 1
+        },
+        "contactInfo": {
+          "emails": [
+            "test@example.com"
+          ],
+          "phones": [
+            "5550000000",
+            "5550000000"
+          ]
+        },
+        "travelers": [
+          {
+            "givenName": "TEST",
+            "surname": "PASSENGER",
+            "type": "ADULT",
+            "passengerCode": "ADT",
+            "nameAssociationId": "1",
+            "emails": [
+              "test@example.com"
+            ],
+            "phones": [
+              {
+                "number": "5550000000",
+                "label": "M"
+              }
+            ],
+            "identityDocuments": [
+              {
+                "documentType": "SECURE_FLIGHT_PASSENGER_DATA",
+                "givenName": "TEST",
+                "surname": "PASSENGER",
+                "birthDate": "1980-01-01",
+                "gender": "MALE",
+                "itemId": "957314c5000c34c24a200081b28fd8397d7b2a9cdc61d625a3883ecdca26317cf999d3252f9ca4403d668b0cba7d64fb81c6767dae44189c5245db5be4116154"
+              }
+            ]
+          }
+        ],
+        "flights": [
+          {
+            "itemId": "11",
+            "confirmationId": "GNSIC4",
+            "sourceType": "ATPCO",
+            "flightNumber": 948,
+            "airlineCode": "DL",
+            "airlineName": "DELTA AIR LINES INC",
+            "operatingFlightNumber": 948,
+            "operatingAirlineCode": "DL",
+            "operatingAirlineName": "DELTA AIR LINES INC",
+            "fromAirportCode": "DFW",
+            "toAirportCode": "LAX",
+            "departureDate": "2026-12-13",
+            "departureTime": "16:10:00",
+            "departureTerminalName": "TERMINAL E",
+            "departureGate": "E",
+            "arrivalDate": "2026-12-13",
+            "arrivalTime": "17:37:00",
+            "arrivalTerminalName": "TERMINAL 3",
+            "arrivalGate": "3",
+            "numberOfSeats": 1,
+            "cabinTypeName": "ECONOMY",
+            "cabinTypeCode": "Y",
+            "aircraftTypeCode": "319",
+            "aircraftTypeName": "AIRBUS",
+            "bookingClass": "E",
+            "meals": [
+              {
+                "code": "V",
+                "description": "Refreshment for purchase"
+              }
+            ],
+            "flightStatusCode": "HK",
+            "flightStatusName": "Confirmed",
+            "durationInMinutes": 204,
+            "distanceInMiles": 1235,
+            "travelerIndices": [
+              1
+            ],
+            "identityDocuments": [
+              {
+                "itemId": "957314c5000c34c24a200081b28fd8397d7b2a9cdc61d625a3883ecdca26317cf999d3252f9ca4403d668b0cba7d64fb81c6767dae44189c5245db5be4116154",
+                "status": "Confirmed"
+              }
+            ],
+            "creationDate": "2026-11-13",
+            "creationTime": "10:10"
+          }
+        ],
+        "journeys": [
+          {
+            "firstAirportCode": "DFW",
+            "departureDate": "2026-12-13",
+            "departureTime": "16:10",
+            "lastAirportCode": "LAX",
+            "numberOfFlights": 1
+          }
+        ],
+        "fareRules": [
+          {
+            "originAirportCode": "DFW",
+            "destinationAirportCode": "LAX",
+            "owningAirlineCode": "DL",
+            "passengerCode": "ADT",
+            "isRefundable": false,
+            "isChangeable": true,
+            "exchangePenalties": [
+              {
+                "applicability": "BEFORE_DEPARTURE",
+                "conditionsApply": true,
+                "penalty": {
+                  "amount": "1844.0",
+                  "currencyCode": "MXN"
+                },
+                "hasNoShowCost": true,
+                "noShowPenalty": {
+                  "amount": "1844.00",
+                  "currencyCode": "MXN"
+                }
+              }
+            ]
+          }
+        ],
+        "fareOffers": [
+          {
+            "travelerIndices": [
+              1
+            ],
+            "flights": [
+              {
+                "itemId": "11"
+              }
+            ],
+            "cabinBaggageAllowance": {
+              "maximumPieces": 1,
+              "baggagePieces": [
+                {
+                  "maximumSizeInInches": 45,
+                  "maximumSizeInCentimeters": 115,
+                  "numberOfPieces": 1
+                }
+              ]
+            },
+            "checkedBaggageAllowance": {
+              "maximumPieces": 0,
+              "baggagePieces": [
+                {
+                  "maximumSizeInInches": 62,
+                  "maximumSizeInCentimeters": 158,
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "HOCKEY EQUIP UPTO50LB 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "JAVELIN UP TO 23KG"
+                },
+                {
+                  "maximumSizeInInches": 80,
+                  "maximumSizeInCentimeters": 203,
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "MI UPTO50LB 23KGAND80LI 203LCM"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "ARCHERY EQPMT UP TO 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "FISHING EQUIPMENTUPTO50LB 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "GOLF EQUIPMENT UP TO 50LB 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "SKI EQUIPMENT UP TO 50LB 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "SNOWBOARD EQPMT UP TO 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "SPORT FIREARMS UP TO 50LB 23KG"
+                },
+                {
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "FLOWERS PLANTS HERBS BUSHES"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "POLE VAULT EQPMT UP TO 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "BICYCLE UP TO 50LB 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "SCUBA EQUIPMENT UP TO50LB 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "WINDSURF EQPMT UP TO 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "SURFBOARD UPTO50LB 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "ANTLERS UP TO 50LB 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "SKATEBOARD EQPMT UP TO 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "GAME MEAT UPTO50LB 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "FOLDING KAYAK UP TO 50LB 23KG"
+                },
+                {
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "MEDIA EQUIPMENT UPTO50 LB 23KG"
+                },
+                {
+                  "numberOfPieces": 1,
+                  "specialItemDescription": "STROLLER OR PUSHCHAIR"
+                },
+                {
+                  "numberOfPieces": 1,
+                  "specialItemDescription": "ASSISTIVE DEVICES"
+                },
+                {
+                  "numberOfPieces": 1,
+                  "specialItemDescription": "INFANT CAR SEAT"
+                },
+                {
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "PET IN HOLD"
+                },
+                {
+                  "numberOfPieces": 0,
+                  "specialItemDescription": "FRUITS AND VEGETABLES"
+                }
+              ]
+            },
+            "checkedBaggageCharges": [
+              {
+                "numberOfPieces": 1,
+                "specialItemDescription": "CANOE KAYAK OARS",
+                "isCheckInOnly": true
+              },
+              {
+                "maximumSizeInInches": 109,
+                "maximumSizeInCentimeters": 277,
+                "numberOfPieces": 1,
+                "specialItemDescription": "WINDSURF OVER 109 IN 277CM",
+                "isCheckInOnly": true
+              },
+              {
+                "maximumSizeInInches": 62,
+                "maximumSizeInCentimeters": 158,
+                "maximumWeightInPounds": 50,
+                "maximumWeightInKilograms": 23,
+                "numberOfPieces": 1,
+                "isCheckInOnly": true,
+                "fee": {
+                  "amount": "45.00",
+                  "currencyCode": "USD"
+                }
+              },
+              {
+                "maximumSizeInInches": 62,
+                "maximumSizeInCentimeters": 158,
+                "maximumWeightInPounds": 50,
+                "maximumWeightInKilograms": 23,
+                "numberOfPieces": 1,
+                "isCheckInOnly": true,
+                "fee": {
+                  "amount": "55.00",
+                  "currencyCode": "USD"
+                }
+              }
+            ]
+          }
+        ],
+        "fares": [
+          {
+            "creationDetails": {
+              "creationUserSine": "AAA",
+              "creationDate": "2026-11-13",
+              "creationTime": "10:10",
+              "purchaseDeadlineDate": "2026-11-13",
+              "purchaseDeadlineTime": "23:59",
+              "userWorkPcc": "XXXX",
+              "userHomePcc": "XXXX"
+            },
+            "airlineCode": "DL",
+            "fareCalculationLine": "DFW DL LAX133.02USD133.02END ZPDFW XFDFW4.5",
+            "isNegotiatedFare": false,
+            "fareConstruction": [
+              {
+                "fareBasisCode": "VAWSA0BD",
+                "baseRate": {
+                  "amount": "133.02",
+                  "currencyCode": "USD"
+                },
+                "brandFareCode": "MAINBASIC",
+                "brandFareName": "DELTA MAIN BASIC",
+                "brandProgramCode": "CFFDL",
+                "brandProgramName": "DL US CA DOMESTIC",
+                "isCurrentItinerary": true
+              }
+            ],
+            "taxBreakdown": [
+              {
+                "taxCode": "US",
+                "taxAmount": {
+                  "amount": "185.78",
+                  "currencyCode": "MXN"
+                }
+              },
+              {
+                "taxCode": "ZP",
+                "taxAmount": {
+                  "amount": "98.69",
+                  "currencyCode": "MXN"
+                }
+              },
+              {
+                "taxCode": "AY",
+                "taxAmount": {
+                  "amount": "104.27",
+                  "currencyCode": "MXN"
+                }
+              },
+              {
+                "taxCode": "XF",
+                "taxAmount": {
+                  "amount": "83.79",
+                  "currencyCode": "MXN"
+                }
+              }
+            ],
+            "totals": {
+              "subtotal": "2477.00",
+              "taxes": "472.53",
+              "total": "2949.53",
+              "currencyCode": "MXN"
+            },
+            "originalTotalValues": {
+              "total": "133.02",
+              "currencyCode": "USD"
+            },
+            "pricingTypeCode": "S",
+            "pricingTypeName": "System",
+            "pricingStatusCode": "A",
+            "pricingStatusName": "Active",
+            "hasValidPricing": true,
+            "requestedTravelerType": "ADT",
+            "pricedTravelerType": "ADT",
+            "recordTypeCode": "PQ",
+            "recordTypeName": "Price Quote",
+            "recordId": "1"
+          }
+        ],
+        "allSegments": [
+          {
+            "id": "11",
+            "type": "FLIGHT",
+            "text": "948",
+            "vendorCode": "DL",
+            "startDate": "2026-12-13",
+            "startTime": "16:10:00",
+            "startLocationCode": "DFW",
+            "endDate": "2026-12-13",
+            "endTime": "17:37:00",
+            "endLocationCode": "LAX"
+          }
+        ],
+        "payments": {
+          "flightTotals": [
+            {
+              "subtotal": "2477.00",
+              "taxes": "472.53",
+              "total": "2949.53",
+              "currencyCode": "MXN"
+            }
+          ]
+        },
+        "specialServices": [
+          {
+            "travelerIndices": [
+              1
+            ],
+            "flights": [
+              {
+                "itemId": "11"
+              }
+            ],
+            "code": "BFFF",
+            "message": "/DL/MAINBASIC",
+            "statusCode": "HK",
+            "statusName": "Confirmed"
+          },
+          {
+            "travelerIndices": [
+              1
+            ],
+            "code": "DOCS",
+            "name": "API-Passenger Travel Document",
+            "message": "/DB/01JAN1980/M/PASSENGER/TEST",
+            "statusCode": "HK",
+            "statusName": "Confirmed"
+          }
+        ]
+      },
+      "request": {
+        "targetPcc": "XXXX",
+        "receivedFrom": "Create Booking",
+        "asynchronousUpdateWaitTime": 0,
+        "agency": {
+          "ticketingPolicy": "TODAY",
+          "agencyCustomerNumber": "XXXX"
+        },
+        "flightDetails": {
+          "flights": [
+            {
+              "flightNumber": 948,
+              "airlineCode": "DL",
+              "fromAirportCode": "DFW",
+              "toAirportCode": "LAX",
+              "departureDate": "2026-12-13",
+              "departureTime": "16:05",
+              "bookingClass": "E",
+              "isMarriageGroup": false,
+              "flightStatusCode": "NN"
+            }
+          ],
+          "flightPricing": [
+            {
+              "qualifiers": {
+                "validatingAirlineCode": "DL",
+                "priceWithTaxes": true,
+                "passengersPricing": [
+                  {
+                    "passengerCode": "ADT",
+                    "numberOfpassengers": 1
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "travelers": [
+          {
+            "givenName": "TEST",
+            "surname": "PASSENGER",
+            "birthDate": "1980-01-01",
+            "passengerCode": "ADT",
+            "identityDocuments": [
+              {
+                "documentType": "SECURE_FLIGHT_PASSENGER_DATA",
+                "givenName": "TEST",
+                "surname": "PASSENGER",
+                "birthDate": "1980-01-01",
+                "gender": "MALE"
+              }
+            ],
+            "emails": [
+              "test@example.com"
+            ],
+            "phones": [
+              {
+                "number": "5550000000",
+                "label": "M"
+              }
+            ]
+          }
+        ],
+        "contactInfo": {
+          "emails": [
+            "test@example.com"
+          ],
+          "phones": [
+            "5550000000"
+          ]
+        },
+        "returnRequest": true,
+        "retrieveBooking": true
+      }
+    }
+  }
+}

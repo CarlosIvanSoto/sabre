@@ -7,6 +7,16 @@
 //
 //   node --env-file=.env.production scripts/record-daily-sales.mjs <hoy.xml> <ayer.xml>
 //
+// Con `--name`, escribe otra fixture y no toca la de producción (#243). Los sobres se etiquetan
+// con `--labels` (separadas por comas, una por XML) y el resto de los metadatos sale de
+// `--environment`, `--recorded-at` y `--source`:
+//
+//   node --env-file=.env scripts/record-daily-sales.mjs --name daily-sales-void \
+//     --environment sandbox --labels 2026-11-12,2026-11-13 --recorded-at 2026-11-13 \
+//     --source '…' <dia1.xml> <dia2.xml>
+//
+// escribe test/fixtures/reporting.sandbox-daily-sales-void.json.
+//
 // Variables: las credenciales (como en los demás scripts) y SABRE_TARGET_PCC, si el reporte es de
 // otro PCC: todos entran como secretos.
 //
@@ -20,12 +30,55 @@
 // Se conservan los enums, los atributos (`count`, `fop`, `category`…), las fechas y las horas.
 // Si después de todo queda un valor original, corta con código 1 sin escribir.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { parseArgs } from 'node:util';
 import { createAnonymizer } from '../dist/testing.js';
 import { envCredentials } from './lib/env-credentials.mjs';
 
-const [todayFile, previousDayFile] = process.argv.slice(2);
-if (todayFile === undefined || previousDayFile === undefined) {
-  console.error('uso: record-daily-sales.mjs <hoy.xml> <ayer.xml>');
+const USAGE = 'uso: record-daily-sales.mjs [--name <nombre> --labels <a,b…> --environment <sandbox|production> --recorded-at <fecha> --source <texto>] <xml>…';
+let args;
+try {
+  args = parseArgs({
+    allowPositionals: true,
+    options: {
+      name: { type: 'string' },
+      labels: { type: 'string' },
+      environment: { type: 'string' },
+      'recorded-at': { type: 'string' },
+      source: { type: 'string' },
+    },
+  });
+} catch (error) {
+  console.error(`${error.message}\n${USAGE}`);
+  process.exit(2);
+}
+const { values: options, positionals: files } = args;
+// Sin `--name`, todo queda como antes: la fixture de producción con el día en curso y el anterior.
+const custom = options.name !== undefined;
+const extra = ['labels', 'environment', 'recorded-at', 'source'].filter((key) => options[key] !== undefined);
+if (!custom && extra.length > 0) {
+  console.error(`--${extra.join(', --')} solo con --name: sin él se escribe la fixture de producción\n${USAGE}`);
+  process.exit(2);
+}
+if (custom && !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(options.name)) {
+  console.error(`--name va en kebab-case, sin extensión (recibido: ${options.name})`);
+  process.exit(2);
+}
+const environment = options.environment ?? 'production';
+if (environment !== 'sandbox' && environment !== 'production') {
+  console.error(`--environment debe ser sandbox o production (recibido: ${environment})`);
+  process.exit(2);
+}
+if (custom && environment === 'production' && options.name === 'daily-sales-summary') {
+  console.error('ese --name es la fixture de producción: corre el script sin --name');
+  process.exit(2);
+}
+const labels = custom ? (options.labels ?? '').split(',').filter((label) => label !== '') : ['today', 'previousDay'];
+if (files.length === 0 || files.length !== labels.length) {
+  console.error(`${custom ? `--labels trae ${labels.length} etiquetas para ${files.length} XML` : 'faltan <hoy.xml> y <ayer.xml>'}\n${USAGE}`);
+  process.exit(2);
+}
+if (custom && (options['recorded-at'] === undefined || options.source === undefined)) {
+  console.error(`con --name hacen falta --recorded-at y --source\n${USAGE}`);
   process.exit(2);
 }
 
@@ -65,18 +118,17 @@ function anonymizeSummary(xml) {
   return anonymize(out);
 }
 
-const responses = [
-  ['today', todayFile],
-  ['previousDay', previousDayFile],
-].map(([label, file]) => ({ operation: 'reporting.dailySalesSummary', label, status: 200, body: anonymizeSummary(readFileSync(file, 'utf8')) }));
+const responses = files.map((file, index) => [labels[index], file]).map(([label, file]) => ({ operation: 'reporting.dailySalesSummary', label, status: 200, body: anonymizeSummary(readFileSync(file, 'utf8')) }));
 
-const fixture = {
-  recordedAt: '2026-11-12',
-  environment: 'production',
-  scenario: 'daily-sales-summary',
-  source: 'sabre-wiki: wiki/sources/dqb-prueba-2026-11-12.md (PCC P8, día en curso y día anterior)',
-  responses,
-};
+const fixture = custom
+  ? { recordedAt: options['recorded-at'], environment, scenario: options.name, source: options.source, responses }
+  : {
+      recordedAt: '2026-11-12',
+      environment: 'production',
+      scenario: 'daily-sales-summary',
+      source: 'sabre-wiki: wiki/sources/dqb-prueba-2026-11-12.md (PCC P8, día en curso y día anterior)',
+      responses,
+    };
 const text = `${JSON.stringify(fixture, null, 2)}\n`;
 
 // Los importes y los números de documento originales pueden ser cortos o repetirse en valores
@@ -90,6 +142,6 @@ if (found.length > 0 || remaining.length > 0) {
   console.error(`⚠️ la fixture todavía trae datos reales (${[...found, `${remaining.length} valores originales`].join(', ')}): no se escribe.`);
   process.exit(1);
 }
-const file = new URL('../test/fixtures/reporting.production-daily-sales-summary.json', import.meta.url);
+const file = new URL(`../test/fixtures/reporting.${fixture.environment}-${fixture.scenario}.json`, import.meta.url);
 writeFileSync(file, text);
 console.log(`fixture: ${file.pathname} (${responses.length} sobres, ${documents.size} documentos, ${names.size} pasajeros)`);

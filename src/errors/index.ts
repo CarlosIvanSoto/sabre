@@ -4,6 +4,7 @@ export {
   SabreGatewayError,
   SabreOrchestrationError,
   SabreSessionError,
+  SabreUncertainOutcomeError,
   SabreWarning,
 } from './sabre-error.js';
 export type {
@@ -15,4 +16,7 @@ export type {
   SabreServiceErrorOptions,
   SabreSessionErrorKind,
   SabreSessionErrorOptions,
+  SabreUncertainOutcomeErrorOptions,
+  SabreUncertainOutcomeReason,
+  SabreUncertainTicket,
 } from './sabre-error.js';

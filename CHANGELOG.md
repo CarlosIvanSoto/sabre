@@ -7,10 +7,60 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-13
+
+Ticket issuance and void (flow W4) and the day's sales report. It has one breaking change, in
+`booking.cancel` with `flightTicketOperation: 'VOID'`, marked **BREAKING** below; everything else
+is new and optional. It is published under the `next` dist-tag first, and moves to `latest` after
+sabre-playground runs W4 in CERT. Issuance and void were recorded in CERT in #231.
+
 ### Added
 
+- `sabre.tickets.fulfill` (Fulfill Flight Tickets): issues the tickets (and EMDs) of a booking
+  with its stored price quote. It returns `status: 'issued'` or `'partial'`; **`partial` is not a
+  complete issuance**: some passengers have no ticket. A ticket that was not issued throws
+  `SabreBusinessError` (for example `PRICE_MISMATCH` or `BOOKING_FULFILLED`) or
+  `SabreGatewayError`. It is **never retried**, and `retry.maxRetries` other than 0 throws a
+  `TypeError` without calling Sabre. The SDK sends `acceptPriceChanges: false` and
+  `priceQuoteExpirationMethod: 'Quit'` unless you pass other values (#235).
+- `sabre.tickets.verify`: reads the booking with Get Booking and says whether the tickets are
+  there: `issued`, `notCommitted` (the `expectedTickets` are missing from the PNR, a ghost ticket)
+  or `notFound`. It looks at each ticket's `ticketStatusCode`, not `isTicketed`, which stays `true`
+  after a void. It never issues (#235).
+- `SabreUncertainOutcomeError`: issuance or void may or may not have happened. It has
+  `operation` (`'tickets.fulfill'` or `'booking.cancel'`), `confirmationId`, `reason`, the
+  `tickets` Sabre managed to return, `warnings` and `cause`. Fulfill throws it for
+  `UNABLE_TO_RETRIEVE_TICKETS`, `FULFILLMENT_NOT_CONFIRMED`, `INTERNAL_SERVER_TIMEOUT` (unless
+  Sabre says no new tickets were issued), `DOWNLINE_SERVICE_ERROR`, `PAYMENT_CARD_ISSUE`, tickets
+  with `isCommitted: false` (`NOT_COMMITTED`), a network failure, a `5xx`, an unreadable body and an
+  abort after the request was sent (`ABORTED`). Verify with `tickets.verify` before retrying
+  (#235).
+- `session.reporting.dailySalesSummary` (the DQB «Summary», `DailySalesSummaryRQ` 1.2.2): the
+  PCC's transactions for one day, with sales, refunds, voids, EMDs and MCOs, and the day's totals.
+  Dates and times come **as Sabre sends them, without a time zone** (local time of the PCC in
+  production). `status` is `complete`, `incomplete` (with `failedDocuments`) or `deferred` (ask
+  again later); only `complete` is the whole day. It carries passenger names. Another PCC needs
+  Branch Access, and without it Sabre answers `45100` (`SabreBusinessError`) (#224, ADR-030).
+- The queue fake in `sabre-client/testing` answers `dailySalesSummary`: `dailySales` seeds the
+  transactions per PCC and date, or forces `incomplete`, `deferred` or an error, and
+  `dailySalesTimeZone` sets which day "today" is without `date` (UTC by default) (#225).
+- The same `fake.fetch` answers the REST client too: the token, Create, Get and Cancel Booking,
+  and Fulfill Flight Tickets. `bookings` seeds bookings, and `ticketing` forces the next outcomes
+  of `tickets.fulfill` and of the void (`issued`, `partial`, every reason of
+  `SabreUncertainOutcomeError`, the four `DOWNLINE_SERVICE_ERROR`s seen in CERT, any other Fulfill
+  error) (#242).
 - `sabreCommandLength` and `MAX_COMMAND_LENGTH` are now public exports, so a client can check a host
   command's length with the same rule `session.command()` uses before sending it (#233).
+
+### Changed
+
+- **BREAKING**: `booking.cancel` with `flightTicketOperation: 'VOID'` no longer returns an
+  `END_TRANSACTION_PROBLEM` warning in `warnings`: it throws `SabreUncertainOutcomeError` with
+  `reason: 'END_TRANSACTION_PROBLEM'`, because a void cannot be undone and it is not known whether
+  it happened. With `VOID`, a network failure, a `5xx`, an unreadable body and an abort after the
+  request was sent also throw `SabreUncertainOutcomeError` (`TRANSPORT`, `GATEWAY_5XX`,
+  `UNPARSEABLE`, `ABORTED`). Check with `sabre.tickets.verify` (a voided ticket is `TV`) or
+  `booking.get` before retrying. A cancel without `VOID` is unchanged (#236).
 
 ## [0.6.0] - 2026-11-10
 
@@ -380,7 +430,8 @@ and queues). Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 - The whole `0.2.4` API. There is no compatibility layer.
 
-[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.4.1...v0.5.0

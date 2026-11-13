@@ -149,6 +149,65 @@ export class SabreBusinessError extends SabreError {
   }
 }
 
+/** Por qué el SDK no sabe si una operación que mueve dinero llegó a hacerse (ADR-031). */
+export type SabreUncertainOutcomeReason =
+  | 'UNABLE_TO_RETRIEVE_TICKETS'
+  | 'FULFILLMENT_NOT_CONFIRMED'
+  | 'INTERNAL_SERVER_TIMEOUT'
+  | 'DOWNLINE_SERVICE_ERROR'
+  | 'PAYMENT_CARD_ISSUE'
+  | 'END_TRANSACTION_PROBLEM'
+  | 'NOT_COMMITTED'
+  | 'TRANSPORT'
+  | 'GATEWAY_5XX'
+  | 'UNPARSEABLE'
+  | 'ABORTED';
+
+/** Un boleto que Sabre alcanzó a devolver en una respuesta incierta. */
+export interface SabreUncertainTicket {
+  number: string;
+  ticketStatusCode?: string;
+  isCommitted?: boolean;
+}
+
+export interface SabreUncertainOutcomeErrorOptions extends Omit<SabreErrorOptions, 'retryable'> {
+  /** Método público sin `sabre.`: `'tickets.fulfill'` o `'booking.cancel'`. */
+  operation: string;
+  confirmationId: string;
+  reason: SabreUncertainOutcomeReason;
+  tickets?: readonly SabreUncertainTicket[];
+  warnings?: readonly SabreWarning[];
+}
+
+/**
+ * La emisión o el void pudieron haberse hecho, o no: el SDK no lo sabe (ADR-031). **No se
+ * reintenta**, ni automáticamente ni a ciegas: primero se verifica con `sabre.tickets.verify` (o
+ * Get Booking), pasando los `tickets` de este error como `expectedTickets`.
+ *
+ * - Con `reason: 'NOT_COMMITTED'`, `tickets` trae siempre los boletos que Sabre devolvió con
+ *   `isCommitted: false`: **esos boletos están emitidos**, aunque todavía no aparezcan en el PNR.
+ *   No se vuelve a emitir.
+ * - Con `reason: 'ABORTED'`, el `signal` se abortó con el request ya mandado; el `AbortError` va
+ *   en `cause`. Es la única excepción a que un abort se propague tal cual (ADR-011).
+ */
+export class SabreUncertainOutcomeError extends SabreError {
+  override name = 'SabreUncertainOutcomeError';
+  readonly operation: string;
+  readonly confirmationId: string;
+  readonly reason: SabreUncertainOutcomeReason;
+  readonly tickets: readonly SabreUncertainTicket[];
+  readonly warnings: readonly SabreWarning[];
+
+  constructor(message: string, options: SabreUncertainOutcomeErrorOptions) {
+    super(message, { ...options, retryable: false });
+    this.operation = options.operation;
+    this.confirmationId = options.confirmationId;
+    this.reason = options.reason;
+    this.tickets = options.tickets ?? [];
+    this.warnings = options.warnings ?? [];
+  }
+}
+
 /**
  * Advertencia de un servicio (p. ej. `category: WARNING` de Create Booking, soft errors
  * de End Transaction): no es un fallo fatal. Nunca se reintenta automáticamente.

@@ -4,6 +4,7 @@ import { AuthManager } from './auth/auth-manager.js';
 import { BookingManagement } from './booking/booking-management.js';
 import { type ResolvedConfig, resolveConfig, type SabreConfig, type SabreEnvironment } from './config.js';
 import { RestTransport } from './http/rest-transport.js';
+import { TicketsManagement } from './tickets/tickets-management.js';
 
 export class Sabre {
   readonly #config: ResolvedConfig;
@@ -12,6 +13,8 @@ export class Sabre {
   readonly air: Air;
   /** Booking Management: creación de reservas. */
   readonly booking: BookingManagement;
+  /** Emisión de boletos (Fulfill Flight Tickets) y su verificación. Mueve dinero: ver ADR-031. */
+  readonly tickets: TicketsManagement;
 
   constructor(config: SabreConfig) {
     this.#config = resolveConfig(config);
@@ -21,6 +24,7 @@ export class Sabre {
     this.#transport.setAuthorizationProvider(auth.bearerProvider());
     this.air = new Air(this.#transport);
     this.booking = new BookingManagement(this.#transport);
+    this.tickets = new TicketsManagement(this.#transport);
   }
 
   get environment(): SabreEnvironment {

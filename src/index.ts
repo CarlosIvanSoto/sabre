@@ -155,6 +155,23 @@ export type {
 } from './air/low-fare-search-request.js';
 export type { SabreTokenStore, StoredToken } from './auth/token-store.js';
 export type { BookingManagement } from './booking/booking-management.js';
+export type { TicketsManagement } from './tickets/tickets-management.js';
+export type {
+  FulfilledTicket,
+  FulfillErrorPolicy,
+  FulfillFormOfPayment,
+  FulfillFormOfPaymentType,
+  FulfillmentDetails,
+  FulfillPayment,
+  FulfillPrinterAddress,
+  FulfillTicketingQualifiers,
+  FulfillTicketsOptions,
+  FulfillTicketsRequest,
+  FulfillTicketsResponse,
+  PriceQuoteHandlingMethod,
+  RawFulfillTicketsResponse,
+} from './tickets/fulfill-tickets.js';
+export type { VerifiedTicket, VerifyTicketsOptions, VerifyTicketsRequest, VerifyTicketsResponse } from './tickets/verify-tickets.js';
 export type {
   Booking,
   CreateBookingOptions,

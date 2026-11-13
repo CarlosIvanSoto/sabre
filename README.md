@@ -676,6 +676,49 @@ fake.openSessions; // 0: the session was closed
   }));
   ```
 
+#### Bookings and ticketing (REST)
+
+The same `fake.fetch` also answers the REST client (`Sabre`): the token, Create, Get and Cancel
+Booking, and Fulfill Flight Tickets. Pass it in the `Sabre` config to run the issue-and-void flow
+without the network:
+
+```ts
+import { Sabre } from 'sabre-client';
+import { createQueueFake } from 'sabre-client/testing';
+
+const fake = createQueueFake({
+  bookings: { ABCDEF: {} }, // or let booking.create make FAKEAA, FAKEAB…
+  ticketing: { fulfill: [{ downline: 'COMMISSION_REQUIRED' }, 'issued'] },
+});
+const sabre = new Sabre({ ...config, fetch: fake.fetch });
+
+await sabre.tickets.fulfill(request); // SabreUncertainOutcomeError, reason DOWNLINE_SERVICE_ERROR
+await sabre.tickets.fulfill(request); // issued: one TE ticket, shown by booking.get
+await sabre.booking.cancel({ confirmationId: 'ABCDEF', cancelAll: true, flightTicketOperation: 'VOID' });
+await sabre.tickets.verify({ confirmationId: 'ABCDEF' }); // notFound: the ticket is now TV
+```
+
+- `tickets.fulfill` issues one `TE` ticket per booking, which then shows in `booking.get` and
+  `tickets.verify`. A second fulfill on a booking with a live ticket gives `BOOKING_FULFILLED`.
+- `booking.cancel` with `VOID` turns the live tickets into `TV`, returns their numbers in
+  `voidedTickets` and, with `cancelAll`, cancels the booking in the same call. `isTicketed` stays
+  `true`, as in CERT. `VOID` on a booking without tickets gives `NO_ITEMS_CANCELLED` with
+  `UNABLE_TO_VOID_TICKET` and cancels nothing.
+- `ticketing.fulfill` and `ticketing.void` force the next outcomes, in order:
+  - `'issued'` or `'partial'` (`PARTIAL_FULFILLMENT`);
+  - `{ uncertain: reason, issued? }` for every reason of `SabreUncertainOutcomeError`. `issued` says
+    whether the booking really got the ticket, so you can test your verification. With
+    `NOT_COMMITTED` the ticket exists but Get Booking does not show it (a ghost ticket);
+  - `{ downline }` for the four `DOWNLINE_SERVICE_ERROR`s seen in CERT, with their real text:
+    `INVALID_TICKET_STOCK`, `COMMISSION_REQUIRED`, `HARDCOPY_PRINTER` and `SECURE_FLIGHT`;
+  - `{ error, description? }` for any other Fulfill error, such as `PRICE_MISMATCH`;
+  - for the void, `'voided'` or `{ uncertain, voided? }`.
+- `fake.calls` records `token`, `createBooking`, `getBooking`, `cancelBooking` and `fulfill`, with
+  the locator.
+- **Not simulated**: the itinerary, fares and passengers (Get Booking returns a minimal booking),
+  more than one ticket per booking, Void Flight Tickets, and `targetPcc` (any PCC sees the same
+  bookings).
+
 `examples/queue-review.mjs` is a full example, and its test runs it against the fake.
 
 #### Anonymizing recorded responses

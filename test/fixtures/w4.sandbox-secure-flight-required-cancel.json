@@ -1,0 +1,149 @@
+{
+  "recordedAt": "2026-11-13",
+  "environment": "sandbox",
+  "steps": {
+    "1.itinerario": {
+      "segments": [
+        "DL948 DFW-LAX"
+      ],
+      "currency": "MXN"
+    },
+    "2.create": {
+      "ok": true,
+      "warnings": [],
+      "errors": [],
+      "echo": [
+        {
+          "isMarriageGroup": false,
+          "marriageGroup": "(ausente)"
+        }
+      ]
+    },
+    "3.get-antes": {
+      "isTicketed": false,
+      "tickets": 0
+    },
+    "4.fulfill": {
+      "httpStatus": 200,
+      "ms": 6102,
+      "transportError": null,
+      "tickets": [],
+      "errors": [
+        "APPLICATION_ERROR:DOWNLINE_SERVICE_ERROR"
+      ],
+      "errorDescriptions": [
+        "The AirTicketRQ service returned an error: (AirTicketLLS failed for /Ticketing[1] with Cause: AirTicketLLSRQ: PASSENGER SECURITY DATA REQUIRED PLEASE UPDATE AND RETRY-1829, TicketingDocumentServicesRQ: No new tickets have been issued)."
+      ],
+      "requestEcho": {
+        "acceptPriceChanges": false,
+        "priceQuoteExpirationMethod": "Quit",
+        "errorHandlingPolicy": null
+      },
+      "uncertain": true
+    },
+    "5.get-despues": {
+      "polls": [
+        {
+          "afterSeconds": 2,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 4,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 7,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 12,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 22,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 42,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        }
+      ],
+      "sameAsFulfill": false
+    },
+    "6.fulfill-repetido": {
+      "omitido": "un solo intento de emisión (SABRE_W4_REPEAT no es 1)"
+    },
+    "7.void-flight-tickets": {
+      "omitido": "no hubo boletos"
+    },
+    "8.get-despues-del-void": {
+      "flights": 1,
+      "isTicketed": false,
+      "tickets": []
+    },
+    "9.cancel": {
+      "ok": true,
+      "warnings": []
+    },
+    "9.get-final": {
+      "flights": 0,
+      "isTicketed": false,
+      "tickets": []
+    }
+  },
+  "request": {
+    "confirmationId": "SVOAAU",
+    "targetPcc": "XXXX",
+    "cancelAll": true,
+    "retrieveBooking": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "timestamp": "2026-11-13T04:50:55",
+      "request": {
+        "confirmationId": "SVOAAU",
+        "retrieveBooking": true,
+        "errorHandlingPolicy": "HALT_ON_ERROR",
+        "cancelAll": true,
+        "targetPcc": "XXXX",
+        "voidNonElectronicTickets": false,
+        "refundDocumentsType": "Tickets"
+      },
+      "booking": {
+        "bookingId": "SVOAAU",
+        "agencyCustomerNumber": "XXXX",
+        "travelers": [
+          {
+            "givenName": "TEST",
+            "surname": "PASSENGER",
+            "type": "ADULT",
+            "passengerCode": "ADT",
+            "nameAssociationId": "1",
+            "emails": [
+              "test@example.com"
+            ],
+            "phones": [
+              {
+                "number": "5550000000",
+                "label": "M"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

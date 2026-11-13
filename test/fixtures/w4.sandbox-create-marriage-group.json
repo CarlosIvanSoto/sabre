@@ -1,0 +1,568 @@
+{
+  "recordedAt": "2026-11-12",
+  "environment": "sandbox",
+  "steps": {
+    "1.itinerario": {
+      "segments": [
+        "AA2974 DFW-LAX"
+      ],
+      "currency": "MXN"
+    },
+    "2.create": {
+      "ok": true,
+      "warnings": [],
+      "errors": [],
+      "echo": [
+        {
+          "isMarriageGroup": false,
+          "marriageGroup": "(ausente)"
+        }
+      ]
+    },
+    "3.get-antes": {
+      "isTicketed": false,
+      "tickets": 0
+    },
+    "4.fulfill": {
+      "httpStatus": 200,
+      "ms": 1139,
+      "transportError": null,
+      "tickets": [],
+      "errors": [
+        "APPLICATION_ERROR:DOWNLINE_SERVICE_ERROR"
+      ],
+      "errorDescriptions": [
+        "The AirTicketRQ service returned an error: (DesignatePrinterLLSRQ: INVALID TICKET STOCK-0001)."
+      ],
+      "requestEcho": {
+        "acceptPriceChanges": false,
+        "priceQuoteExpirationMethod": "Quit",
+        "errorHandlingPolicy": null
+      },
+      "uncertain": true
+    },
+    "5.get-despues": {
+      "polls": [
+        {
+          "afterSeconds": 1,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 4,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 7,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 11,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 21,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 41,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        }
+      ],
+      "sameAsFulfill": false
+    },
+    "6.fulfill-repetido": {
+      "omitido": "el primer Fulfill no dejó boletos visibles"
+    },
+    "7.cancel-void": {
+      "ok": false,
+      "error": {
+        "name": "SabreBusinessError",
+        "code": "NO_ITEMS_CANCELLED",
+        "status": null,
+        "warnings": [],
+        "message": "cancelBooking: WARNING NO_ITEMS_CANCELLED: Nothing was cancelled - cancellation was interrupted due to errors"
+      },
+      "errors": [
+        "WARNING:NO_ITEMS_CANCELLED",
+        "CANCELLATION_ERROR:UNABLE_TO_VOID_TICKET"
+      ]
+    },
+    "8.get-final": {
+      "flights": 1,
+      "isTicketed": false,
+      "tickets": []
+    },
+    "9.void-repetido": {
+      "ok": false,
+      "error": {
+        "name": "SabreBusinessError",
+        "code": "NO_ITEMS_CANCELLED",
+        "status": null,
+        "warnings": [],
+        "message": "cancelBooking: WARNING NO_ITEMS_CANCELLED: Nothing was cancelled - cancellation was interrupted due to errors"
+      },
+      "errors": [
+        "WARNING:NO_ITEMS_CANCELLED",
+        "CANCELLATION_ERROR:UNABLE_TO_VOID_TICKET"
+      ]
+    },
+    "10.create-marriageGroup": {
+      "ok": true,
+      "warnings": [],
+      "errors": [],
+      "echo": [
+        {
+          "isMarriageGroup": "(ausente)",
+          "marriageGroup": "(ausente)"
+        }
+      ],
+      "echoIsMarriageGroupRun": [
+        {
+          "isMarriageGroup": false,
+          "marriageGroup": "(ausente)"
+        }
+      ]
+    },
+    "10.cancel": {
+      "ok": true,
+      "warnings": []
+    }
+  },
+  "request": {
+    "flightDetails": {
+      "flights": [
+        {
+          "flightNumber": 2974,
+          "airlineCode": "AA",
+          "fromAirportCode": "DFW",
+          "toAirportCode": "LAX",
+          "departureDate": "2026-12-12",
+          "departureTime": "13:05",
+          "bookingClass": "O",
+          "flightStatusCode": "NN",
+          "marriageGroup": false
+        }
+      ],
+      "flightPricing": [
+        {
+          "qualifiers": {
+            "passengersPricing": [
+              {
+                "passengerCode": "ADT",
+                "numberOfpassengers": 1
+              }
+            ],
+            "validatingAirlineCode": "AA"
+          }
+        }
+      ]
+    },
+    "travelers": [
+      {
+        "givenName": "TEST",
+        "surname": "PASSENGER",
+        "passengerCode": "ADT",
+        "emails": [
+          "test@example.com"
+        ],
+        "phones": [
+          {
+            "number": "5550000000",
+            "label": "M"
+          }
+        ]
+      }
+    ],
+    "contactInfo": {
+      "emails": [
+        "test@example.com"
+      ],
+      "phones": [
+        "5550000000"
+      ]
+    },
+    "agency": {
+      "ticketingPolicy": "TODAY"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "timestamp": "2026-11-12T23:38:06",
+      "confirmationId": "TMUTXQ",
+      "booking": {
+        "bookingId": "TMUTXQ",
+        "startDate": "2026-12-12",
+        "endDate": "2026-12-12",
+        "isCancelable": false,
+        "isTicketed": false,
+        "creationDetails": {
+          "creationUserSine": "AAA",
+          "creationDate": "2026-11-12",
+          "creationTime": "17:38",
+          "userWorkPcc": "XXXX",
+          "userHomePcc": "XXXX",
+          "primeHostId": "1S",
+          "lastUpdateDate": "2026-11-12",
+          "lastUpdateTime": "17:38",
+          "numberOfUpdates": 2
+        },
+        "contactInfo": {
+          "emails": [
+            "test@example.com"
+          ],
+          "phones": [
+            "5550000000",
+            "5550000000"
+          ]
+        },
+        "travelers": [
+          {
+            "givenName": "TEST",
+            "surname": "PASSENGER",
+            "type": "ADULT",
+            "passengerCode": "ADT",
+            "nameAssociationId": "1",
+            "emails": [
+              "test@example.com"
+            ],
+            "phones": [
+              {
+                "number": "5550000000",
+                "label": "M"
+              }
+            ]
+          }
+        ],
+        "flights": [
+          {
+            "itemId": "10",
+            "confirmationId": "SWWPVF",
+            "sourceType": "ATPCO",
+            "flightNumber": 2974,
+            "airlineCode": "AA",
+            "airlineName": "AMERICAN AIRLINES",
+            "operatingFlightNumber": 2974,
+            "operatingAirlineCode": "AA",
+            "operatingAirlineName": "AMERICAN AIRLINES",
+            "fromAirportCode": "DFW",
+            "toAirportCode": "LAX",
+            "departureDate": "2026-12-12",
+            "departureTime": "13:05:00",
+            "arrivalDate": "2026-12-12",
+            "arrivalTime": "14:27:00",
+            "numberOfSeats": 1,
+            "cabinTypeName": "ECONOMY",
+            "cabinTypeCode": "Y",
+            "aircraftTypeCode": "32Q",
+            "aircraftTypeName": "AIRBUS A321NEO",
+            "bookingClass": "O",
+            "meals": [
+              {
+                "code": "F",
+                "description": "Food for purchase"
+              }
+            ],
+            "flightStatusCode": "HK",
+            "flightStatusName": "Confirmed",
+            "durationInMinutes": 202,
+            "distanceInMiles": 1235,
+            "travelerIndices": [
+              1
+            ],
+            "creationDate": "2026-11-12",
+            "creationTime": "17:38"
+          }
+        ],
+        "journeys": [
+          {
+            "firstAirportCode": "DFW",
+            "departureDate": "2026-12-12",
+            "departureTime": "13:05",
+            "lastAirportCode": "LAX",
+            "numberOfFlights": 1
+          }
+        ],
+        "fareRules": [
+          {
+            "originAirportCode": "DFW",
+            "destinationAirportCode": "LAX",
+            "owningAirlineCode": "AA",
+            "passengerCode": "ADT",
+            "isRefundable": false,
+            "isChangeable": true,
+            "exchangePenalties": [
+              {
+                "applicability": "BEFORE_DEPARTURE",
+                "conditionsApply": true,
+                "penalty": {
+                  "amount": "0.0",
+                  "currencyCode": "MXN"
+                },
+                "hasNoShowCost": true,
+                "noShowPenalty": {
+                  "amount": "0.00",
+                  "currencyCode": "MXN"
+                }
+              }
+            ]
+          }
+        ],
+        "fareOffers": [
+          {
+            "travelerIndices": [
+              1
+            ],
+            "flights": [
+              {
+                "itemId": "10"
+              }
+            ],
+            "cabinBaggageAllowance": {
+              "maximumPieces": 2,
+              "baggagePieces": [
+                {
+                  "maximumSizeInInches": 45,
+                  "maximumSizeInCentimeters": 115,
+                  "numberOfPieces": 1
+                },
+                {
+                  "maximumSizeInInches": 40,
+                  "maximumSizeInCentimeters": 101,
+                  "numberOfPieces": 1
+                }
+              ]
+            },
+            "checkedBaggageAllowance": {
+              "maximumPieces": 0,
+              "baggagePieces": [
+                {
+                  "maximumSizeInInches": 62,
+                  "maximumSizeInCentimeters": 158,
+                  "maximumWeightInPounds": 50,
+                  "maximumWeightInKilograms": 23,
+                  "numberOfPieces": 0
+                },
+                {
+                  "numberOfPieces": 1,
+                  "specialItemDescription": "ASSISTIVE DEVICES"
+                },
+                {
+                  "numberOfPieces": 1,
+                  "specialItemDescription": "INFANT CAR SEAT"
+                },
+                {
+                  "numberOfPieces": 1,
+                  "specialItemDescription": "STROLLER OR PUSHCHAIR"
+                }
+              ]
+            },
+            "checkedBaggageCharges": [
+              {
+                "maximumSizeInInches": 62,
+                "maximumSizeInCentimeters": 158,
+                "maximumWeightInPounds": 50,
+                "maximumWeightInKilograms": 23,
+                "numberOfPieces": 1,
+                "isCheckInOnly": true,
+                "fee": {
+                  "amount": "50.00",
+                  "currencyCode": "USD"
+                }
+              },
+              {
+                "maximumSizeInInches": 62,
+                "maximumSizeInCentimeters": 158,
+                "maximumWeightInPounds": 50,
+                "maximumWeightInKilograms": 23,
+                "numberOfPieces": 1,
+                "isCheckInOnly": true,
+                "fee": {
+                  "amount": "60.00",
+                  "currencyCode": "USD"
+                }
+              }
+            ]
+          }
+        ],
+        "fares": [
+          {
+            "creationDetails": {
+              "creationUserSine": "AAA",
+              "creationDate": "2026-11-12",
+              "creationTime": "17:38",
+              "purchaseDeadlineDate": "2026-11-12",
+              "purchaseDeadlineTime": "23:59",
+              "userWorkPcc": "XXXX",
+              "userHomePcc": "XXXX"
+            },
+            "airlineCode": "AA",
+            "fareCalculationLine": "DFW AA LAX156.28USD156.28END ZPDFW XFDFW4.5",
+            "isNegotiatedFare": false,
+            "fareConstruction": [
+              {
+                "fareBasisCode": "OWAIUTM3",
+                "baseRate": {
+                  "amount": "156.28",
+                  "currencyCode": "USD"
+                },
+                "brandFareCode": "MAIN",
+                "brandFareName": "MAIN CABIN",
+                "brandProgramCode": "AADOM",
+                "brandProgramName": "AABFDOM1S",
+                "isCurrentItinerary": true
+              }
+            ],
+            "taxBreakdown": [
+              {
+                "taxCode": "US",
+                "taxAmount": {
+                  "amount": "218.85",
+                  "currencyCode": "MXN"
+                }
+              },
+              {
+                "taxCode": "ZP",
+                "taxAmount": {
+                  "amount": "98.94",
+                  "currencyCode": "MXN"
+                }
+              },
+              {
+                "taxCode": "AY",
+                "taxAmount": {
+                  "amount": "104.54",
+                  "currencyCode": "MXN"
+                }
+              },
+              {
+                "taxCode": "XF",
+                "taxAmount": {
+                  "amount": "84.01",
+                  "currencyCode": "MXN"
+                }
+              }
+            ],
+            "totals": {
+              "subtotal": "2918.00",
+              "taxes": "506.34",
+              "total": "3424.34",
+              "currencyCode": "MXN"
+            },
+            "originalTotalValues": {
+              "total": "156.28",
+              "currencyCode": "USD"
+            },
+            "pricingTypeCode": "S",
+            "pricingTypeName": "System",
+            "pricingStatusCode": "A",
+            "pricingStatusName": "Active",
+            "hasValidPricing": true,
+            "requestedTravelerType": "ADT",
+            "pricedTravelerType": "ADT",
+            "recordTypeCode": "PQ",
+            "recordTypeName": "Price Quote",
+            "recordId": "1"
+          }
+        ],
+        "allSegments": [
+          {
+            "id": "10",
+            "type": "FLIGHT",
+            "text": "2974",
+            "vendorCode": "AA",
+            "startDate": "2026-12-12",
+            "startTime": "13:05:00",
+            "startLocationCode": "DFW",
+            "endDate": "2026-12-12",
+            "endTime": "14:27:00",
+            "endLocationCode": "LAX"
+          }
+        ],
+        "payments": {
+          "flightTotals": [
+            {
+              "subtotal": "2918.00",
+              "taxes": "506.34",
+              "total": "3424.34",
+              "currencyCode": "MXN"
+            }
+          ]
+        }
+      },
+      "request": {
+        "receivedFrom": "Create Booking",
+        "asynchronousUpdateWaitTime": 0,
+        "agency": {
+          "ticketingPolicy": "TODAY"
+        },
+        "flightDetails": {
+          "flights": [
+            {
+              "flightNumber": 2974,
+              "airlineCode": "AA",
+              "fromAirportCode": "DFW",
+              "toAirportCode": "LAX",
+              "departureDate": "2026-12-12",
+              "departureTime": "13:05",
+              "bookingClass": "O",
+              "flightStatusCode": "NN"
+            }
+          ],
+          "flightPricing": [
+            {
+              "qualifiers": {
+                "validatingAirlineCode": "AA",
+                "priceWithTaxes": true,
+                "passengersPricing": [
+                  {
+                    "passengerCode": "ADT",
+                    "numberOfpassengers": 1
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "travelers": [
+          {
+            "givenName": "TEST",
+            "surname": "PASSENGER",
+            "passengerCode": "ADT",
+            "emails": [
+              "test@example.com"
+            ],
+            "phones": [
+              {
+                "number": "5550000000",
+                "label": "M"
+              }
+            ]
+          }
+        ],
+        "contactInfo": {
+          "emails": [
+            "test@example.com"
+          ],
+          "phones": [
+            "5550000000"
+          ]
+        },
+        "returnRequest": true,
+        "retrieveBooking": true
+      }
+    }
+  }
+}

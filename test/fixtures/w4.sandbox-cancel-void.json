@@ -1,0 +1,149 @@
+{
+  "recordedAt": "2026-11-12",
+  "environment": "sandbox",
+  "steps": {
+    "1.itinerario": {
+      "segments": [
+        "AA2974 DFW-LAX"
+      ],
+      "currency": "MXN"
+    },
+    "2.create": {
+      "ok": true,
+      "warnings": [],
+      "errors": [],
+      "echo": [
+        {
+          "isMarriageGroup": false,
+          "marriageGroup": "(ausente)"
+        }
+      ]
+    },
+    "3.get-antes": {
+      "isTicketed": false,
+      "tickets": 0
+    },
+    "4.fulfill": {
+      "httpStatus": 200,
+      "ms": 431,
+      "transportError": null,
+      "status": "Incomplete",
+      "documents": 0,
+      "messages": [
+        "Error: No printer designated.",
+        "Warning: DesignatePrinterLLSRQ: INVALID TICKET STOCK-0096"
+      ],
+      "uncertain": false
+    },
+    "5.get-despues": {
+      "polls": [
+        {
+          "afterSeconds": 2,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 4,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 6,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 11,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 21,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 42,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        }
+      ],
+      "sameAsFulfill": false
+    },
+    "6.fulfill-repetido": {
+      "omitido": "Enhanced Air Ticket no tiene BOOKING_FULFILLED: emitiría otro boleto"
+    },
+    "7.cancel-void": {
+      "ok": true,
+      "voidedTickets": 0,
+      "warnings": [],
+      "echo": {
+        "errorHandlingPolicy": "HALT_ON_ERROR"
+      }
+    },
+    "8.get-final": {
+      "flights": 0,
+      "isTicketed": false,
+      "tickets": []
+    },
+    "9.void-repetido": {
+      "omitido": "no hubo boletos"
+    }
+  },
+  "void": {
+    "request": {
+      "confirmationId": "THMDVD",
+      "cancelAll": true,
+      "retrieveBooking": true
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "timestamp": "2026-11-12T23:44:04",
+        "request": {
+          "confirmationId": "THMDVD",
+          "retrieveBooking": true,
+          "errorHandlingPolicy": "HALT_ON_ERROR",
+          "cancelAll": true,
+          "voidNonElectronicTickets": false,
+          "refundDocumentsType": "Tickets"
+        },
+        "booking": {
+          "bookingId": "THMDVD",
+          "travelers": [
+            {
+              "givenName": "TEST",
+              "surname": "PASSENGER",
+              "type": "ADULT",
+              "passengerCode": "ADT",
+              "nameAssociationId": "1",
+              "emails": [
+                "test@example.com"
+              ],
+              "phones": [
+                {
+                  "number": "5550000000",
+                  "label": "M"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "again": {
+    "request": {
+      "confirmationId": "THMDVD",
+      "cancelAll": true,
+      "retrieveBooking": true
+    },
+    "response": null
+  }
+}

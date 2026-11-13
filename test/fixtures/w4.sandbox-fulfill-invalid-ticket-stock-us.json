@@ -1,0 +1,215 @@
+{
+  "recordedAt": "2026-11-12",
+  "environment": "sandbox",
+  "steps": {
+    "1.itinerario": {
+      "segments": [
+        "AA2974 DFW-LAX"
+      ],
+      "currency": "MXN"
+    },
+    "2.create": {
+      "ok": true,
+      "warnings": [],
+      "errors": [],
+      "echo": [
+        {
+          "isMarriageGroup": false,
+          "marriageGroup": "(ausente)"
+        }
+      ]
+    },
+    "3.get-antes": {
+      "isTicketed": false,
+      "tickets": 0
+    },
+    "4.fulfill": {
+      "httpStatus": 200,
+      "ms": 1139,
+      "transportError": null,
+      "tickets": [],
+      "errors": [
+        "APPLICATION_ERROR:DOWNLINE_SERVICE_ERROR"
+      ],
+      "errorDescriptions": [
+        "The AirTicketRQ service returned an error: (DesignatePrinterLLSRQ: INVALID TICKET STOCK-0001)."
+      ],
+      "requestEcho": {
+        "acceptPriceChanges": false,
+        "priceQuoteExpirationMethod": "Quit",
+        "errorHandlingPolicy": null
+      },
+      "uncertain": true
+    },
+    "5.get-despues": {
+      "polls": [
+        {
+          "afterSeconds": 1,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 4,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 7,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 11,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 21,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        },
+        {
+          "afterSeconds": 41,
+          "isTicketed": false,
+          "newTickets": 0,
+          "codes": []
+        }
+      ],
+      "sameAsFulfill": false
+    },
+    "6.fulfill-repetido": {
+      "omitido": "el primer Fulfill no dejó boletos visibles"
+    },
+    "7.cancel-void": {
+      "ok": false,
+      "error": {
+        "name": "SabreBusinessError",
+        "code": "NO_ITEMS_CANCELLED",
+        "status": null,
+        "warnings": [],
+        "message": "cancelBooking: WARNING NO_ITEMS_CANCELLED: Nothing was cancelled - cancellation was interrupted due to errors"
+      },
+      "errors": [
+        "WARNING:NO_ITEMS_CANCELLED",
+        "CANCELLATION_ERROR:UNABLE_TO_VOID_TICKET"
+      ]
+    },
+    "8.get-final": {
+      "flights": 1,
+      "isTicketed": false,
+      "tickets": []
+    },
+    "9.void-repetido": {
+      "ok": false,
+      "error": {
+        "name": "SabreBusinessError",
+        "code": "NO_ITEMS_CANCELLED",
+        "status": null,
+        "warnings": [],
+        "message": "cancelBooking: WARNING NO_ITEMS_CANCELLED: Nothing was cancelled - cancellation was interrupted due to errors"
+      },
+      "errors": [
+        "WARNING:NO_ITEMS_CANCELLED",
+        "CANCELLATION_ERROR:UNABLE_TO_VOID_TICKET"
+      ]
+    },
+    "10.create-marriageGroup": {
+      "ok": true,
+      "warnings": [],
+      "errors": [],
+      "echo": [
+        {
+          "isMarriageGroup": "(ausente)",
+          "marriageGroup": "(ausente)"
+        }
+      ],
+      "echoIsMarriageGroupRun": [
+        {
+          "isMarriageGroup": false,
+          "marriageGroup": "(ausente)"
+        }
+      ]
+    },
+    "10.cancel": {
+      "ok": true,
+      "warnings": []
+    }
+  },
+  "first": {
+    "request": {
+      "confirmationId": "SNMEAA",
+      "fulfillments": [
+        {
+          "payment": {
+            "primaryFormOfPayment": 1
+          }
+        }
+      ],
+      "formsOfPayment": [
+        {
+          "type": "CASH"
+        }
+      ],
+      "designatePrinters": [
+        {
+          "ticket": {
+            "countryCode": "US"
+          }
+        }
+      ],
+      "acceptPriceChanges": false,
+      "priceQuoteExpirationMethod": "Quit"
+    },
+    "ms": 1139,
+    "response": {
+      "status": 200,
+      "body": {
+        "timestamp": "2026-11-12T23:37:14",
+        "request": {
+          "confirmationId": "SNMEAA",
+          "retainAccounting": false,
+          "fulfillments": [
+            {
+              "payment": {
+                "primaryFormOfPayment": 1
+              }
+            }
+          ],
+          "receivedFrom": "Fulfill Flight Tickets",
+          "designatePrinters": [
+            {
+              "ticket": {
+                "countryCode": "US"
+              }
+            }
+          ],
+          "formsOfPayment": [
+            {
+              "type": "CASH"
+            }
+          ],
+          "generateSingleInvoice": false,
+          "commitTicketToBookingWaitTime": 0,
+          "acceptNegotiatedFare": true,
+          "acceptPriceChanges": false,
+          "backDatePriceQuoteMethod": "Reprice",
+          "priceQuoteExpirationMethod": "Quit",
+          "returnRequest": true
+        },
+        "errors": [
+          {
+            "category": "APPLICATION_ERROR",
+            "type": "DOWNLINE_SERVICE_ERROR",
+            "description": "The AirTicketRQ service returned an error: (DesignatePrinterLLSRQ: INVALID TICKET STOCK-0001)."
+          }
+        ]
+      }
+    }
+  },
+  "again": null
+}

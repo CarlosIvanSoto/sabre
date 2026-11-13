@@ -1,0 +1,147 @@
+{
+  "recordedAt": "2026-11-13",
+  "environment": "sandbox",
+  "steps": {
+    "1.itinerario": {
+      "segments": [
+        "DL948 DFW-LAX"
+      ],
+      "currency": "MXN"
+    },
+    "2.create": {
+      "ok": true,
+      "warnings": [],
+      "errors": [],
+      "echo": [
+        {
+          "isMarriageGroup": false,
+          "marriageGroup": "(ausente)"
+        }
+      ]
+    },
+    "3.get-antes": {
+      "isTicketed": false,
+      "tickets": 0
+    },
+    "4.fulfill": {
+      "httpStatus": 200,
+      "ms": 8687,
+      "transportError": null,
+      "tickets": [
+        {
+          "ticket": "…0001",
+          "ticketStatusCode": "TE",
+          "ticketStatusName": "Issued",
+          "isCommitted": true,
+          "fields": [
+            "date",
+            "isCommitted",
+            "number",
+            "payment",
+            "ticketStatusCode",
+            "ticketStatusName",
+            "ticketingPcc",
+            "travelerGivenName",
+            "travelerSurname"
+          ]
+        }
+      ],
+      "responseFields": [
+        "request",
+        "tickets",
+        "timestamp"
+      ],
+      "errors": [],
+      "errorDescriptions": [],
+      "requestEcho": {
+        "acceptPriceChanges": false,
+        "priceQuoteExpirationMethod": "Quit",
+        "errorHandlingPolicy": null
+      },
+      "uncertain": false
+    },
+    "5.get-despues": {
+      "polls": [
+        {
+          "afterSeconds": 2,
+          "isTicketed": true,
+          "newTickets": 1,
+          "codes": [
+            "TE"
+          ]
+        }
+      ],
+      "sameAsFulfill": true
+    },
+    "6.fulfill-repetido": {
+      "omitido": "un solo intento de emisión (SABRE_W4_REPEAT no es 1)"
+    },
+    "7.void-flight-tickets": {
+      "httpStatus": 200,
+      "ms": 355,
+      "transportError": null,
+      "voidedTickets": [],
+      "errors": [
+        "WARNING:NO_TICKETS_VOIDED",
+        "BAD_REQUEST:INVALID_FLAGS_COMBINATION"
+      ],
+      "errorDescriptions": [
+        "No tickets voided",
+        "Properties confirmationId and tickets cannot be combined. Use tickets property to indicate specific tickets for check/void/refund operation or confirmationId to process all tickets present in the reservation."
+      ],
+      "ok": false
+    },
+    "8.get-despues-del-void": {
+      "flights": 1,
+      "isTicketed": true,
+      "tickets": [
+        {
+          "ticket": "…0001",
+          "code": "TE",
+          "name": "Issued"
+        }
+      ]
+    },
+    "9.cancel": {
+      "omitido": "el void falló: el PNR queda vivo para revisarlo, sin reintentar"
+    }
+  },
+  "request": {
+    "confirmationId": "SWMUBV",
+    "targetPcc": "XXXX",
+    "tickets": [
+      "0060000000001"
+    ],
+    "receivedFrom": "SABRE CLIENT W4"
+  },
+  "ms": 355,
+  "response": {
+    "status": 200,
+    "body": {
+      "timestamp": "2026-11-13T04:54:13",
+      "request": {
+        "errorHandlingPolicy": "HALT_ON_ERROR",
+        "targetPcc": "XXXX",
+        "tickets": [
+          "0060000000001"
+        ],
+        "receivedFrom": "SABRE CLIENT W4",
+        "confirmationId": "SWMUBV",
+        "voidNonElectronicTickets": false
+      },
+      "errors": [
+        {
+          "category": "WARNING",
+          "type": "NO_TICKETS_VOIDED",
+          "description": "No tickets voided"
+        },
+        {
+          "category": "BAD_REQUEST",
+          "type": "INVALID_FLAGS_COMBINATION",
+          "description": "Properties confirmationId and tickets cannot be combined. Use tickets property to indicate specific tickets for check/void/refund operation or confirmationId to process all tickets present in the reservation.",
+          "fieldPath": "VoidTicketsRequest"
+        }
+      ]
+    }
+  }
+}

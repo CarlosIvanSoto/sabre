@@ -12,20 +12,30 @@ SDK de TypeScript para las APIs de Sabre.
 
 ## Estado
 
-La `0.6.0` está publicada con el dist-tag `next` mientras se prueba; `latest` sigue en la `0.5.1`.
+La `0.7.0` está publicada con el dist-tag `next` mientras se prueba; `latest` sigue en la `0.6.0`.
 Cubre el Tier 1 y el Tier 2 del flujo de Air Booking por REST, el Tier 3 (sesiones SOAP y colas) y
 el Tier 4: actividad de colas, historial del PNR, la cola de mensajes `S`, `selection` en `list` y
-`onRawRequest`. La `0.6.0` suma filtros de cola: `count` con una cola, un rango o `selection`,
-`activity` con una cola o un rango, y `selection` en el fake de colas. No trae cambios
-incompatibles; la línea `0.5` trae tres (ver [Actualizar desde la 0.4](#actualizar-desde-la-04)).
+`onRawRequest`, además de los filtros de cola de la `0.6.0`. La `0.7.0` suma la emisión y el void
+de boletos ([Emitir y anular boletos](#emitir-y-anular-boletos)), las ventas del día
+([Ventas del día](#ventas-del-día)) y un fake REST de reservas y emisión en
+`sabre-client/testing`. Trae un cambio incompatible, en el void (ver
+[Actualizar desde la 0.6](#actualizar-desde-la-06)).
 
 ```sh
-npm install sabre-client@next   # 0.6.0
-npm install sabre-client        # 0.5.1
+npm install sabre-client@next   # 0.7.0
+npm install sabre-client        # 0.6.0
 ```
 
 El paquete sigue en `0.x`: una versión minor puede traer cambios incompatibles, y el
 [CHANGELOG](./CHANGELOG.md) los marca.
+
+### Actualizar desde la 0.6
+
+- **Un void que pudo no haberse hecho lanza.** Con `flightTicketOperation: 'VOID'`,
+  `booking.cancel` ya no devuelve `END_TRANSACTION_PROBLEM` como aviso: lanza
+  `SabreUncertainOutcomeError`, igual que con un fallo de red, un `5xx`, un cuerpo ilegible o un
+  abort con el request ya mandado. Atrápalo y verifica con `sabre.tickets.verify` antes de
+  reintentar (ver [Anular](#anular)). Un cancel sin `VOID` no cambia.
 
 ### Actualizar desde la 0.4
 
@@ -49,6 +59,14 @@ El Tier 1 cubre el flujo básico de Air Booking por REST:
 | Reserva | Create Booking (Booking Management API v1, ATPCO por `flightDetails`) | `sabre.booking.create` |
 | Gestión de la reserva | Get Booking y Cancel Booking (Booking Management API v1) | `sabre.booking.get`, `sabre.booking.cancel` |
 
+Emisión (flujo W4, `0.7.0`):
+
+| Paso | Servicio | Método |
+| - | - | - |
+| Emisión | Fulfill Flight Tickets (Booking Management API v1) | `sabre.tickets.fulfill` |
+| Verificación | Get Booking | `sabre.tickets.verify` |
+| Void | Cancel Booking con `flightTicketOperation: 'VOID'` | `sabre.booking.cancel` |
+
 El Tier 2 agrega la elección de asiento:
 
 | Paso | Servicio | Método |
@@ -65,6 +83,7 @@ El Tier 3 agrega el cliente SOAP `SabreLegacy`, con una sesión stateful y Queue
 | Párrafo de cola | — (función pura) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
 | Historial del PNR | `TravelItineraryHistoryLLSRQ` 2.4.0 | `session.reservation.history` |
 | Comandos de host | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
+| Ventas del día | `TKT_TravelAgencyReportsRQ` / `DailySalesSummaryRQ` 1.2.2 (el «Summary» del DQB) | `session.reporting.dailySalesSummary` |
 
 Planeado después de `0.5.0`: Get Ancillaries (solo NDC).
 
@@ -233,9 +252,9 @@ Como `create`, **nunca se reintenta automáticamente**. Las combinaciones que Sa
 rechaza (`cancelAll` junto con listas, ni `cancelAll` ni listas, `offerItemId` junto con
 `flightTicketOperation`) lanzan un `TypeError` antes de enviar nada. Si Sabre responde
 `NO_ITEMS_CANCELLED`, la llamada lanza `SabreBusinessError` aunque Sabre lo mande como aviso,
-porque no se canceló nada; los errores que explican el motivo están en `error.errors`. El aviso
-`END_TRANSACTION_PROBLEM` significa que la confirmación sigue pendiente: verifica el resultado
-con `sabre.booking.get`.
+porque no se canceló nada; los errores que explican el motivo están en `error.errors`. Sin
+`VOID`, el aviso `END_TRANSACTION_PROBLEM` significa que la confirmación sigue pendiente: verifica
+el resultado con `sabre.booking.get`. Con `VOID`, lanza: ver [Anular](#anular).
 
 Toda request acepta un `AbortSignal`. Las búsquedas aceptan además una política de reintentos
 propia:
@@ -243,6 +262,109 @@ propia:
 ```ts
 await sabre.air.bargainFinderMax(search, { signal, retry: { maxRetries: 1 } });
 ```
+
+## Emitir y anular boletos
+
+`sabre.tickets.fulfill` emite los boletos (y EMD) de una reserva con su PQ guardado (Fulfill
+Flight Tickets). **Mueve dinero y nunca se reintenta**, ni siquiera tras un fallo de red; pasar
+`retry.maxRetries` distinto de 0 lanza `TypeError` sin llamar a Sabre.
+
+```ts
+import { SabreUncertainOutcomeError } from 'sabre-client';
+
+const before = await sabre.booking.get({ confirmationId });
+const knownTickets = (before.flightTickets ?? []).map((ticket) => ticket.number);
+
+try {
+  const issued = await sabre.tickets.fulfill({
+    confirmationId,
+    fulfillments: [{ payment: { primaryFormOfPayment: 1 }, ticketingQualifiers: { commissionPercentage: '0.00' } }],
+    formsOfPayment: [{ type: 'CASH' }],
+    designatePrinters: [{ profileNumber: 1 }],
+  });
+  if (issued.status === 'partial') {
+    // Hay boletos emitidos y faltan otros: guarda estos y verifica antes de completar.
+  }
+} catch (error) {
+  if (!(error instanceof SabreUncertainOutcomeError)) throw error; // no se emitió
+  const check = await sabre.tickets.verify({
+    confirmationId,
+    knownTickets,
+    expectedTickets: error.tickets.map((ticket) => ticket.number),
+  });
+  // check.status: 'issued' | 'notCommitted' | 'notFound'
+}
+```
+
+El SDK manda `acceptPriceChanges: false` y `priceQuoteExpirationMethod: 'Quit'` salvo que pases
+otros valores: una emisión automática nunca paga un precio que nadie vio. Con un precio nuevo,
+Sabre responde `PRICE_MISMATCH`.
+
+Hay cuatro desenlaces:
+
+| Desenlace | Qué recibes | Qué hacer |
+| - | - | - |
+| Emitido | `status: 'issued'`, todos los boletos con `isCommitted: true` | Guardar `tickets` |
+| Parcial | `status: 'partial'`: algunos boletos, y `PARTIAL_FULFILLMENT` o un error | Guardar los emitidos y verificar antes de completar |
+| No emitido | `SabreBusinessError` (`PRICE_MISMATCH`, `BOOKING_FULFILLED`…) o `SabreGatewayError` (400, 401, 403, 429) | Corregir la causa; no se emitió nada |
+| Incierto | `SabreUncertainOutcomeError`, con `reason`, `confirmationId`, `tickets` y `cause` | Verificar con `tickets.verify` antes de pensar en reintentar |
+
+> [!WARNING]
+> **`partial` no es una emisión completa**: hay pasajeros sin boleto. No vuelvas a emitir a
+> ciegas: los boletos emitidos son reales, y un segundo fulfill puede dar `BOOKING_FULFILLED` o
+> emitir dos veces. Verifica primero.
+
+- **Incierto** cubre `UNABLE_TO_RETRIEVE_TICKETS`, `FULFILLMENT_NOT_CONFIRMED`,
+  `INTERNAL_SERVER_TIMEOUT` (salvo que Sabre diga que no emitió boletos nuevos),
+  `DOWNLINE_SERVICE_ERROR`, `PAYMENT_CARD_ISSUE`, un fallo de red, un `5xx`, un cuerpo ilegible y
+  un abort con el request ya mandado (`ABORTED`, con el `AbortError` en `cause`). Un abort antes
+  de mandarlo se propaga tal cual.
+- Con `reason: 'NOT_COMMITTED'`, `tickets` trae los boletos que Sabre devolvió con
+  `isCommitted: false`. **Esos boletos existen**, aunque el PNR todavía no los muestre: no vuelvas
+  a emitir.
+- Los errores de configuración del PCC (comisión, impresora, Secure Flight) llegan como
+  `DOWNLINE_SERVICE_ERROR` y se tratan como incierto (CERT).
+- `BOOKING_FULFILLED` quiere decir que la reserva ya tiene boletos, **no** que sean de esta
+  emisión: verifica.
+
+`sabre.tickets.verify` lee la reserva con Get Booking y nunca emite. Mira el `ticketStatusCode`
+de cada boleto (`TE`, `ME` o `TO` están vigentes, `TV` está anulado), no `isTicketed`, que sigue
+en `true` después de un void:
+
+- `issued`: hay boletos vigentes nuevos (fuera de `knownTickets`), y están todos los
+  `expectedTickets`.
+- `notCommitted`: faltan `expectedTickets` en el PNR (un *ghost ticket*). Están emitidos: no
+  vuelvas a emitir.
+- `notFound`: ningún boleto vigente nuevo. **No prueba que no se haya emitido**: el guardado en el
+  PNR puede tardar. Espera y verifica otra vez, y en producción revisa también las ventas del día
+  ([Ventas del día](#ventas-del-día), por `pnrLocator`) antes de reintentar.
+
+Si emitiste con `targetPcc` en `fulfill`, pasa el mismo `targetPcc` a `verify`.
+
+### Anular
+
+El void va por `sabre.booking.cancel` con `flightTicketOperation: 'VOID'`. Con `cancelAll` y
+`HALT_ON_ERROR`, una sola llamada anula los boletos y cancela la reserva, y `voidedTickets` trae
+los números anulados (CERT):
+
+```ts
+const result = await sabre.booking.cancel({
+  confirmationId,
+  cancelAll: true,
+  flightTicketOperation: 'VOID',
+  errorHandlingPolicy: 'HALT_ON_ERROR',
+});
+result.voidedTickets; // ['0060000000001']
+```
+
+- **Un void no se puede deshacer.** Un fallo de red, un `5xx`, un cuerpo ilegible, un abort con
+  el request ya mandado o `END_TRANSACTION_PROBLEM` lanzan `SabreUncertainOutcomeError`
+  (`operation: 'booking.cancel'`): no se sabe si se anularon los boletos. Verifica con
+  `sabre.tickets.verify` (un boleto anulado queda en `TV`) o con `booking.get` antes de reintentar.
+- `VOID` sobre una reserva sin boletos lanza `NO_ITEMS_CANCELLED` con `UNABLE_TO_VOID_TICKET` y
+  **no cancela nada**. Para una reserva que nunca se emitió, cancela sin `VOID`.
+- Una venta anulada sigue en las ventas del día como `SALE` con `documentStatusCode: 'V'`, y no
+  cuenta en `totals` (CERT).
 
 ## Elegir un asiento
 
@@ -430,6 +552,44 @@ const { transactions } = await legacy.withSession((session) => session.reservati
 - Es una lectura: se reintenta. Un `locator` que no es de 6 caracteres alfanuméricos en mayúscula
   lanza un `TypeError` sin llamar a la red. Un PNR que no existe lanza un `SabreBusinessError`
   (`service: 'itineraryHistory'`).
+
+### Ventas del día
+
+`session.reporting.dailySalesSummary(request?, options?)` lee las ventas del día (el «Summary» del
+DQB, `TKT_TravelAgencyReportsRQ` / `DailySalesSummaryRQ` 1.2.2): una transacción por movimiento del
+PCC en ese día (ventas, reembolsos, voids, EMD y MCO), sin tope, y los totales del día.
+
+```ts
+const report = await legacy.withSession((session) =>
+  session.reporting.dailySalesSummary({ date: '2026-11-12' }),
+);
+// report.status → 'complete' | 'incomplete' | 'deferred'
+// report.transactions[0] → { documentType: 'TKT', transactionCode: 'SALE', documentNumber,
+//                            documentStatusCode, pnrLocator, passengerName, payments,
+//                            transactionDateTime: '2026-11-12T11:02:00.000', … }
+// report.totals → por tipo de transacción, settlement y moneda
+```
+
+- **Un día por llamada**, sin rango. Sin `date`, es el día en curso, hasta minutos antes de la
+  llamada (producción). Los filtros son `pcc`, `documentType`, `settlementType`, `airline` y
+  `documentNumber`.
+- **Las fechas y horas llegan tal como las manda Sabre, sin zona**: `transactionDateTime` es
+  `'YYYY-MM-DDTHH:MM:SS.sss'`, en hora local del PCC en producción. El SDK no las convierte,
+  porque no conoce la zona.
+- **Solo `status: 'complete'` es el día entero.** `incomplete` quiere decir que Sabre no pudo leer
+  algunos documentos (`failedDocuments`), así que faltan transacciones. `deferred` quiere decir
+  que Sabre dejó el reporte en caché (`deferred.reportId`) o sigue corriendo: vuelve a pedirlo más
+  tarde. El SDK no manda `CachedReportRQ`.
+- Un void no agrega una transacción: la venta original sigue como `SALE` con
+  `documentStatusCode: 'V'`, y no cuenta en `totals` (CERT).
+- Los importes van como string, tal como los manda Sabre. **Trae nombres de pasajeros**
+  (`passengerName`); el SDK nunca los registra en el log.
+- Otro PCC necesita Branch Access. Sin él, Sabre responde `45100` y el SDK lanza
+  `SabreBusinessError` (`service: 'dailySalesSummary'`). Un filtro con forma equivocada lanza
+  `TypeError` sin llamar a la red.
+- **En CERT el reporte puede no tener datos**: un PCC que no emite recibe un reporte `complete`
+  sin transacciones. Un reporte vacío en CERT no prueba nada.
+- Es una lectura: se reintenta ante fallos de transporte, no ante errores de negocio.
 
 ### Colas
 
@@ -658,6 +818,12 @@ fake.openSessions; // 0: la sesión se cerró
   `count` con `queue` cuenta los que cumplen y devuelve `totals.unfiltered`; con `range` o sin
   cola, da los errores de Sabre. Otro código recibe un error de host marcado como no simulado,
   nunca la cola entera.
+- `reporting.dailySalesSummary`: `dailySales` siembra las transacciones por PCC y fecha
+  (`{ ABCD: { '2026-11-12': [transacciones] } }`, con la forma de `DailySalesTransaction`), o un
+  día con `status: 'incomplete'` o `'deferred'`, o un `errorCode` como `'45100'`. Sin `pcc` usa el
+  PCC de la sesión; sin `date`, el día de `now()` en `dailySalesTimeZone` (una zona IANA, `'UTC'`
+  por defecto). Un PCC o un día sin sembrar da un reporte `complete` vacío. El filtro
+  `documentType` se simula, los demás no, y los `totals` salen vacíos.
 - **No simula** los PCC (las colas son las mismas para cualquier `pcc`) ni las reglas de
   combinación de `selection` del host.
 - `queueFixtures` trae las respuestas anonimizadas que se grabaron en producción (`walk`,
@@ -773,6 +939,7 @@ Todos los errores que lanza el SDK extienden `SabreError`:
 | `SabreOrchestrationError` | Error de un servicio orquestado dentro de un `200` (`SP.*`) | `code` |
 | `SabreBusinessError` | Error del catálogo propio de un servicio (p. ej. `No Availability`, una reserva que no se creó) | `service`, `code`, `warnings`, `errors` |
 | `SabreSessionError` | Falla de la sesión SOAP de `SabreLegacy`, subclase de `SabreGatewayError` | `kind`: `'limit'` (más de 50 sesiones), `'invalid'`, `'expired'`, `'blocked'` |
+| `SabreUncertainOutcomeError` | La emisión o el void pudieron haberse hecho, o no (`tickets.fulfill`, `booking.cancel` con `VOID`): verifica antes de reintentar | `operation`, `confirmationId`, `reason`, `tickets`, `warnings` |
 | `SabreWarning` | Aviso no fatal (p. ej. `category: WARNING` en Create Booking) | `service`, `code` |
 
 Todos tienen `retryable`, que indica si la política de reintentos puede volver a intentar.
@@ -801,7 +968,8 @@ try {
 ## Respuesta cruda
 
 Toda operación REST (`air.bargainFinderMax`, `air.revalidateItinerary`, `air.getSeats`,
-`booking.create`, `booking.get` y `booking.cancel`), y toda operación de `SabreLegacy`, acepta un
+`booking.create`, `booking.get`, `booking.cancel`, `tickets.fulfill` y `tickets.verify`), y toda
+operación de `SabreLegacy`, acepta un
 callback `onRawResponse` en sus
 opciones, junto a `signal`. Recibe la respuesta de Sabre tal cual llegó, por ejemplo para
 guardarla junto al resultado tipado. En `air.getSeats`, `operation` indica el endpoint que se
@@ -826,7 +994,8 @@ const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r)
   conserva el valor y escríbelo cuando la llamada vuelva.
 
 En `SabreLegacy`, `protocol` es `'soap'`, `body` es el sobre SOAP completo, y `operation` es
-`'openSession'`, `'close'`, `'ping'`, `'command'` o `'queue.<método>'`. El token de la sesión
+`'openSession'`, `'close'`, `'ping'`, `'command'`, `'queue.<método>'`, `'reservation.history'` o
+`'reporting.dailySalesSummary'`. `tickets.verify` reporta `'booking.get'`, el Get Booking que corre. El token de la sesión
 (`BinarySecurityToken`) se reemplaza por `[REDACTED]` donde aparezca. No se cambia nada más.
 
 > [!WARNING]
@@ -869,7 +1038,8 @@ await sabre.booking.get({ confirmationId }, { onRawRequest: (r) => (sent = r) })
 ## Reintentos
 
 Solo se reintentan las operaciones idempotentes: Bargain Finder Max y Revalidate Itinerary
-(ambas son `POST` de solo lectura). Create Booking nunca se reintenta. Los reintentos usan
+(ambas son `POST` de solo lectura), además de Get Booking y `tickets.verify`. Create Booking,
+Cancel Booking y `tickets.fulfill` nunca se reintentan. Los reintentos usan
 backoff exponencial con full jitter y un piso de 500 ms, ante `429`, `500`, `503`, `504`,
 `SP.PROVIDER_ERROR` y los errores temporales del catálogo de Bargain Finder Max.
 

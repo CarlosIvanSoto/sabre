@@ -12,20 +12,30 @@ TypeScript SDK for the Sabre APIs.
 
 ## Status
 
-`0.6.0` is published under the `next` dist-tag while it is tested; `latest` stays on `0.5.1`.
+`0.7.0` is published under the `next` dist-tag while it is tested; `latest` stays on `0.6.0`.
 It covers Tier 1 and Tier 2 of the Air Booking flow over REST, Tier 3 (SOAP sessions and queues)
 and Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `list` and
-`onRawRequest`. `0.6.0` adds queue filters: `count` with one queue, a range or `selection`,
-`activity` with one queue or a range, and `selection` in the queue fake. It has no breaking
-changes; the `0.5` line has three (see [Upgrading from 0.4](#upgrading-from-04)).
+`onRawRequest`, plus the queue filters of `0.6.0`. `0.7.0` adds ticket issuance and void
+([Issuing and voiding tickets](#issuing-and-voiding-tickets)), the day's sales report
+([Daily sales](#daily-sales)) and a REST fake of bookings and ticketing in
+`sabre-client/testing`. It has one breaking change, in the void (see
+[Upgrading from 0.6](#upgrading-from-06)).
 
 ```sh
-npm install sabre-client@next   # 0.6.0
-npm install sabre-client        # 0.5.1
+npm install sabre-client@next   # 0.7.0
+npm install sabre-client        # 0.6.0
 ```
 
 The package is still `0.x`: a minor version may include breaking changes, and the
 [CHANGELOG](./CHANGELOG.md) marks them.
+
+### Upgrading from 0.6
+
+- **A void that may not have happened throws.** With `flightTicketOperation: 'VOID'`,
+  `booking.cancel` no longer returns `END_TRANSACTION_PROBLEM` as a warning: it throws
+  `SabreUncertainOutcomeError`, and so do a network failure, a `5xx`, an unreadable body and an
+  abort after the request was sent. Catch it and check with `sabre.tickets.verify` before
+  retrying (see [Voiding](#voiding)). A cancel without `VOID` is unchanged.
 
 ### Upgrading from 0.4
 
@@ -49,6 +59,14 @@ Tier 1 covers the core Air Booking flow over REST:
 | Booking | Create Booking (Booking Management API v1, ATPCO by `flightDetails`) | `sabre.booking.create` |
 | Booking management | Get Booking and Cancel Booking (Booking Management API v1) | `sabre.booking.get`, `sabre.booking.cancel` |
 
+Ticketing (flow W4, `0.7.0`):
+
+| Step | Service | Method |
+| - | - | - |
+| Issuance | Fulfill Flight Tickets (Booking Management API v1) | `sabre.tickets.fulfill` |
+| Verification | Get Booking | `sabre.tickets.verify` |
+| Void | Cancel Booking with `flightTicketOperation: 'VOID'` | `sabre.booking.cancel` |
+
 Tier 2 adds seat selection:
 
 | Step | Service | Method |
@@ -65,6 +83,7 @@ Tier 3 adds the `SabreLegacy` SOAP client, with a stateful session and Queue Man
 | Queue paragraph | — (pure function) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
 | PNR history | `TravelItineraryHistoryLLSRQ` 2.4.0 | `session.reservation.history` |
 | Host commands | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
+| Daily sales | `TKT_TravelAgencyReportsRQ` / `DailySalesSummaryRQ` 1.2.2 (the DQB «Summary») | `session.reporting.dailySalesSummary` |
 
 Planned after `0.5.0`: Get Ancillaries (NDC only).
 
@@ -233,15 +252,119 @@ Like `create`, it is **never retried automatically**. Combinations that Sabre al
 (`cancelAll` together with item lists, no `cancelAll` and no list, `offerItemId` together with
 `flightTicketOperation`) throw a `TypeError` before any request is sent. If Sabre answers
 `NO_ITEMS_CANCELLED`, the call throws `SabreBusinessError` even though Sabre sends it as a
-warning, because nothing was cancelled; the errors that explain why are in `error.errors`. An
-`END_TRANSACTION_PROBLEM` warning means the confirmation is still pending: check the result
-with `sabre.booking.get`.
+warning, because nothing was cancelled; the errors that explain why are in `error.errors`.
+Without `VOID`, an `END_TRANSACTION_PROBLEM` warning means the confirmation is still pending:
+check the result with `sabre.booking.get`. With `VOID` it throws instead: see
+[Voiding](#voiding).
 
 Every request accepts an `AbortSignal`. Shopping calls also accept a per-request retry policy:
 
 ```ts
 await sabre.air.bargainFinderMax(search, { signal, retry: { maxRetries: 1 } });
 ```
+
+## Issuing and voiding tickets
+
+`sabre.tickets.fulfill` issues the tickets (and EMDs) of a booking with its stored price quote
+(Fulfill Flight Tickets). **It moves money and is never retried**, not even after a network
+failure; passing `retry.maxRetries` other than 0 throws a `TypeError` without calling Sabre.
+
+```ts
+import { SabreUncertainOutcomeError } from 'sabre-client';
+
+const before = await sabre.booking.get({ confirmationId });
+const knownTickets = (before.flightTickets ?? []).map((ticket) => ticket.number);
+
+try {
+  const issued = await sabre.tickets.fulfill({
+    confirmationId,
+    fulfillments: [{ payment: { primaryFormOfPayment: 1 }, ticketingQualifiers: { commissionPercentage: '0.00' } }],
+    formsOfPayment: [{ type: 'CASH' }],
+    designatePrinters: [{ profileNumber: 1 }],
+  });
+  if (issued.status === 'partial') {
+    // Some tickets were issued and some are missing: store these and verify before completing.
+  }
+} catch (error) {
+  if (!(error instanceof SabreUncertainOutcomeError)) throw error; // not issued
+  const check = await sabre.tickets.verify({
+    confirmationId,
+    knownTickets,
+    expectedTickets: error.tickets.map((ticket) => ticket.number),
+  });
+  // check.status: 'issued' | 'notCommitted' | 'notFound'
+}
+```
+
+The SDK sends `acceptPriceChanges: false` and `priceQuoteExpirationMethod: 'Quit'` unless you
+pass other values: an automatic issuance never pays a price nobody saw. With a new price, Sabre
+answers `PRICE_MISMATCH`.
+
+There are four outcomes:
+
+| Outcome | What you get | What to do |
+| - | - | - |
+| Issued | `status: 'issued'`, every ticket with `isCommitted: true` | Store `tickets` |
+| Partial | `status: 'partial'`: some tickets, and `PARTIAL_FULFILLMENT` or an error | Store the issued ones and verify before completing |
+| Not issued | `SabreBusinessError` (`PRICE_MISMATCH`, `BOOKING_FULFILLED`…) or `SabreGatewayError` (400, 401, 403, 429) | Fix the cause; nothing was issued |
+| Uncertain | `SabreUncertainOutcomeError`, with `reason`, `confirmationId`, `tickets` and `cause` | Verify with `tickets.verify` before thinking of retrying |
+
+> [!WARNING]
+> **`partial` is not a complete issuance**: some passengers have no ticket. Do not issue again
+> blindly: the tickets that were issued are real, and a second fulfill can give
+> `BOOKING_FULFILLED` or issue twice. Verify first.
+
+- **Uncertain** covers `UNABLE_TO_RETRIEVE_TICKETS`, `FULFILLMENT_NOT_CONFIRMED`,
+  `INTERNAL_SERVER_TIMEOUT` (unless Sabre says no new tickets were issued),
+  `DOWNLINE_SERVICE_ERROR`, `PAYMENT_CARD_ISSUE`, a network failure, a `5xx`, an unreadable body
+  and an abort after the request was sent (`ABORTED`, with the `AbortError` in `cause`). An abort
+  before sending propagates as is.
+- With `reason: 'NOT_COMMITTED'`, `tickets` holds the tickets Sabre returned with
+  `isCommitted: false`. **Those tickets exist**, even if the PNR does not show them yet: do not
+  issue again.
+- PCC configuration errors (commission, printer, Secure Flight) come as `DOWNLINE_SERVICE_ERROR`
+  and are treated as uncertain (CERT).
+- `BOOKING_FULFILLED` means the booking already has tickets, **not** that they are from this
+  issuance: verify.
+
+`sabre.tickets.verify` reads the booking with Get Booking and never issues. It looks at each
+ticket's `ticketStatusCode` (`TE`, `ME` or `TO` are live, `TV` is voided), not at `isTicketed`,
+which stays `true` after a void:
+
+- `issued`: there are new live tickets (outside `knownTickets`), and every `expectedTickets` is
+  there.
+- `notCommitted`: some `expectedTickets` are missing from the PNR (a ghost ticket). They are
+  issued: do not issue again.
+- `notFound`: no new live ticket. **It does not prove nothing was issued**: saving to the PNR can
+  take a while. Wait and verify again, and in production check the day's sales too
+  ([Daily sales](#daily-sales), by `pnrLocator`) before retrying.
+
+With `targetPcc` in `fulfill`, pass the same `targetPcc` to `verify`.
+
+### Voiding
+
+A void goes through `sabre.booking.cancel` with `flightTicketOperation: 'VOID'`. With `cancelAll`
+and `HALT_ON_ERROR`, one call voids the tickets and cancels the booking, and `voidedTickets`
+holds the voided numbers (CERT):
+
+```ts
+const result = await sabre.booking.cancel({
+  confirmationId,
+  cancelAll: true,
+  flightTicketOperation: 'VOID',
+  errorHandlingPolicy: 'HALT_ON_ERROR',
+});
+result.voidedTickets; // ['0060000000001']
+```
+
+- **A void cannot be undone.** A network failure, a `5xx`, an unreadable body, an abort after the
+  request was sent or `END_TRANSACTION_PROBLEM` throw `SabreUncertainOutcomeError`
+  (`operation: 'booking.cancel'`): it is not known whether the tickets were voided. Check with
+  `sabre.tickets.verify` (a voided ticket is `TV`) or `booking.get` before retrying.
+- `VOID` on a booking without tickets throws `NO_ITEMS_CANCELLED` with `UNABLE_TO_VOID_TICKET`
+  and **cancels nothing**. For a booking that was never issued, cancel without `VOID`.
+- A voided sale stays in the day's sales as a `SALE` with `documentStatusCode: 'V'`, and does not
+  count in `totals` (CERT).
 
 ## Choosing a seat
 
@@ -426,6 +549,44 @@ const { transactions } = await legacy.withSession((session) => session.reservati
 - It is a read: it is retried. A `locator` that is not 6 uppercase alphanumeric characters throws a
   `TypeError` without calling the network. A PNR that does not exist throws a `SabreBusinessError`
   (`service: 'itineraryHistory'`).
+
+### Daily sales
+
+`session.reporting.dailySalesSummary(request?, options?)` reads the day's sales (the DQB
+«Summary», `TKT_TravelAgencyReportsRQ` / `DailySalesSummaryRQ` 1.2.2): one transaction per movement
+of the PCC on that day (sales, refunds, voids, EMDs and MCOs), with no cap, and the day's totals.
+
+```ts
+const report = await legacy.withSession((session) =>
+  session.reporting.dailySalesSummary({ date: '2026-11-12' }),
+);
+// report.status → 'complete' | 'incomplete' | 'deferred'
+// report.transactions[0] → { documentType: 'TKT', transactionCode: 'SALE', documentNumber,
+//                            documentStatusCode, pnrLocator, passengerName, payments,
+//                            transactionDateTime: '2026-11-12T11:02:00.000', … }
+// report.totals → per transaction type, settlement and currency
+```
+
+- **One day per call**, no range. Without `date`, it is the current day, up to a few minutes
+  before the call (production). The filters are `pcc`, `documentType`, `settlementType`,
+  `airline` and `documentNumber`.
+- **Dates and times come as Sabre sends them, without a time zone**: `transactionDateTime` is
+  `'YYYY-MM-DDTHH:MM:SS.sss'`, in the PCC's local time in production. The SDK does not convert
+  them, because it does not know the zone.
+- **Only `status: 'complete'` is the whole day.** `incomplete` means Sabre could not read some
+  documents (`failedDocuments`), so transactions are missing. `deferred` means Sabre cached the
+  report (`deferred.reportId`) or is still running it: ask again later. The SDK does not send
+  `CachedReportRQ`.
+- A void does not add a transaction: the original sale stays as a `SALE` with
+  `documentStatusCode: 'V'`, and does not count in `totals` (CERT).
+- Amounts are strings, as Sabre sends them. **It carries passenger names** (`passengerName`); the
+  SDK never logs them.
+- Another PCC needs Branch Access. Without it Sabre answers `45100`, and the SDK throws
+  `SabreBusinessError` (`service: 'dailySalesSummary'`). A filter with the wrong shape throws a
+  `TypeError` without calling the network.
+- **In CERT the report may have no data**: a PCC that does not issue gets a `complete` report
+  with no transactions. Do not read an empty CERT report as proof of anything.
+- It is a read: it is retried on transport failures, not on business errors.
 
 ### Queues
 
@@ -652,6 +813,13 @@ fake.openSessions; // 0: the session was closed
   `count` with `queue` counts the matches and returns `totals.unfiltered`; with `range` or without
   a queue it gives Sabre's errors. Any other code gets a host error marked as not simulated,
   never the whole queue.
+- `reporting.dailySalesSummary`: `dailySales` seeds the transactions per PCC and date
+  (`{ ABCD: { '2026-11-12': [transactions] } }`, in the shape of `DailySalesTransaction`), or a
+  day with `status: 'incomplete'` or `'deferred'`, or an `errorCode` like `'45100'`. Without
+  `pcc` it uses the session's PCC; without `date`, the day of `now()` in `dailySalesTimeZone`
+  (an IANA zone, `'UTC'` by default). A PCC or day that is not seeded gives an empty `complete`
+  report. The `documentType` filter is simulated, the other filters are not, and `totals` come
+  back empty.
 - **Not simulated**: PCCs (the queues are the same for any `pcc`) and the host's combination rules
   for `selection`.
 - `queueFixtures` holds the anonymized responses recorded in production (`walk`, `emptyQueue`,
@@ -765,6 +933,7 @@ Every error thrown by the SDK extends `SabreError`:
 | `SabreOrchestrationError` | Orchestrated service error inside a `200` (`SP.*`) | `code` |
 | `SabreBusinessError` | Error from a service's own catalog (e.g. `No Availability`, a booking that was not created) | `service`, `code`, `warnings`, `errors` |
 | `SabreSessionError` | SOAP session failure in `SabreLegacy`, a subclass of `SabreGatewayError` | `kind`: `'limit'` (more than 50 sessions), `'invalid'`, `'expired'`, `'blocked'` |
+| `SabreUncertainOutcomeError` | Issuance or void may or may not have happened (`tickets.fulfill`, `booking.cancel` with `VOID`): verify before retrying | `operation`, `confirmationId`, `reason`, `tickets`, `warnings` |
 | `SabreWarning` | Non-fatal warning (e.g. `category: WARNING` in Create Booking) | `service`, `code` |
 
 All of them have `retryable`, which says whether the retry policy may try again.
@@ -793,7 +962,8 @@ try {
 ## Raw response
 
 Every REST operation (`air.bargainFinderMax`, `air.revalidateItinerary`, `air.getSeats`,
-`booking.create`, `booking.get` and `booking.cancel`), and every `SabreLegacy` operation, accepts
+`booking.create`, `booking.get`, `booking.cancel`, `tickets.fulfill` and `tickets.verify`), and
+every `SabreLegacy` operation, accepts
 an `onRawResponse` callback in its
 options, next to `signal`. It receives Sabre's response as it arrived, for example to store it
 next to the typed result. For `air.getSeats`, `operation` names the endpoint that was called
@@ -818,7 +988,8 @@ const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r)
   asynchronously, keep the value and write it after the call returns.
 
 In `SabreLegacy`, `protocol` is `'soap'`, `body` is the whole SOAP envelope, and `operation` is
-`'openSession'`, `'close'`, `'ping'`, `'command'` or `'queue.<method>'`. The session token
+`'openSession'`, `'close'`, `'ping'`, `'command'`, `'queue.<method>'`, `'reservation.history'` or
+`'reporting.dailySalesSummary'`. `tickets.verify` reports `'booking.get'`, the Get Booking it runs. The session token
 (`BinarySecurityToken`) is replaced by `[REDACTED]` wherever it appears. Nothing else is changed.
 
 > [!WARNING]
@@ -861,7 +1032,8 @@ await sabre.booking.get({ confirmationId }, { onRawRequest: (r) => (sent = r) })
 ## Retries
 
 Only idempotent operations are retried: Bargain Finder Max and Revalidate Itinerary (both
-are read-only `POST`s). Create Booking is never retried. Retries use exponential backoff with
+are read-only `POST`s), plus Get Booking and `tickets.verify`. Create Booking, Cancel Booking and
+`tickets.fulfill` are never retried. Retries use exponential backoff with
 full jitter and a 500 ms floor, on `429`, `500`, `503`, `504`, `SP.PROVIDER_ERROR` and the
 temporary errors in the Bargain Finder Max catalog.
 

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { SabreBusinessError, type SabreRawResponse } from '../src/index.js';
 import { dailySalesSummaryPayload } from '../src/reporting/daily-sales-summary.js';
 import fixture from './fixtures/reporting.production-daily-sales-summary.json';
+import voidFixture from './fixtures/reporting.sandbox-daily-sales-void.json';
 import { mockFetch } from './helpers.js';
 import { legacyClient, rejection, sentBody, sentTag, sessionOpened, soap, xml } from './soap-helpers.js';
 
@@ -160,6 +161,35 @@ describe('reporting.dailySalesSummary: respuesta de producción (P8, 2026-11-12)
     expect(raws).toHaveLength(1);
     expect(raws[0]?.operation).toBe('reporting.dailySalesSummary');
     expect(String(raws[0]?.body)).toContain('DailySalesSummaryRS');
+  });
+});
+
+describe('reporting.dailySalesSummary: un void en CERT (#243, Q-122)', () => {
+  const recordedVoid = (date: string) => {
+    const response = voidFixture.responses.find((r) => r.label === date);
+    if (response === undefined) throw new Error(`la fixture no tiene ${date}`);
+    return xml(response.status, response.body);
+  };
+
+  it.each([
+    ['2026-11-12', '0060000000001'],
+    ['2026-11-13', '0060000000002'],
+  ])('el %s: el boleto anulado sigue como SALE con documentStatusCode V y no suma en totals', async (date, documentNumber) => {
+    const { session } = await openWith(recordedVoid(date));
+    const result = await session.reporting.dailySalesSummary({ date });
+
+    expect(result.status).toBe('complete');
+    expect(result.reportDate).toBe(date);
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions[0]).toMatchObject({
+      documentType: 'TKT',
+      transactionCode: 'SALE',
+      documentStatusCode: 'V',
+      documentNumber,
+      payments: { currencyCode: expect.any(String), total: '100.00' },
+    });
+    expect(result.transactions.some((t) => t.transactionCode !== 'SALE')).toBe(false);
+    expect(result.totals).toEqual([]);
   });
 });
 

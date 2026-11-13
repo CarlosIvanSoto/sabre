@@ -1,6 +1,6 @@
 // Cancel Booking (`POST /v1/trip/orders/cancelBooking`).
 // Ver sabre-wiki/wiki/sdk/gestion-de-reserva.md y sabre-wiki/wiki/sources/cancel-booking.md.
-import { SabreError, type SabreWarning } from '../errors/index.js';
+import { SabreError, SabreUncertainOutcomeError, type SabreWarning } from '../errors/index.js';
 import type { SabreRawResponseCallback } from '../http/raw-response.js';
 import type { RestTransport } from '../http/rest-transport.js';
 import {
@@ -14,9 +14,13 @@ import {
 } from './booking-errors.js';
 import type { Booking } from './create-booking.js';
 import type { BookingSource } from './get-booking.js';
-import { rawHooks, type SabreRawRequestCallback } from '../http/raw-request.js';
+import { rawHooks, type SabreRawRequest, type SabreRawRequestCallback } from '../http/raw-request.js';
+import { uncertainInFlight } from '../tickets/fulfill-tickets.js';
 
 export const CANCEL_BOOKING_SERVICE = 'cancelBooking';
+const CANCEL_BOOKING_OPERATION = 'booking.cancel';
+/** «Confirmation is pending. Redisplay the booking»: con `VOID` es incierto (ADR-031). */
+const END_TRANSACTION_PROBLEM = 'END_TRANSACTION_PROBLEM';
 const PATH = '/v1/trip/orders/cancelBooking';
 /** Llega con `category: WARNING`, pero significa que no se canceló nada (decidido en #39). */
 const NO_ITEMS_CANCELLED = 'NO_ITEMS_CANCELLED';
@@ -127,6 +131,10 @@ export interface CancelBookingResponse {
 /**
  * Cancel Booking: escritura sin reintento automático. Solo el reintento reactivo ante 401,
  * que el gateway rechaza antes de llegar al proveedor.
+ *
+ * Con `flightTicketOperation: 'VOID'` sigue ADR-031: lo que pudo haber llegado a Sabre sin una
+ * respuesta legible (red, 5xx, cuerpo ilegible, abort en vuelo) y `END_TRANSACTION_PROBLEM` lanzan
+ * `SabreUncertainOutcomeError`, porque el void es irreversible.
  */
 export async function cancelBooking(
   transport: RestTransport,
@@ -134,17 +142,67 @@ export async function cancelBooking(
   options: CancelBookingOptions = {},
 ): Promise<CancelBookingResponse> {
   validateCancelBookingRequest(request);
-  const body = await transport.request<RawCancelBookingResponse>({
-    method: 'POST',
-    path: PATH,
-    service: CANCEL_BOOKING_SERVICE,
-    idempotent: false,
-    body: request,
-    classify: classifyCancelBooking,
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ...rawHooks(options, 'booking.cancel'),
-  });
+  const voiding = request.flightTicketOperation === 'VOID';
+  let sent = false;
+  const hooks = voiding
+    ? rawHooks(
+        {
+          onRawResponse: options.onRawResponse,
+          // `onRawRequest` llega si algún intento llamó a `fetch`: así se sabe si el void salió.
+          onRawRequest: (raw: SabreRawRequest) => {
+            sent = true;
+            options.onRawRequest?.(raw);
+          },
+        },
+        CANCEL_BOOKING_OPERATION,
+      )
+    : rawHooks(options, CANCEL_BOOKING_OPERATION);
+  let body: RawCancelBookingResponse;
+  try {
+    body = await transport.request<RawCancelBookingResponse>({
+      method: 'POST',
+      path: PATH,
+      service: CANCEL_BOOKING_SERVICE,
+      idempotent: false,
+      body: request,
+      classify: voiding ? (parsed) => classifyVoid(parsed, request.confirmationId) : classifyCancelBooking,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...hooks,
+    });
+  } catch (error) {
+    if (!voiding) throw error;
+    throw uncertainInFlight(error, sent, request.confirmationId, CANCEL_BOOKING_OPERATION, CANCEL_BOOKING_SERVICE);
+  }
   return toCancelBookingResponse(body);
+}
+
+/**
+ * El void: como `classifyCancelBooking`, más dos inciertos. Un 2xx que no es un objeto, y
+ * `END_TRANSACTION_PROBLEM` («Confirmation is pending»), que sin `VOID` es solo un aviso.
+ */
+function classifyVoid(body: unknown, confirmationId: string): SabreError | undefined {
+  const voidUncertain = (reason: 'UNPARSEABLE' | 'END_TRANSACTION_PROBLEM', detail: string, warnings: SabreWarning[] = []) =>
+    new SabreUncertainOutcomeError(`${CANCEL_BOOKING_SERVICE}: no se sabe si el void se hizo (${reason}: ${detail}). Verifica con tickets.verify o booking.get antes de reintentar.`, {
+      operation: CANCEL_BOOKING_OPERATION,
+      confirmationId,
+      reason,
+      tickets: isObject(body) ? voidedOf(body as RawCancelBookingResponse).map((number) => ({ number })) : [],
+      warnings,
+      raw: body,
+    });
+  if (!isObject(body)) return voidUncertain('UNPARSEABLE', 'respuesta 2xx sin un objeto JSON');
+  const failure = classifyCancelBooking(body);
+  if (failure !== undefined) return failure;
+  const items = responseErrors(body as RawCancelBookingResponse);
+  const pending = items.find((item) => item.type === END_TRANSACTION_PROBLEM);
+  if (pending !== undefined) {
+    return voidUncertain('END_TRANSACTION_PROBLEM', pending.description ?? 'Confirmation is pending', items.filter(isWarning).map(warningOf));
+  }
+  return undefined;
+}
+
+function voidedOf(body: RawCancelBookingResponse): string[] {
+  return Array.isArray(body.voidedTickets) ? body.voidedTickets.filter(nonEmpty) : [];
 }
 
 /** Combinaciones que Sabre rechaza seguro (`INVALID_FLAGS_COMBINATION`, `CANCEL_DATA_MISSING`). */

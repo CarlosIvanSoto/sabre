@@ -71,6 +71,12 @@ describe('commandToken', () => {
 });
 
 describe('sabreCommandLength', () => {
+  it('se importa desde la entrada pública, con MAX_COMMAND_LENGTH (#233, ADR-021)', async () => {
+    const pkg = await import('../src/index.js');
+    expect(pkg.MAX_COMMAND_LENGTH).toBe(1023);
+    expect(pkg.sabreCommandLength('!%$&¥§A')).toBe(13);
+  });
+
   it.each<[string, number]>([
     ['W/PT¥*', 7],
     ['*IM', 3],

@@ -7,6 +7,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `sabreCommandLength` and `MAX_COMMAND_LENGTH` are now public exports, so a client can check a host
+  command's length with the same rule `session.command()` uses before sending it (#233).
+
 ## [0.6.0] - 2026-11-10
 
 Queue filters for sabre-playground, with no breaking changes: every new field is optional, and

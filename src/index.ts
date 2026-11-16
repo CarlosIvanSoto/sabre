@@ -65,6 +65,17 @@ export type {
   ReservationHistoryText,
   ReservationHistoryTransaction,
 } from './reservation/reservation-history.js';
+export { SabreTripSearchError, TRIP_SEARCH_MAX_ITEMS } from './reservation/search-by-update-date.js';
+export type {
+  SabreTripSearchErrorOptions,
+  SearchByUpdateDateOptions,
+  SearchByUpdateDateRequest,
+  SearchByUpdateDateReservation,
+  SearchByUpdateDateResult,
+  SearchByUpdateDateWarning,
+  TripSearchErrorReason,
+  TripSearchType,
+} from './reservation/search-by-update-date.js';
 export type {
   QueueActivity,
   QueueActivityCounters,

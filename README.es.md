@@ -824,7 +824,17 @@ fake.openSessions; // 0: la sesión se cerró
   PCC de la sesión; sin `date`, el día de `now()` en `dailySalesTimeZone` (una zona IANA, `'UTC'`
   por defecto). Un PCC o un día sin sembrar da un reporte `complete` vacío. El filtro
   `documentType` se simula, los demás no, y los `totals` salen vacíos.
-- **No simula** los PCC (las colas son las mismas para cualquier `pcc`) ni las reglas de
+- `reservation.searchByUpdateDate`: `tripSearch.reservations` siembra los PNR, cada uno con su
+  `locator`, el PCC que lo creó (`createdBy`), los otros PCC que lo pueden ver (`visibleTo`), los
+  instantes en que cambió (`updatedAt`, uno o varios) y `pastDate`. Necesita
+  `tripSearchTimeZone`, la zona IANA en que Sabre lee `After`/`Before` y escribe el
+  `TimeStamp` de la raíz (sin default, como el `timeZone` del request). Un consumidor que pase
+  otra zona ve la ventana corrida y `TIMEZONE_MISMATCH`, como con Sabre. `anyBranch: false` trae
+  solo los PNR que creó ese PCC, y `searchType` sigue a `pastDate`. Los dos bordes de la ventana
+  entran (un supuesto del fake). `tripSearch.limit` (800 por defecto) trunca, con
+  `TotalResults` y `200006`. `tripSearch.errors` fuerza errores en orden, uno por búsqueda, por
+  `reason`. **No simula** el retraso entre un cambio y su aparición.
+- **No simula** los PCC en las colas (son las mismas para cualquier `pcc`) ni las reglas de
   combinación de `selection` del host.
 - `queueFixtures` trae las respuestas anonimizadas que se grabaron en producción (`walk`,
   `emptyQueue`, `place`…), como `{ operation, status, body }`. Cada una tiene sus propios alias de

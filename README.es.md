@@ -12,18 +12,20 @@ SDK de TypeScript para las APIs de Sabre.
 
 ## Estado
 
-La `0.7.0` está publicada con el dist-tag `next` mientras se prueba; `latest` sigue en la `0.6.0`.
+La `0.8.0` está publicada con el dist-tag `next` mientras se prueba; `latest` sigue en la `0.7.0`.
 Cubre el Tier 1 y el Tier 2 del flujo de Air Booking por REST, el Tier 3 (sesiones SOAP y colas) y
 el Tier 4: actividad de colas, historial del PNR, la cola de mensajes `S`, `selection` en `list` y
 `onRawRequest`, además de los filtros de cola de la `0.6.0`. La `0.7.0` suma la emisión y el void
 de boletos ([Emitir y anular boletos](#emitir-y-anular-boletos)), las ventas del día
 ([Ventas del día](#ventas-del-día)) y un fake REST de reservas y emisión en
 `sabre-client/testing`. Trae un cambio incompatible, en el void (ver
-[Actualizar desde la 0.6](#actualizar-desde-la-06)).
+[Actualizar desde la 0.6](#actualizar-desde-la-06)). La `0.8.0` suma la búsqueda de PNR por fecha
+de modificación ([Buscar PNR por fecha de modificación](#buscar-pnr-por-fecha-de-modificación)) y
+su fake, sin cambios incompatibles.
 
 ```sh
-npm install sabre-client@next   # 0.7.0
-npm install sabre-client        # 0.6.0
+npm install sabre-client@next   # 0.8.0
+npm install sabre-client        # 0.7.0
 ```
 
 El paquete sigue en `0.x`: una versión minor puede traer cambios incompatibles, y el
@@ -82,6 +84,7 @@ El Tier 3 agrega el cliente SOAP `SabreLegacy`, con una sesión stateful y Queue
 | Colas | Get Queue Count, Get Queue Activity, Access Queue, Place Queue Message | `session.queue.count`, `activity`, `list`, `access`, `ignore`, `remove`, `place`, `exit`, `process` |
 | Párrafo de cola | — (función pura) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
 | Historial del PNR | `TravelItineraryHistoryLLSRQ` 2.4.0 | `session.reservation.history` |
+| Búsqueda de PNR por fecha de modificación | `Trip_SearchRQ` 4.5.0 (Search For Itineraries, `0.8.0`) | `session.reservation.searchByUpdateDate` |
 | Comandos de host | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 | Ventas del día | `TKT_TravelAgencyReportsRQ` / `DailySalesSummaryRQ` 1.2.2 (el «Summary» del DQB) | `session.reporting.dailySalesSummary` |
 
@@ -361,6 +364,12 @@ result.voidedTickets; // ['0060000000001']
   el request ya mandado o `END_TRANSACTION_PROBLEM` lanzan `SabreUncertainOutcomeError`
   (`operation: 'booking.cancel'`): no se sabe si se anularon los boletos. Verifica con
   `sabre.tickets.verify` (un boleto anulado queda en `TV`) o con `booking.get` antes de reintentar.
+- **`SabreUncertainOutcomeError` solo sale con `flightTicketOperation: 'VOID'`.** Un cancel sin
+  `VOID` sigue como antes: `END_TRANSACTION_PROBLEM` llega como `SabreWarning` en `warnings`, un
+  `5xx` o un fallo de red lanzan `SabreGatewayError`, y un abort lanza el `AbortError` tal cual,
+  todo sin reintento automático. Ese cancel igual pudo haberse hecho: trata esos casos como
+  inciertos y verifica con `booking.get` antes de reintentar. Repetir un cancel sobre una reserva
+  ya vacía lanza `NO_ITEMS_CANCELLED`.
 - `VOID` sobre una reserva sin boletos lanza `NO_ITEMS_CANCELLED` con `UNABLE_TO_VOID_TICKET` y
   **no cancela nada**. Para una reserva que nunca se emitió, cancela sin `VOID`.
 - Una venta anulada sigue en las ventas del día como `SALE` con `documentStatusCode: 'V'`, y no
@@ -552,6 +561,53 @@ const { transactions } = await legacy.withSession((session) => session.reservati
 - Es una lectura: se reintenta. Un `locator` que no es de 6 caracteres alfanuméricos en mayúscula
   lanza un `TypeError` sin llamar a la red. Un PNR que no existe lanza un `SabreBusinessError`
   (`service: 'itineraryHistory'`).
+
+### Buscar PNR por fecha de modificación
+
+`session.reservation.searchByUpdateDate(request, options?)` (Search For Itineraries,
+`Trip_SearchRQ` 4.5.0, vista `TripSearchTN`) devuelve los localizadores de los PNR del PCC que
+cambiaron en una ventana de tiempo. La creación, un remark, la emisión y la cancelación cuentan
+como cambio (CERT y producción). Sirve para sincronizar: después se relee cada localizador
+(`booking.get`) para ver qué cambió.
+
+```ts
+const result = await legacy.withSession((session) =>
+  session.reservation.searchByUpdateDate({
+    pcc: 'ABCD',
+    from: ultimoCorte,             // un instante: Date, o ISO 8601 con Z u offset
+    to: new Date(),
+    timeZone: 'America/Mexico_City', // la zona IANA del PCC: obligatoria
+  }),
+);
+// result.status → 'complete' | 'truncated'
+// result.reservations → [{ locator: 'ABCDEF' }, …] (sin repetidos)
+// result.respondedAt → '2026-11-16T20:24:13Z'; result.warnings → []
+```
+
+- **Sabre lee la ventana en hora local**, sin zona. Tú pasas instantes y la `timeZone` del PCC, y
+  el SDK los convierte con `Intl`. **`timeZone` no tiene default**: una zona equivocada corre la
+  ventana varias horas sin error visible. Un string sin zona (`'2026-11-16T14:00:00'`) lanza
+  `TypeError`. Todavía no está probado si la hora es la del PCC o la del host de Sabre (US
+  Central): de marzo a noviembre difieren 1 h. Si la zona en que responde Sabre
+  (`sabreLocalOffsetMinutes`) no coincide con `timeZone`, `warnings` trae `TIMEZONE_MISMATCH`.
+- **Solapa las ventanas.** Empieza cada pasada al menos 1 h antes del corte anterior mientras la
+  zona siga sin confirmar, y deduplica por localizador. No se sabe si `from` y `to` incluyen el
+  borde, ni cuánto tarda un cambio en aparecer en producción (en CERT, menos de 2 minutos). El
+  corte siguiente es `respondedAt` menos el solape, no `respondedAt` a secas.
+- **`status: 'truncated'` no es un error.** Una búsqueda síncrona trae a lo sumo 800 PNR (500
+  según el change log de Sabre), sin páginas. Si hay más, parte la ventana y vuelve a pedir.
+- `anyBranch` es `true` por defecto: todos los PNR que el PCC puede ver. Con `false` solo salen
+  los que creó ese PCC, y se pierden los creados en otro y emitidos ahí.
+- Un PNR cancelado sigue saliendo con `searchType: 'ACTIVE'` (el default). `TripSearchTN` no trae
+  `updatedAt`.
+- Sabre corta la búsqueda a los 20 s. Si pasas un `signal`, que sea de más.
+- Es una lectura: nunca manda `ResultAction` (podría colocar los PNR en una cola), y se reintenta
+  ante fallos de transporte, no ante errores de negocio. Un error de Sabre lanza
+  `SabreTripSearchError`, un `SabreBusinessError` con `service: 'tripSearch'`, el `code` y la
+  `severity` de Sabre, y un `reason`: `NO_PRIMARY_CRITERIA`, `CRITERIA_TOO_WEAK`,
+  `TOO_MANY_RESULTS`, `SEARCH_TIMEOUT`, `PCC_NOT_ACCESSIBLE` (sin Branch Access a ese PCC) o
+  `UNKNOWN`. Ninguno de estos errores se vio todavía en una respuesta real: la forma sale de la
+  guía de Sabre.
 
 ### Ventas del día
 
@@ -950,6 +1006,7 @@ Todos los errores que lanza el SDK extienden `SabreError`:
 | `SabreBusinessError` | Error del catálogo propio de un servicio (p. ej. `No Availability`, una reserva que no se creó) | `service`, `code`, `warnings`, `errors` |
 | `SabreSessionError` | Falla de la sesión SOAP de `SabreLegacy`, subclase de `SabreGatewayError` | `kind`: `'limit'` (más de 50 sesiones), `'invalid'`, `'expired'`, `'blocked'` |
 | `SabreUncertainOutcomeError` | La emisión o el void pudieron haberse hecho, o no (`tickets.fulfill`, `booking.cancel` con `VOID`): verifica antes de reintentar | `operation`, `confirmationId`, `reason`, `tickets`, `warnings` |
+| `SabreTripSearchError` | Error de `Trip_SearchRQ` en `reservation.searchByUpdateDate`, subclase de `SabreBusinessError` | `reason`, `severity`, más los de `SabreBusinessError` |
 | `SabreWarning` | Aviso no fatal (p. ej. `category: WARNING` en Create Booking) | `service`, `code` |
 
 Todos tienen `retryable`, que indica si la política de reintentos puede volver a intentar.
@@ -1004,8 +1061,8 @@ const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r)
   conserva el valor y escríbelo cuando la llamada vuelva.
 
 En `SabreLegacy`, `protocol` es `'soap'`, `body` es el sobre SOAP completo, y `operation` es
-`'openSession'`, `'close'`, `'ping'`, `'command'`, `'queue.<método>'`, `'reservation.history'` o
-`'reporting.dailySalesSummary'`. `tickets.verify` reporta `'booking.get'`, el Get Booking que corre. El token de la sesión
+`'openSession'`, `'close'`, `'ping'`, `'command'`, `'queue.<método>'`, `'reservation.history'`,
+`'reservation.searchByUpdateDate'` o `'reporting.dailySalesSummary'`. `tickets.verify` reporta `'booking.get'`, el Get Booking que corre. El token de la sesión
 (`BinarySecurityToken`) se reemplaza por `[REDACTED]` donde aparezca. No se cambia nada más.
 
 > [!WARNING]
@@ -1053,7 +1110,8 @@ Cancel Booking y `tickets.fulfill` nunca se reintentan. Los reintentos usan
 backoff exponencial con full jitter y un piso de 500 ms, ante `429`, `500`, `503`, `504`,
 `SP.PROVIDER_ERROR` y los errores temporales del catálogo de Bargain Finder Max.
 
-En `SabreLegacy`, `count`, `list` y `ping` son lecturas y se reintentan ante fallos transitorios.
+En `SabreLegacy`, `count`, `list`, `ping`, `reservation.history`, `reservation.searchByUpdateDate` y
+`reporting.dailySalesSummary` son lecturas y se reintentan ante fallos transitorios.
 Las operaciones que mueven el cursor de la cola (`access`, `ignore`, `remove`, `place`, `exit`) se
 reintentan solo ante los `USG_*_BUSY`, que se toman como señal de que Sabre no procesó el request, y ante
 `PREVIOUS ENTRY ACTIVE` (3 × 1 s). Nunca se reintentan después de un fallo de red, porque el PNR

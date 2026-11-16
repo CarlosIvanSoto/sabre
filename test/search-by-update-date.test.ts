@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { SabreBusinessError, SabreError, SabreGatewayError, type SabreRawResponse, SabreTripSearchError, type SearchByUpdateDateRequest } from '../src/index.js';
 import cert from './fixtures/trip-search.sandbox-cert1.json';
 import synthetic from './fixtures/trip-search.synthetic-guide.json';
+import validate from './fixtures/trip-search.sandbox-validate.json';
 import { mockFetch } from './helpers.js';
 import { fault, legacyClient, rejection, sentBody, sentTag, sessionOpened, soap, xml } from './soap-helpers.js';
 
@@ -245,6 +246,20 @@ describe('reservation.searchByUpdateDate: errores', () => {
     expect(tripError.severity).toBe(severity);
     expect(tripError.message).toMatch(new RegExp(`^tripSearch: ${code} `));
     expect(tripError.retryable).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('más resultados que maxItems (sobre real de CERT): 200206 con Severity WARNING lanza TOO_MANY_RESULTS', async () => {
+    const response = validate.responses.filter((candidate) => candidate.operation === 'reservation.searchByUpdateDate').find((candidate) => candidate.body.includes('200206'));
+    if (response === undefined) throw new Error('la fixture no tiene el 200206');
+    const { fetch, session } = await openWith(xml(response.status, response.body));
+    const error = (await rejection(session.reservation.searchByUpdateDate({ ...MEXICO, maxItems: 1 }))) as SabreTripSearchError;
+    expect(error).toBeInstanceOf(SabreTripSearchError);
+    expect(error.reason).toBe('TOO_MANY_RESULTS');
+    expect(error.code).toBe('200206');
+    expect(error.severity).toBe('WARNING');
+    expect(error.message).toBe('tripSearch: 200206 Too many results - specify more data; wanted: 1 , found: 2');
+    expect(error.retryable).toBe(false);
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 

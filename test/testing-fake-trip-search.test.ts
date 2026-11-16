@@ -94,7 +94,7 @@ describe('fake: reservation.searchByUpdateDate', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it('con más resultados que el tope: los primeros, TotalResults con el total y truncated', async () => {
+  it('con maxItems por encima del tope de la vista (no visto en Sabre): los primeros, TotalResults con el total y truncated', async () => {
     const { result } = await search({ ...seeded, tripSearch: { ...seeded.tripSearch, limit: 1 } });
     expect(result.status).toBe('truncated');
     expect(locators(result)).toEqual(['AAAAAA']);
@@ -103,8 +103,20 @@ describe('fake: reservation.searchByUpdateDate', () => {
     expect(result.warnings).toEqual([{ code: '200006', message: 'Number of results exceeded view limit or requested PNRs limit' }]);
   });
 
-  it('maxItems también corta, y pedir más que el tope da 200005 sin truncar', async () => {
-    expect((await search(seeded, { maxItems: 1 })).result.status).toBe('truncated');
+  it('más resultados que maxItems: 200206 sin lista y TOO_MANY_RESULTS, como Sabre en CERT', async () => {
+    const { legacy } = client(seeded);
+    const session = await legacy.openSession();
+    const error = (await rejection(session.reservation.searchByUpdateDate({ ...WINDOW, maxItems: 1 }))) as SabreTripSearchError;
+    expect(error).toBeInstanceOf(SabreTripSearchError);
+    expect(error.reason).toBe('TOO_MANY_RESULTS');
+    expect(error.code).toBe('200206');
+    expect(error.severity).toBe('WARNING');
+    expect(error.message).toBe('tripSearch: 200206 Too many results - specify more data; wanted: 1 , found: 2');
+    expect((await session.reservation.searchByUpdateDate({ ...WINDOW, maxItems: 2 })).status).toBe('complete');
+    await session.close();
+  });
+
+  it('pedir más que el tope da 200005 sin truncar', async () => {
     const { result } = await search({ ...seeded, tripSearch: { ...seeded.tripSearch, limit: 500 } });
     expect(result.status).toBe('complete');
     expect(result.warnings).toEqual([{ code: '200005', message: 'Max number of requested PNRs exceeded view limit [500]' }]);

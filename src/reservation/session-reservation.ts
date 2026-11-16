@@ -76,8 +76,11 @@ export class SessionReservation {
    *   y `Before` incluyen el borde, ni cuánto tarda un cambio en aparecer en producción (en CERT,
    *   menos de 2 min). El corte de la pasada siguiente es `respondedAt` menos el solape, no
    *   `respondedAt` a secas. `from` y `to` se mandan al segundo.
-   * - **Truncado.** Una búsqueda síncrona trae a lo sumo 800 PNR (500 según el change log), sin
-   *   páginas. Si hay más, `status` es `'truncated'`: no lanza; hay que partir la ventana.
+   * - **Demasiados resultados.** Una búsqueda síncrona trae a lo sumo `maxItems` PNR (hasta 800;
+   *   500 según el change log), sin páginas. Si hay más, Sabre no corta: responde `200206` sin
+   *   lista y el SDK lanza `SabreTripSearchError` con `reason: 'TOO_MANY_RESULTS'` (CERT,
+   *   2026-11-16). Hay que partir la ventana y volver a pedir. `status: 'truncated'` cubre la
+   *   advertencia `200006` y los contadores que describe la guía, que no se vieron en Sabre.
    * - **`anyBranch`** es `true` por defecto: con `false` solo salen los PNR que creó el `pcc`.
    * - Un PNR cancelado sigue saliendo con `searchType: 'ACTIVE'` (CERT, 2026-11-16).
    * - `reservations[].updatedAt` no llega con `TripSearchTN`.

@@ -1,0 +1,318 @@
+{
+  "recordedAt": "2026-11-16",
+  "environment": "sandbox",
+  "timeZone": "America/Mexico_City",
+  "hours": 24,
+  "searchType": [
+    "ACTIVE"
+  ],
+  "results": [
+    {
+      "step": "ventana inválida",
+      "ok": false,
+      "error": {
+        "name": "TypeError",
+        "message": "sabre-client: reservation.searchByUpdateDate: from debe ser anterior a to"
+      }
+    },
+    {
+      "step": "últimas 24 h, anyBranch true",
+      "ok": true,
+      "status": "complete",
+      "anyBranch": true,
+      "window": {
+        "after": "2026-11-15T15:42:37",
+        "before": "2026-11-16T15:42:37",
+        "timeZone": "America/Mexico_City"
+      },
+      "reservations": [
+        {
+          "locator": "AAAAAA"
+        },
+        {
+          "locator": "AAAAAB"
+        }
+      ],
+      "numberResults": 2,
+      "totalResults": 2,
+      "warnings": [],
+      "respondedAt": "2026-11-16T21:42:37Z",
+      "sabreLocalOffsetMinutes": -360
+    },
+    {
+      "step": "últimas 24 h, anyBranch false",
+      "ok": true,
+      "status": "complete",
+      "anyBranch": false,
+      "window": {
+        "after": "2026-11-15T15:42:37",
+        "before": "2026-11-16T15:42:37",
+        "timeZone": "America/Mexico_City"
+      },
+      "reservations": [
+        {
+          "locator": "AAAAAB"
+        }
+      ],
+      "numberResults": 1,
+      "totalResults": 1,
+      "warnings": [],
+      "respondedAt": "2026-11-16T21:42:38Z",
+      "sabreLocalOffsetMinutes": -360
+    },
+    {
+      "step": "1 h en el futuro",
+      "ok": true,
+      "status": "complete",
+      "anyBranch": true,
+      "window": {
+        "after": "2026-11-16T16:42:37",
+        "before": "2026-11-16T17:42:37",
+        "timeZone": "America/Mexico_City"
+      },
+      "reservations": [],
+      "numberResults": 0,
+      "totalResults": 0,
+      "warnings": [],
+      "respondedAt": "2026-11-16T21:42:38Z",
+      "sabreLocalOffsetMinutes": -360
+    },
+    {
+      "step": "maxItems 1",
+      "ok": false,
+      "error": {
+        "name": "SabreTripSearchError",
+        "message": "tripSearch: 200206 Too many results - specify more data; wanted: 1 , found: 2",
+        "code": "200206",
+        "retryable": false
+      }
+    },
+    {
+      "step": "close",
+      "ok": true
+    }
+  ],
+  "findings": {
+    "invalidWindow": {
+      "threwTypeError": true,
+      "wentToNetwork": false
+    },
+    "anyBranch": {
+      "true": 2,
+      "false": 1,
+      "falseIsSubsetOfTrue": true
+    },
+    "sabreLocalOffsetMinutes": -360,
+    "timezoneMismatch": false,
+    "futureWindow": {
+      "status": "complete",
+      "reservations": 0,
+      "warnings": []
+    },
+    "maxItems1": {
+      "name": "SabreTripSearchError",
+      "message": "tripSearch: 200206 Too many results - specify more data; wanted: 1 , found: 2",
+      "code": "200206",
+      "retryable": false
+    }
+  },
+  "events": [
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionCreate",
+        "action": "SessionCreateRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 363,
+        "messageId": "1669677781573550940",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.open",
+      "context": {
+        "version": "2.0.0",
+        "pseudoCityCode": "XXXX"
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "tripSearch",
+        "action": "Trip_SearchRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "tripSearch",
+        "action": "Trip_SearchRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 436,
+        "messageId": "1669686781576790940",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "tripSearch",
+        "action": "Trip_SearchRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "tripSearch",
+        "action": "Trip_SearchRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 145,
+        "messageId": "1669693781580050940",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "tripSearch",
+        "action": "Trip_SearchRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "tripSearch",
+        "action": "Trip_SearchRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 229,
+        "messageId": "1669293781581511150",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "tripSearch",
+        "action": "Trip_SearchRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "tripSearch",
+        "action": "Trip_SearchRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 114,
+        "messageId": "1669699781583790940",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "debug",
+      "message": "sabre.request.start",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionClose",
+        "action": "SessionCloseRQ",
+        "attempt": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.request.end",
+      "context": {
+        "protocol": "soap",
+        "service": "sessionClose",
+        "action": "SessionCloseRQ",
+        "attempt": 0,
+        "status": 200,
+        "durationMs": 108,
+        "messageId": "1669703781585060940",
+        "warnings": 0
+      }
+    },
+    {
+      "level": "info",
+      "message": "sabre.session.close",
+      "context": {
+        "pseudoCityCode": "XXXX"
+      }
+    }
+  ],
+  "responses": [
+    {
+      "operation": "openSession",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>4513c160-2668-4da7-8f52-acb508137b02</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCreateRS</eb:Action><eb:MessageData><eb:MessageId>1669677781573550940</eb:MessageId><eb:Timestamp>2026-11-16T21:42:37</eb:Timestamp><eb:RefToMessageId>mid:1dafb2c8-b7ff-437d-ba7b-b4700621bc78</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCreateRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"2.0.0\" status=\"Approved\">\t<ConversationId>4513c160-2668-4da7-8f52-acb508137b02</ConversationId></SessionCreateRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "reservation.searchByUpdateDate",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>4513c160-2668-4da7-8f52-acb508137b02</eb:ConversationId><eb:Service>Trip_SearchRQ</eb:Service><eb:Action>Trip_SearchRQ</eb:Action><eb:MessageData><eb:MessageId>1669686781576790940</eb:MessageId><eb:Timestamp>2026-11-16T21:42:37</eb:Timestamp><eb:RefToMessageId>mid:8b06a5d6-8324-45d6-a77b-9e36e29b3caa</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><Trip_SearchRS xmlns=\"http://webservices.sabre.com/triprecord\" xmlns:ns2=\"http://services.sabre.com/STL/v01\" xmlns:ns4=\"http://webservices.sabre.com/sabreXML/2003/07\" xmlns:ns3=\"http://webservices.sabre.com/pnrbuilder\" xmlns:ns6=\"http://tds.sabre.com/itinerary\" xmlns:ns20=\"http://services.sabre.com/res/or/v1_14\" xmlns:ns5=\"http://tds.sabre.com/rules\" xmlns:ns8=\"http://services.sabre.com/STL/v02\" xmlns:ns7=\"http://services.sabre.com/res/orr/v0\" xmlns:ns13=\"http://www.sabre.com/eps/schemas\" xmlns:ns9=\"http://www.sabre.com/ssg/des/v1\" xmlns:ns12=\"http://opentravel.org/common/v02\" xmlns:ns11=\"http://www.OpenTravel.org/ns/OTA2/AppInfo_v01_00\" xmlns:tir39=\"http://services.sabre.com/res/tir/v3_9\" xmlns:ns10=\"http://services.sabre.com/STL_Header/v02_00\" xmlns:ns15=\"http://webservices.sabre.com/servicesplatform/orr/rules/1.0.0\" xmlns:ns14=\"http://tds.sabre.com/distribution\" xmlns:stl115=\"http://webservices.sabre.com/pnrbuilder/v1_15\" xmlns:or18=\"http://services.sabre.com/res/or/v1_8\" xmlns:or19=\"http://services.sabre.com/res/or/v1_9\" xmlns:stl119=\"http://webservices.sabre.com/pnrbuilder/v1_19\" TimeStamp=\"2026-11-16T15:42:37\" Target=\"Production\" Version=\"4.5.0\"><Success>Success</Success><ReservationsList NumberResults=\"2\" NumberPages=\"1\" TotalResults=\"2\"><Reservations><Reservation Locator=\"AAAAAA\"><stl19:GetReservationRS xmlns:stl19=\"http://webservices.sabre.com/pnrbuilder/v1_19\" xmlns:or114=\"http://services.sabre.com/res/or/v1_14\" xmlns:raw=\"http://tds.sabre.com/itinerary\" xmlns:ns4=\"http://webservices.sabre.com/pnrconn/ReaccSearch\" xmlns:ns6=\"http://services.sabre.com/res/orr/v0\" Version=\"1.19.0\"></stl19:GetReservationRS></Reservation><Reservation Locator=\"AAAAAB\"><stl19:GetReservationRS xmlns:stl19=\"http://webservices.sabre.com/pnrbuilder/v1_19\" xmlns:or114=\"http://services.sabre.com/res/or/v1_14\" xmlns:raw=\"http://tds.sabre.com/itinerary\" xmlns:ns4=\"http://webservices.sabre.com/pnrconn/ReaccSearch\" xmlns:ns6=\"http://services.sabre.com/res/orr/v0\" Version=\"1.19.0\"></stl19:GetReservationRS></Reservation></Reservations></ReservationsList></Trip_SearchRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "reservation.searchByUpdateDate",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>4513c160-2668-4da7-8f52-acb508137b02</eb:ConversationId><eb:Service>Trip_SearchRQ</eb:Service><eb:Action>Trip_SearchRQ</eb:Action><eb:MessageData><eb:MessageId>1669693781580050940</eb:MessageId><eb:Timestamp>2026-11-16T21:42:38</eb:Timestamp><eb:RefToMessageId>mid:18e802c9-de4f-4a85-b4aa-afc797bb9648</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><Trip_SearchRS xmlns=\"http://webservices.sabre.com/triprecord\" xmlns:ns2=\"http://services.sabre.com/STL/v01\" xmlns:ns4=\"http://webservices.sabre.com/sabreXML/2003/07\" xmlns:ns3=\"http://webservices.sabre.com/pnrbuilder\" xmlns:ns6=\"http://tds.sabre.com/itinerary\" xmlns:ns20=\"http://services.sabre.com/res/or/v1_14\" xmlns:ns5=\"http://tds.sabre.com/rules\" xmlns:ns8=\"http://services.sabre.com/STL/v02\" xmlns:ns7=\"http://services.sabre.com/res/orr/v0\" xmlns:ns13=\"http://www.sabre.com/eps/schemas\" xmlns:ns9=\"http://www.sabre.com/ssg/des/v1\" xmlns:ns12=\"http://opentravel.org/common/v02\" xmlns:ns11=\"http://www.OpenTravel.org/ns/OTA2/AppInfo_v01_00\" xmlns:tir39=\"http://services.sabre.com/res/tir/v3_9\" xmlns:ns10=\"http://services.sabre.com/STL_Header/v02_00\" xmlns:ns15=\"http://webservices.sabre.com/servicesplatform/orr/rules/1.0.0\" xmlns:ns14=\"http://tds.sabre.com/distribution\" xmlns:stl115=\"http://webservices.sabre.com/pnrbuilder/v1_15\" xmlns:or18=\"http://services.sabre.com/res/or/v1_8\" xmlns:or19=\"http://services.sabre.com/res/or/v1_9\" xmlns:stl119=\"http://webservices.sabre.com/pnrbuilder/v1_19\" TimeStamp=\"2026-11-16T15:42:38\" Target=\"Production\" Version=\"4.5.0\"><Success>Success</Success><ReservationsList NumberResults=\"1\" NumberPages=\"1\" TotalResults=\"1\"><Reservations><Reservation Locator=\"AAAAAB\"><stl19:GetReservationRS xmlns:stl19=\"http://webservices.sabre.com/pnrbuilder/v1_19\" xmlns:or114=\"http://services.sabre.com/res/or/v1_14\" xmlns:raw=\"http://tds.sabre.com/itinerary\" xmlns:ns4=\"http://webservices.sabre.com/pnrconn/ReaccSearch\" xmlns:ns6=\"http://services.sabre.com/res/orr/v0\" Version=\"1.19.0\"></stl19:GetReservationRS></Reservation></Reservations></ReservationsList></Trip_SearchRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "reservation.searchByUpdateDate",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>4513c160-2668-4da7-8f52-acb508137b02</eb:ConversationId><eb:Service>Trip_SearchRQ</eb:Service><eb:Action>Trip_SearchRQ</eb:Action><eb:MessageData><eb:MessageId>1669293781581511150</eb:MessageId><eb:Timestamp>2026-11-16T21:42:38</eb:Timestamp><eb:RefToMessageId>mid:f51082a0-4086-4c4c-a3df-cee2674cbca0</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><Trip_SearchRS xmlns=\"http://webservices.sabre.com/triprecord\" xmlns:ns2=\"http://services.sabre.com/STL/v01\" xmlns:ns4=\"http://webservices.sabre.com/sabreXML/2003/07\" xmlns:ns3=\"http://webservices.sabre.com/pnrbuilder\" xmlns:ns6=\"http://tds.sabre.com/itinerary\" xmlns:ns20=\"http://services.sabre.com/res/or/v1_14\" xmlns:ns5=\"http://tds.sabre.com/rules\" xmlns:ns8=\"http://services.sabre.com/STL/v02\" xmlns:ns7=\"http://services.sabre.com/res/orr/v0\" xmlns:ns13=\"http://www.sabre.com/eps/schemas\" xmlns:ns9=\"http://www.sabre.com/ssg/des/v1\" xmlns:ns12=\"http://opentravel.org/common/v02\" xmlns:ns11=\"http://www.OpenTravel.org/ns/OTA2/AppInfo_v01_00\" xmlns:tir39=\"http://services.sabre.com/res/tir/v3_9\" xmlns:ns10=\"http://services.sabre.com/STL_Header/v02_00\" xmlns:ns15=\"http://webservices.sabre.com/servicesplatform/orr/rules/1.0.0\" xmlns:ns14=\"http://tds.sabre.com/distribution\" xmlns:stl115=\"http://webservices.sabre.com/pnrbuilder/v1_15\" xmlns:or18=\"http://services.sabre.com/res/or/v1_8\" xmlns:or19=\"http://services.sabre.com/res/or/v1_9\" xmlns:stl119=\"http://webservices.sabre.com/pnrbuilder/v1_19\" TimeStamp=\"2026-11-16T15:42:38\" Target=\"Production\" Version=\"4.5.0\"><Success>Success</Success><ReservationsList NumberResults=\"0\" NumberPages=\"1\" TotalResults=\"0\"><Reservations/></ReservationsList></Trip_SearchRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "reservation.searchByUpdateDate",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>4513c160-2668-4da7-8f52-acb508137b02</eb:ConversationId><eb:Service>Trip_SearchRQ</eb:Service><eb:Action>Trip_SearchRQ</eb:Action><eb:MessageData><eb:MessageId>1669699781583790940</eb:MessageId><eb:Timestamp>2026-11-16T21:42:38</eb:Timestamp><eb:RefToMessageId>mid:91799cf8-b016-4d0b-a06e-93a656f8f248</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><Trip_SearchRS xmlns=\"http://webservices.sabre.com/triprecord\" xmlns:ns2=\"http://services.sabre.com/STL/v01\" xmlns:ns4=\"http://webservices.sabre.com/sabreXML/2003/07\" xmlns:ns3=\"http://webservices.sabre.com/pnrbuilder\" xmlns:ns6=\"http://tds.sabre.com/itinerary\" xmlns:ns20=\"http://services.sabre.com/res/or/v1_14\" xmlns:ns5=\"http://tds.sabre.com/rules\" xmlns:ns8=\"http://services.sabre.com/STL/v02\" xmlns:ns7=\"http://services.sabre.com/res/orr/v0\" xmlns:ns13=\"http://www.sabre.com/eps/schemas\" xmlns:ns9=\"http://www.sabre.com/ssg/des/v1\" xmlns:ns12=\"http://opentravel.org/common/v02\" xmlns:ns11=\"http://www.OpenTravel.org/ns/OTA2/AppInfo_v01_00\" xmlns:tir39=\"http://services.sabre.com/res/tir/v3_9\" xmlns:ns10=\"http://services.sabre.com/STL_Header/v02_00\" xmlns:ns15=\"http://webservices.sabre.com/servicesplatform/orr/rules/1.0.0\" xmlns:ns14=\"http://tds.sabre.com/distribution\" xmlns:stl115=\"http://webservices.sabre.com/pnrbuilder/v1_15\" xmlns:or18=\"http://services.sabre.com/res/or/v1_8\" xmlns:or19=\"http://services.sabre.com/res/or/v1_9\" xmlns:stl119=\"http://webservices.sabre.com/pnrbuilder/v1_19\" Version=\"1.19.0\"><Errors><Error ErrorCode=\"200206\" Severity=\"WARNING\" ErrorMessage=\"Too many results - specify more data; wanted: 1 , found: 2\"/></Errors></Trip_SearchRS></soap-env:Body></soap-env:Envelope>"
+    },
+    {
+      "operation": "close",
+      "status": 200,
+      "attempts": 1,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap-env:Envelope xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap-env:Header><eb:MessageHeader xmlns:eb=\"http://www.ebxml.org/namespaces/messageHeader\" eb:version=\"1.0\" soap-env:mustUnderstand=\"1\"><eb:From><eb:PartyId eb:type=\"URI\"/></eb:From><eb:To><eb:PartyId eb:type=\"URI\"/></eb:To><eb:CPAId>XXXX</eb:CPAId><eb:ConversationId>4513c160-2668-4da7-8f52-acb508137b02</eb:ConversationId><eb:Service eb:type=\"sabreXML\">Session</eb:Service><eb:Action>SessionCloseRS</eb:Action><eb:MessageData><eb:MessageId>1669703781585060940</eb:MessageId><eb:Timestamp>2026-11-16T21:42:38</eb:Timestamp><eb:RefToMessageId>mid:f8d8b3e6-b2cf-431d-af11-e7368657b8c2</eb:RefToMessageId></eb:MessageData></eb:MessageHeader><wsse:Security xmlns:wsse=\"http://schemas.xmlsoap.org/ws/2002/12/secext\"><wsse:BinarySecurityToken valueType=\"String\" EncodingType=\"wsse:Base64Binary\">[REDACTED]</wsse:BinarySecurityToken></wsse:Security></soap-env:Header><soap-env:Body><SessionCloseRS xmlns=\"http://www.opentravel.org/OTA/2002/11\" version=\"1\" status=\"Approved\"/></soap-env:Body></soap-env:Envelope>"
+    }
+  ]
+}

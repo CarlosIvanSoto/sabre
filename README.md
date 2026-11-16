@@ -591,9 +591,12 @@ const result = await legacy.withSession((session) =>
   question is open, and deduplicate by locator. It is not known whether `from` and `to` are
   inclusive, nor how long a change takes to show up in production (in CERT, under 2 minutes). The
   next cutoff is `respondedAt` minus the overlap, not `respondedAt` alone.
-- **`status: 'truncated'` is not an error.** A synchronous search returns at most 800 PNRs (500
-  according to Sabre's change log), with no pages. When there are more, split the window and ask
-  again.
+- **Too many results throws.** A synchronous search returns at most `maxItems` PNRs (up to 800;
+  500 according to Sabre's change log), with no pages. When there are more, Sabre does not cut the
+  list: it answers `200206` with no PNRs, and the SDK throws `SabreTripSearchError` with
+  `reason: 'TOO_MANY_RESULTS'` (seen in CERT). Split the window and ask again.
+  `status: 'truncated'` covers the `200006` warning and the counters that Sabre's guide
+  describes, which have not been seen in a real response.
 - `anyBranch` is `true` by default: every PNR the PCC can see. With `false` you only get the
   PNRs that PCC created, and lose the ones created elsewhere and ticketed there.
 - A cancelled PNR still shows up with `searchType: 'ACTIVE'` (the default). `TripSearchTN`
@@ -604,8 +607,8 @@ const result = await legacy.withSession((session) =>
   `SabreTripSearchError`, a `SabreBusinessError` with `service: 'tripSearch'`, Sabre's
   `code` and `severity`, and a `reason`: `NO_PRIMARY_CRITERIA`, `CRITERIA_TOO_WEAK`,
   `TOO_MANY_RESULTS`, `SEARCH_TIMEOUT`, `PCC_NOT_ACCESSIBLE` (no Branch Access to that PCC)
-  or `UNKNOWN`. None of these errors has been seen in a real response yet: their shape comes from
-  Sabre's guide.
+  or `UNKNOWN`. Only `TOO_MANY_RESULTS` has been seen in a real response (CERT, `200206` with
+  `severity: 'WARNING'`); the shape of the others comes from Sabre's guide.
 
 ### Daily sales
 
@@ -884,8 +887,9 @@ fake.openSessions; // 0: the session was closed
   root `TimeStamp` (no default, like the request's `timeZone`). A consumer that passes another
   zone gets the window shifted and `TIMEZONE_MISMATCH`, as with Sabre. `anyBranch: false` returns
   only the PNRs created by that PCC, and `searchType` follows `pastDate`. Both edges of the window
-  count (an assumption of the fake). `tripSearch.limit` (800 by default) truncates, with
-  `TotalResults` and `200006`. `tripSearch.errors` forces errors in order, one per search, by
+  count (an assumption of the fake). More PNRs than `maxItems` give `200206` with no list, as
+  with Sabre. `tripSearch.limit` (800 by default) is the view's cap: only when `maxItems` is above
+  it and the PNRs too does the fake truncate, with `TotalResults` and `200006` (not seen in Sabre). `tripSearch.errors` forces errors in order, one per search, by
   `reason`. **Not simulated**: the delay between a change and its appearance.
 - **Not simulated**: PCCs in the queues (they are the same for any `pcc`) and the host's combination rules
   for `selection`.

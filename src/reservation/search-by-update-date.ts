@@ -32,7 +32,11 @@ export interface SearchByUpdateDateRequest {
   anyBranch?: boolean;
   /** `ACTIVE` (default), `INACTIVE` (PNR ya depurados, "Past Date") o `BOTH`. */
   searchType?: TripSearchType;
-  /** `MaxItemsReturned`, de 1 a 800. Default 800. */
+  /**
+   * `MaxItemsReturned`, de 1 a 800. Default 800. Si hay más PNR que esto, Sabre no corta: responde
+   * `200206` sin lista y el SDK lanza `SabreTripSearchError` con `TOO_MANY_RESULTS` (CERT,
+   * 2026-11-16). Hay que partir la ventana.
+   */
   maxItems?: number;
 }
 
@@ -57,7 +61,9 @@ export interface SearchByUpdateDateResult {
   /**
    * `truncated` si `totalResults > numberResults`, `NumberPages > 1` o llega la advertencia
    * `200006` ("Number of results exceeded view limit or requested PNRs limit"). No es un error:
-   * hay que partir la ventana y volver a pedir.
+   * hay que partir la ventana y volver a pedir. **No es lo que pasa al exceder `maxItems`**: ahí
+   * Sabre responde `200206` y el SDK lanza `TOO_MANY_RESULTS` (CERT, 2026-11-16). `truncated`
+   * queda para la forma que describe la guía, que todavía no se vio en Sabre (Q-136).
    */
   status: 'complete' | 'truncated';
   pcc: string;

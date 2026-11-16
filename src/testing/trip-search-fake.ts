@@ -21,9 +21,11 @@ export interface QueueFakeTripSearchReservation {
 export interface QueueFakeTripSearch {
   reservations?: readonly QueueFakeTripSearchReservation[];
   /**
-   * El tope de la vista. Default 800 (la guía; el change log dice 500). Con más resultados, la
-   * respuesta trae los primeros, `TotalResults` con el total y la advertencia `200006`, y el SDK
-   * da `status: 'truncated'`.
+   * El tope de la vista. Default 800 (la guía; el change log dice 500). Con más resultados que
+   * `maxItems` (y `maxItems` dentro del tope), responde `200206` sin lista, como Sabre en CERT
+   * (2026-11-16), y el SDK lanza `TOO_MANY_RESULTS`. Solo si `maxItems` pasa del tope y los
+   * resultados también, trae los primeros con `TotalResults` y la advertencia `200006`, y el SDK
+   * da `status: 'truncated'`: ese caso no se vio en Sabre (Q-136).
    */
   limit?: number;
   /** Errores forzados, en orden: cada búsqueda consume el primero que queda. */
@@ -154,13 +156,18 @@ export function createTripSearchHandler(options: QueueFakeTripSearch | undefined
     const to = instantOf(formatter, rq.before);
     const anyBranch = rq.anyBranch === 'true';
     const searchType = rq.searchType ?? 'ACTIVE';
-    const requested = Number(rq.maxItems ?? limit);
-    const cap = Math.min(Number.isInteger(requested) && requested > 0 ? requested : limit, limit);
+    const asked = Number(rq.maxItems ?? limit);
+    const requested = Number.isInteger(asked) && asked > 0 ? asked : limit;
+    const cap = Math.min(requested, limit);
 
     const visible = (pnr: Seeded) => pnr.createdBy === rq.pcc || (anyBranch && pnr.visibleTo.has(rq.pcc ?? ''));
     const ofType = (pnr: Seeded) => (searchType === 'BOTH' ? true : searchType === 'INACTIVE' ? pnr.pastDate : !pnr.pastDate);
     // Supuesto del fake: los dos bordes entran (la guía no lo dice).
     const matches = seeded.filter((pnr) => visible(pnr) && ofType(pnr) && pnr.updates.some((at) => at >= from && at <= to));
+    // Como Sabre en CERT (2026-11-16): con más resultados que `MaxItemsReturned`, error sin lista.
+    if (requested <= limit && matches.length > requested) {
+      return errorBody('200206', 'WARNING', `Too many results - specify more data; wanted: ${requested} , found: ${matches.length}`);
+    }
     const shown = matches.slice(0, cap);
     const notices = [
       ...(matches.length > cap ? ['<Error ErrorCode="200006" Severity="MINOR" ErrorMessage="Number of results exceeded view limit or requested PNRs limit"/>'] : []),

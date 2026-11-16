@@ -21,19 +21,24 @@ and moves to `latest` after BX3 tries it.
   local time, and the SDK converts with `Intl`. A string without a zone throws a `TypeError`.
   `anyBranch` is `true` by default. It never sends `ResultAction` (#250).
 - The result has `status: 'complete' | 'truncated'` (by the counters, `NumberPages > 1` or the
-  `200006` warning; truncation does not throw), deduplicated `reservations`, `warnings`
-  (`200005`, `200006`, `RESERVATION_ERROR` and `TIMEZONE_MISMATCH`), `respondedAt` in UTC
-  and `sabreLocalOffsetMinutes` (#250).
+  `200006` warning, as Sabre's guide describes; not seen in Sabre yet), deduplicated
+  `reservations`, `warnings` (`200005`, `200006`, `RESERVATION_ERROR` and `TIMEZONE_MISMATCH`),
+  `respondedAt` in UTC and `sabreLocalOffsetMinutes` (#250).
 - `SabreTripSearchError`, a `SabreBusinessError` (`service: 'tripSearch'`) with `reason`
   (`NO_PRIMARY_CRITERIA`, `CRITERIA_TOO_WEAK`, `TOO_MANY_RESULTS`, `SEARCH_TIMEOUT`,
   `PCC_NOT_ACCESSIBLE` or `UNKNOWN`) and `severity`, plus `TRIP_SEARCH_MAX_ITEMS` and the
   `SearchByUpdateDate*` types (#250).
+- More PNRs than `maxItems` throw `SabreTripSearchError` with `TOO_MANY_RESULTS`: Sabre answers
+  `200206` (`severity: 'WARNING'`) with no PNRs, it does not truncate (CERT, #265). Split the
+  window and ask again.
 - `sabre-client/testing`: the fake answers `Trip_SearchRQ` with `tripSearch` (PNRs seeded by
   creating PCC, the PCCs that can see them and their change instants; a configurable cap; forced
   errors) and `tripSearchTimeZone` (no default), so a wrong zone shifts the window as with Sabre.
-  It does not simulate the delay before a change shows up (#251).
+  More PNRs than `maxItems` give `200206`, as with Sabre (#265). It does not simulate the delay
+  before a change shows up (#251).
 - Anonymized `Trip_SearchRS` fixtures: real envelopes from CERT and envelopes built from the
-  guide for what was not seen in Sabre (#249).
+  guide for what was not seen in Sabre (#249), and the CERT run of
+  `scripts/validate-search-by-update-date.mjs` (#258).
 
 ### Changed
 

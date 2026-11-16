@@ -34,6 +34,7 @@ and moves to `latest` after BX3 tries it.
   It does not simulate the delay before a change shows up (#251).
 - Anonymized `Trip_SearchRS` fixtures: real envelopes from CERT and envelopes built from the
   guide for what was not seen in Sabre (#249).
+
 ### Changed
 
 - The published package now includes `CHANGELOG.md` (#252).

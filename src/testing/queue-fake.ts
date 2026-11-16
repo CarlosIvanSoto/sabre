@@ -14,6 +14,7 @@ import { signatureLocator } from '../queue/queue-place.js';
 import type { QueueActivityCounters } from '../queue/queue-activity.js';
 import { MAX_QUEUE_NUMBER, MESSAGE_QUEUE, MIN_QUEUE_NUMBER, type QueueRef, toQueueRef } from '../queue/queue-ref.js';
 import type { DailySalesTransaction } from '../reporting/daily-sales-summary.js';
+import { createTripSearchHandler, type QueueFakeTripSearch } from './trip-search-fake.js';
 import type {
   ReservationHistoryAccounting,
   ReservationHistoryFlightSegment,
@@ -127,6 +128,19 @@ export interface QueueFakeOptions {
    */
   dailySalesTimeZone?: string;
   /**
+   * Los PNR de `reservation.searchByUpdateDate` (ADR-033), cada uno con su PCC creador, los PCC
+   * que lo pueden ver y sus instantes de modificación; el tope de la vista y errores forzados.
+   * Necesita `tripSearchTimeZone`. No se simula el retraso entre un cambio y su aparición.
+   */
+  tripSearch?: QueueFakeTripSearch;
+  /**
+   * La zona IANA en que Sabre lee `UpdateDate@After`/`@Before` y escribe el `TimeStamp` de la
+   * raíz de `Trip_SearchRS`, p. ej. `'America/Mexico_City'`. **Sin default**, como el
+   * `timeZone` del request: un consumidor que pase otra zona ve la ventana corrida y
+   * `TIMEZONE_MISMATCH`, como con Sabre. Sin ella, `Trip_SearchRQ` no se simula.
+   */
+  tripSearchTimeZone?: string;
+  /**
    * Reservas para el cliente REST (`Sabre`), por localizador, sin pasar por `booking.create`. Las
    * que crea `booking.create` se suman solas, con localizadores `FAKEAA`, `FAKEAB`…
    */
@@ -156,6 +170,7 @@ export type QueueFakeCommand =
   | 'activity'
   | 'history'
   | 'dailySalesSummary'
+  | 'tripSearch'
   | BookingFakeCommand;
 
 export interface QueueFakeCall {
@@ -164,7 +179,7 @@ export interface QueueFakeCall {
   queue?: QueueRef;
   /** El localizador de `history` y de las llamadas REST de reserva y emisión. */
   locator?: string;
-  /** El PCC y la fecha que pidió `dailySalesSummary`, si los mandó. */
+  /** El PCC de `tripSearch`, y el PCC y la fecha que pidió `dailySalesSummary`, si los mandó. */
   pcc?: string;
   date?: string;
 }
@@ -279,6 +294,11 @@ function attr(value: unknown, name: string): string | undefined {
   return typeof found === 'string' ? found : undefined;
 }
 
+/** `{ [key]: value }` si hay valor (`exactOptionalPropertyTypes`). */
+function optional<K extends string>(key: K, value: string | undefined): { [P in K]?: string } {
+  return (value === undefined ? {} : { [key]: value }) as { [P in K]?: string };
+}
+
 function escape(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -373,7 +393,7 @@ function toPnr(item: QueueFakeItem, label: string): Pnr & Omit<Entry, 'locator'>
   };
 }
 
-function envelope(action: string, conversationId: string, token: string | undefined, body: string): string {
+function envelope(action: string, conversationId: string, token: string | undefined, body: string, timestamp?: Date): string {
   const security =
     token === undefined
       ? ''
@@ -383,6 +403,8 @@ function envelope(action: string, conversationId: string, token: string | undefi
     '<soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/"><soap-env:Header>',
     '<eb:MessageHeader xmlns:eb="http://www.ebxml.org/namespaces/messageHeader" eb:version="1.0" soap-env:mustUnderstand="1">',
     `<eb:ConversationId>${escape(conversationId)}</eb:ConversationId><eb:Action>${escape(action)}</eb:Action>`,
+    // `eb:Timestamp` en UTC y sin zona, como Sabre: solo en las respuestas que el SDK lo lee.
+    timestamp === undefined ? '' : `<eb:MessageData><eb:Timestamp>${timestamp.toISOString().slice(0, 19)}</eb:Timestamp></eb:MessageData>`,
     '</eb:MessageHeader>',
     security,
     `</soap-env:Header><soap-env:Body>${body}</soap-env:Body></soap-env:Envelope>`,
@@ -631,6 +653,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
       dailySales.set(`${pccKey} ${date}`, toDailySalesDay(day, `dailySales['${pccKey}']['${date}']`));
     }
   }
+  const tripSearch = createTripSearchHandler(options.tripSearch, options.tripSearchTimeZone, now);
   const histories = new Map<string, QueueFakeHistoryTransaction[]>();
   for (const [locator, transactions] of Object.entries(options.histories ?? {})) {
     if (!LOCATOR.test(locator)) fail(`histories['${locator}']: la clave debe ser un localizador de 6 caracteres alfanuméricos en mayúscula`);
@@ -1121,6 +1144,32 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
         return reply('TravelItineraryHistoryLLSRS', session, token, history(session, rq));
       case 'TKT_TravelAgencyReportsRQ':
         return reply('TKT_TravelAgencyReportsRS', session, token, dailySalesSummary(rq, text(messageHeader?.CPAId) ?? ''));
+      case 'Trip_SearchRQ': {
+        const read = node(node(rq.ReadRequests)?.ReservationReadRequest);
+        const update = node(node(read?.DateCriteria)?.UpdateDate);
+        const pos = node(read?.PosCriteria);
+        const returnOptions = node(read?.ReturnOptions);
+        const pcc = text(pos?.Pcc);
+        calls.push({ command: 'tripSearch', ...(pcc === undefined ? {} : { pcc }) });
+        const searchBody = tripSearch({
+          ...optional('after', attr(update, 'After')),
+          ...optional('before', attr(update, 'Before')),
+          ...optional('pcc', pcc),
+          ...optional('anyBranch', attr(pos, 'AnyBranch')),
+          ...optional('searchType', attr(returnOptions, 'SearchType')),
+          ...optional('maxItems', attr(returnOptions, 'MaxItemsReturned')),
+        });
+        if (searchBody !== undefined) return { status: 200, body: envelope('Trip_SearchRS', session.conversationId, token, searchBody, now()) };
+        return {
+          status: 500,
+          body: envelope(
+            'ErrorRS',
+            conversationId,
+            token,
+            '<soap-env:Fault><faultcode>soap-env:Client.InvalidAction</faultcode><faultstring>sabre-client/testing: Trip_SearchRQ no está simulado sin tripSearchTimeZone</faultstring></soap-env:Fault>',
+          ),
+        };
+      }
       default:
         return {
           status: 500,

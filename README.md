@@ -820,7 +820,17 @@ fake.openSessions; // 0: the session was closed
   (an IANA zone, `'UTC'` by default). A PCC or day that is not seeded gives an empty `complete`
   report. The `documentType` filter is simulated, the other filters are not, and `totals` come
   back empty.
-- **Not simulated**: PCCs (the queues are the same for any `pcc`) and the host's combination rules
+- `reservation.searchByUpdateDate`: `tripSearch.reservations` seeds the PNRs, each with its
+  `locator`, the PCC that created it (`createdBy`), the other PCCs that can see it
+  (`visibleTo`), the instants it changed (`updatedAt`, one or several) and `pastDate`. It needs
+  `tripSearchTimeZone`, the IANA zone in which Sabre reads `After`/`Before` and writes the
+  root `TimeStamp` (no default, like the request's `timeZone`). A consumer that passes another
+  zone gets the window shifted and `TIMEZONE_MISMATCH`, as with Sabre. `anyBranch: false` returns
+  only the PNRs created by that PCC, and `searchType` follows `pastDate`. Both edges of the window
+  count (an assumption of the fake). `tripSearch.limit` (800 by default) truncates, with
+  `TotalResults` and `200006`. `tripSearch.errors` forces errors in order, one per search, by
+  `reason`. **Not simulated**: the delay between a change and its appearance.
+- **Not simulated**: PCCs in the queues (they are the same for any `pcc`) and the host's combination rules
   for `selection`.
 - `queueFixtures` holds the anonymized responses recorded in production (`walk`, `emptyQueue`,
   `place`, …), as `{ operation, status, body }`. Each one has its own locator aliases (`walk`:

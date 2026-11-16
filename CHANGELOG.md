@@ -7,6 +7,34 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-16
+
+PNR search by update date, the synchronization entry point BX3 asked for (ADR-033). Everything is
+new and optional: there are no breaking changes. It is published under the `next` dist-tag first,
+and moves to `latest` after BX3 tries it.
+
+### Added
+
+- `session.reservation.searchByUpdateDate` (Search For Itineraries, `Trip_SearchRQ` 4.5.0, view
+  `TripSearchTN`): the locators of the PCC's PNRs that changed in a window. `from` and `to` are
+  instants and `timeZone` (IANA) is required, with no default: Sabre reads `After`/`Before` in
+  local time, and the SDK converts with `Intl`. A string without a zone throws a `TypeError`.
+  `anyBranch` is `true` by default. It never sends `ResultAction` (#250).
+- The result has `status: 'complete' | 'truncated'` (by the counters, `NumberPages > 1` or the
+  `200006` warning; truncation does not throw), deduplicated `reservations`, `warnings`
+  (`200005`, `200006`, `RESERVATION_ERROR` and `TIMEZONE_MISMATCH`), `respondedAt` in UTC
+  and `sabreLocalOffsetMinutes` (#250).
+- `SabreTripSearchError`, a `SabreBusinessError` (`service: 'tripSearch'`) with `reason`
+  (`NO_PRIMARY_CRITERIA`, `CRITERIA_TOO_WEAK`, `TOO_MANY_RESULTS`, `SEARCH_TIMEOUT`,
+  `PCC_NOT_ACCESSIBLE` or `UNKNOWN`) and `severity`, plus `TRIP_SEARCH_MAX_ITEMS` and the
+  `SearchByUpdateDate*` types (#250).
+- `sabre-client/testing`: the fake answers `Trip_SearchRQ` with `tripSearch` (PNRs seeded by
+  creating PCC, the PCCs that can see them and their change instants; a configurable cap; forced
+  errors) and `tripSearchTimeZone` (no default), so a wrong zone shifts the window as with Sabre.
+  It does not simulate the delay before a change shows up (#251).
+- Anonymized `Trip_SearchRS` fixtures: real envelopes from CERT and envelopes built from the
+  guide for what was not seen in Sabre (#249).
+
 ## [0.7.0] - 2026-11-13
 
 Ticket issuance and void (flow W4) and the day's sales report. It has one breaking change, in
@@ -430,7 +458,8 @@ and queues). Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 - The whole `0.2.4` API. There is no compatibility layer.
 
-[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.0...v0.5.1

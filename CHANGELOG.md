@@ -34,6 +34,15 @@ and moves to `latest` after BX3 tries it.
   It does not simulate the delay before a change shows up (#251).
 - Anonymized `Trip_SearchRS` fixtures: real envelopes from CERT and envelopes built from the
   guide for what was not seen in Sabre (#249).
+### Changed
+
+- The published package now includes `CHANGELOG.md` (#252).
+
+### Docs
+
+- `SabreUncertainOutcomeError` in `booking.cancel` only comes with `flightTicketOperation:
+  'VOID'`. Without `VOID`, `END_TRANSACTION_PROBLEM` is still a `SabreWarning`, a `5xx` or a
+  network failure a `SabreGatewayError`, and an abort an `AbortError`, as in `0.6.0` (#252).
 
 ## [0.7.0] - 2026-11-13
 

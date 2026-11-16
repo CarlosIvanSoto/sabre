@@ -364,6 +364,12 @@ result.voidedTickets; // ['0060000000001']
   request was sent or `END_TRANSACTION_PROBLEM` throw `SabreUncertainOutcomeError`
   (`operation: 'booking.cancel'`): it is not known whether the tickets were voided. Check with
   `sabre.tickets.verify` (a voided ticket is `TV`) or `booking.get` before retrying.
+- **`SabreUncertainOutcomeError` only comes with `flightTicketOperation: 'VOID'`.** A cancel without
+  `VOID` behaves as before: `END_TRANSACTION_PROBLEM` arrives as a `SabreWarning` in `warnings`, a
+  `5xx` or a network failure throws `SabreGatewayError`, and an abort throws the `AbortError` as
+  is, all without an automatic retry. Such a cancel may still have gone through: treat those cases
+  as uncertain and check with `booking.get` before retrying. Repeating a cancel on a booking that
+  is already empty throws `NO_ITEMS_CANCELLED`.
 - `VOID` on a booking without tickets throws `NO_ITEMS_CANCELLED` with `UNABLE_TO_VOID_TICKET`
   and **cancels nothing**. For a booking that was never issued, cancel without `VOID`.
 - A voided sale stays in the day's sales as a `SALE` with `documentStatusCode: 'V'`, and does not

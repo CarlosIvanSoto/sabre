@@ -364,6 +364,12 @@ result.voidedTickets; // ['0060000000001']
   el request ya mandado o `END_TRANSACTION_PROBLEM` lanzan `SabreUncertainOutcomeError`
   (`operation: 'booking.cancel'`): no se sabe si se anularon los boletos. Verifica con
   `sabre.tickets.verify` (un boleto anulado queda en `TV`) o con `booking.get` antes de reintentar.
+- **`SabreUncertainOutcomeError` solo sale con `flightTicketOperation: 'VOID'`.** Un cancel sin
+  `VOID` sigue como antes: `END_TRANSACTION_PROBLEM` llega como `SabreWarning` en `warnings`, un
+  `5xx` o un fallo de red lanzan `SabreGatewayError`, y un abort lanza el `AbortError` tal cual,
+  todo sin reintento automático. Ese cancel igual pudo haberse hecho: trata esos casos como
+  inciertos y verifica con `booking.get` antes de reintentar. Repetir un cancel sobre una reserva
+  ya vacía lanza `NO_ITEMS_CANCELLED`.
 - `VOID` sobre una reserva sin boletos lanza `NO_ITEMS_CANCELLED` con `UNABLE_TO_VOID_TICKET` y
   **no cancela nada**. Para una reserva que nunca se emitió, cancela sin `VOID`.
 - Una venta anulada sigue en las ventas del día como `SALE` con `documentStatusCode: 'V'`, y no

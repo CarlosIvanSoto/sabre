@@ -2,7 +2,8 @@
 // Sobres sintéticos de `GetReservationRS` y `UpdateReservationRS` (STL 1.19) para ADR-034 (#267).
 // Salen de los ejemplos oficiales de Update Itinerary 1.19.22 en Developer Hub (sabre-wiki:
 // raw/sources/update-itinerary-modify-air-segment.md, «Change Status», y
-// raw/sources/update-itinerary-cancel-air-segments-and-add-remarks.md), metidos en el sobre SOAP de
+// raw/sources/update-itinerary-cancel-air-segments-and-add-remarks.md; los errores, de
+// raw/sources/update-itinerary-errors.md), metidos en el sobre SOAP de
 // una respuesta real ya anonimizada (test/fixtures/trip-search.sandbox-validate.json). No llama a
 // Sabre: ninguno se vio en Sabre, y U.6 (#272) trae la primera respuesta real.
 //
@@ -130,6 +131,12 @@ const updateRS = (rows, results) =>
   envelope('UpdateReservationRQ', `<stl19:UpdateReservationRS ${NS} Version="1.19.0"><stl19:Success>OK</stl19:Success>${reservation(rows, AFTER)}${results}</stl19:UpdateReservationRS>`);
 const deleted = (ids) => `<stl19:Results>${ids.map((_, index) => `<stl19:UpdateResult UpdateId="${index + 1}" Status="SUCCESS"><stl19:Item op="D"/></stl19:UpdateResult>`).join('')}</stl19:Results>`;
 
+/** Un error STL: `Errors/Error` con `Code`, `Message` y `Severity` como elementos (Sample Error Responses). */
+const stlError = (root, code, message, severity = 'MODERATE') =>
+  envelope(root.replace(/RS$/, 'RQ'), `<stl19:${root} ${NS} Version="1.19.0"><stl19:Errors><stl19:Error><stl19:Code>${code}</stl19:Code><stl19:Message>${message}</stl19:Message><stl19:Severity>${severity}</stl19:Severity></stl19:Error></stl19:Errors></stl19:${root}>`);
+const ERRORS = 'Update Itinerary 1.19.22, Errors: la forma es la de Sample Error Responses (GetReservationRS, Code/Message/Severity como elementos, sin Success)';
+const SAME = 'No hay ejemplo oficial de UpdateReservationRS con error: se supone la misma forma, con el prefijo stl19 de los ejemplos de éxito.';
+
 const MODIFY = 'Update Itinerary 1.19.22, Modify an Air Segment, «Change Status» (MHTFNG)';
 const CANCEL = 'Update Itinerary 1.19.22, Cancel Air Segments and Add Remarks (TSGZJC)';
 const PAIR = 'El vuelo viejo y el TK nuevo (una hora más tarde) son supuestos: el ejemplo oficial solo tiene TK.';
@@ -140,6 +147,7 @@ const get = [
   ['tk-hx', PNRS['tk-hx'], `${MODIFY}, armado: como tk-un, con el vuelo viejo en HX. ${PAIR}`],
   ['tk-un-hx', PNRS['tk-un-hx'], `${MODIFY}, armado: dos cambios de horario seguidos, con el primer vuelo en UN (id 8), el segundo en HX (id 10), el vigente en TK (id 12) y la vuelta en HK (id 9). ${PAIR}`],
   ['hk-only', PNRS['hk-only'], `${MODIFY}, armado: los dos segmentos en HK y ningún TK (para noop).`],
+  ['error-pnr-not-found', null, `${ERRORS}: «Invalid Locator in RQ message» tal cual (700226, MODERATE), con el prefijo stl19 de los ejemplos de éxito en vez de ns3.`],
   ['tk-kk', PNRS['tk-kk'], `${MODIFY}, armado: un TK (id 8) y un KK (id 9). Qué hace CONFIRM-ALL con un KK no está documentado (Q-139).`],
 ];
 const update = [
@@ -149,6 +157,10 @@ const update = [
   ['delete-un', updateRS([['out', 10, 'TK', later], ['back', 9, 'HK']], deleted([8])), `${CANCEL}, armado sobre get tk-un: ProductUpdate id="8" op="D" borra el UN y queda un UpdateResult SUCCESS con Item op="D", como en el ejemplo. Supuesto: op="D" borra un UN igual que el HK del ejemplo (Q-140).`],
   ['delete-hx', updateRS([['out', 10, 'TK', later], ['back', 9, 'HK']], deleted([8])), `${CANCEL}, armado sobre get tk-hx: borra el HX (id 8), con un UpdateResult SUCCESS. Supuesto: op="D" borra un HX igual que un HK (Q-140).`],
   ['delete-un-hx', updateRS([['out', 12, 'TK', latest], ['back', 9, 'HK']], deleted([8, 10])), `${CANCEL}, armado sobre get tk-un-hx: dos ProductUpdate op="D" (ids 8 y 10, UpdateId 1 y 2) en un solo request, con un UpdateResult SUCCESS por cada uno, como el borrado y el remark del ejemplo. Supuesto (Q-140).`],
+  ['error-orchestration-cancel', stlError('UpdateReservationRS', '700432', 'Reservation Orchestration Error Caused by: [Unable to cancel segment : Host return not valid response: UNABLE TO CANCEL - AIRLINE DENIES CANCELLATION]'), `${ERRORS}. Código y texto de Fault Errors (700432, el ejemplo oficial es una baja rechazada). Severity supuesta (MODERATE, como en los ejemplos). ${SAME}`],
+  ['error-aaa-modified', stlError('UpdateReservationRS', '700411', 'The PNR in the AAA has been modified'), `${ERRORS}. Código y texto de Fault Errors (700411). Severity supuesta. ${SAME}`],
+  ['error-no-pnr-in-aaa', stlError('UpdateReservationRS', '700408', 'No PNR in AAA'), `${ERRORS}. Código y texto de Fault Errors (700408: un Update Stateful sin Get previo). Severity supuesta. ${SAME}`],
+  ['error-ignore-or-commit', stlError('UpdateReservationRS', '500810', 'UNABLE TO MODIFY - PLEASE IGNORE OR COMMIT CURRENT TRANSACTION'), `${ERRORS}. Código y texto de Error Messages (500810, tabla de lodging; se supone que también sale con un segmento aéreo). Severity supuesta. ${SAME}`],
   ['delete-not-applied', updateRS([['out', 8, 'UN'], ['out', 10, 'TK', later], ['back', 9, 'HK']], deleted([8])), `${CANCEL}, armado sobre get tk-un: Success y UpdateResult SUCCESS pero el id 8 sigue en el PNR, para NOT_APPLIED. Nunca se vio así en Sabre.`],
 ];
 
@@ -164,5 +176,6 @@ const write = (name, operation, cases, source) => {
   console.log(`${name}: ${cases.length} sobres`);
 };
 const BASE = 'Sobres armados para ADR-034 (#267) a partir de los ejemplos oficiales de Update Itinerary 1.19.22, en el sobre SOAP de trip-search.sandbox-validate.json. Ninguno se vio en Sabre (ver source de cada uno).';
-write('get-reservation', 'reservation.getReservation', get.map(([label, rows, from]) => [label, getRS(rows), from]), BASE);
+const getBody = (label, rows) => (rows === null ? stlError('GetReservationRS', '700226', 'PNR not found, caused by [PNR not found, code: 100123, severity: MODERATE]') : getRS(rows));
+write('get-reservation', 'reservation.getReservation', get.map(([label, rows, from]) => [label, getBody(label, rows), from]), BASE);
 write('update-reservation', 'reservation.updateReservation', update, BASE);

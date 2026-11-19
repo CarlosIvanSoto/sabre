@@ -25,6 +25,8 @@ describe.each([
     expect(XMLValidator.validate(response.body)).toBe(true);
     expect(untrimmedPayload(response.body)).toBeDefined();
     expect(response.body).toContain(`<stl19:${root} `);
+    // Un error STL no trae Success; un éxito no trae Errors.
+    expect(response.body.includes('<stl19:Errors>')).toBe(response.label.startsWith('error-'));
     expect(response.source.length).toBeGreaterThan(20);
     // El Air y el Product (or114) de cada segmento dicen el mismo estado.
     const air = statuses(response.body).map(([, status]) => status);
@@ -37,6 +39,21 @@ describe.each([
     for (const value of ['MHTFNG', 'TSGZJC', 'MHTGWH', 'FF9A', 'FSG', '"MDG"', '>MDG<', 'ADULT', '123345']) expect(text).not.toContain(value);
     for (const match of text.matchAll(/RecordLocator>(\w+)</g)) expect(match[1]).toBe('AAAAAA');
     for (const match of text.matchAll(/PseudoCityCode=\\"(\w+)\\"/g)) expect(match[1]).toBe('XXXX');
+  });
+});
+
+describe('los errores', () => {
+  it.each([
+    [getReservation, 'error-pnr-not-found', '700226'],
+    [updateReservation, 'error-orchestration-cancel', '700432'],
+    [updateReservation, 'error-aaa-modified', '700411'],
+    [updateReservation, 'error-no-pnr-in-aaa', '700408'],
+    [updateReservation, 'error-ignore-or-commit', '500810'],
+  ])('%#: Errors/Error con Code, Message y Severity como elementos, sin Success ni Reservation', (fixture, label, code) => {
+    const xml = body(fixture as Fixture, label);
+    expect(xml).toMatch(new RegExp(`<stl19:Errors><stl19:Error><stl19:Code>${code}</stl19:Code><stl19:Message>[^<]+</stl19:Message><stl19:Severity>MODERATE</stl19:Severity></stl19:Error></stl19:Errors>`));
+    expect(xml).not.toContain('<stl19:Success>');
+    expect(xml).not.toContain('<stl19:Reservation ');
   });
 });
 

@@ -112,8 +112,12 @@ export class AirSegmentUpdate {
    * 3. Escritura con el ET en la misma llamada. Sin ningún reintento, tampoco el esquema de
    * `PREVIOUS ENTRY ACTIVE` del transporte: sale un solo `UpdateReservationRQ`. Devuelve la
    * respuesta solo si trae `Success` y `Reservation`; lo demás lanza (no escrito o incierto).
+   *
+   * `deleted` son los ids que borran los `items` (`removeAirSegments`). Con `Errors` y sin
+   * `Success`, si hay evidencia de que algo se aplicó (un `UpdateResult` `SUCCESS`, o un `deleted`
+   * que ya no está en `Reservation`), es incierto con `PARTIALLY_APPLIED`, sin IG.
    */
-  async write(items: readonly string[], receivedFrom: string): Promise<{ response: SoapResponse; after: StlReservationResponse & { segments: ReservationAirSegment[] } }> {
+  async write(items: readonly string[], receivedFrom: string, deleted: readonly string[] = []): Promise<{ response: SoapResponse; after: StlReservationResponse & { segments: ReservationAirSegment[] } }> {
     const { signal, onRawRequest } = this.#options;
     signal?.throwIfAborted();
     let sent = false;
@@ -148,6 +152,10 @@ export class AirSegmentUpdate {
     }
     if (!after.success) {
       if (after.errors.length === 0) throw this.#uncertain('UNPARSEABLE', 'UpdateReservationRS sin Success ni Errors', response.raw);
+      const applied = appliedEvidence(after, deleted);
+      if (applied !== undefined) {
+        throw this.#uncertain('PARTIALLY_APPLIED', `Errors (${after.errors.map((e) => e.code).join(', ')}) con ${applied}`, response.raw);
+      }
       const pea = after.errors.find((e) => isPreviousEntryActive(e.message) || isPreviousEntryActive(e.code));
       if (pea !== undefined) throw this.#uncertain('PREVIOUS_ENTRY_ACTIVE', `${pea.code} ${pea.message}`, response.raw);
       // Sabre no escribió: se descarta lo que quedó pendiente en el AAA.
@@ -214,6 +222,34 @@ export class AirSegmentUpdate {
       });
     }
   }
+}
+
+/**
+ * Evidencia, en un `UpdateReservationRS` con `Errors`, de que alguna parte se aplicó: los
+ * `UpdateResult` `SUCCESS`, o los `deleted` que ya no están en `Reservation`. `undefined` si no hay.
+ */
+function appliedEvidence(after: StlReservationResponse, deleted: readonly string[]): string | undefined {
+  const succeeded = after.updateResults.filter((result) => result.status === 'SUCCESS').map((result) => result.updateId);
+  if (succeeded.length > 0) return `UpdateResult SUCCESS en UpdateId ${succeeded.join(', ')}`;
+  if (after.segments === undefined) return undefined;
+  const present = new Set(after.segments.map((segment) => segment.id));
+  const gone = deleted.filter((id) => !present.has(id));
+  return gone.length > 0 ? `${gone.join(', ')} ya no está en el PNR` : undefined;
+}
+
+/**
+ * `UNEXPECTED_CHANGE` si `changed` trae ids que no están en `requested`: Sabre tocó (borró o
+ * cambió de estado) un segmento que no se pidió. `undefined` si no.
+ */
+export function unexpectedChange(changed: readonly string[], requested: readonly string[], statusOf: (id: string) => string | undefined): ReservationUpdateWarning | undefined {
+  const asked = new Set(requested);
+  const extra = changed.filter((id) => !asked.has(id));
+  if (extra.length === 0) return undefined;
+  return {
+    code: 'UNEXPECTED_CHANGE',
+    message: `Sabre cambió segmentos que no se pidieron: ${extra.map((id) => `${id} (${statusOf(id) ?? 'ya no está'})`).join(', ')}`,
+    segmentIds: extra,
+  };
 }
 
 /** Los segmentos después del cambio, con el `previousStatus` de la lectura previa. */

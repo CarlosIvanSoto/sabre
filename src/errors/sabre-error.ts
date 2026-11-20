@@ -168,7 +168,14 @@ export type SabreUncertainOutcomeReason =
    * reintentos internos y una entrada del mismo request puede seguir en curso. Como SOAP fault es
    * `GATEWAY_5XX`.
    */
-  | 'PREVIOUS_ENTRY_ACTIVE';
+  | 'PREVIOUS_ENTRY_ACTIVE'
+  /**
+   * Una escritura con varios `ProductUpdate op="D"` (`reservation.removeAirSegments`) que Sabre
+   * rechazó con `Errors`, pero con evidencia de que alguna baja se aplicó: un
+   * `Results/UpdateResult` `SUCCESS`, o un segmento pedido que ya no está en `Reservation`. Sin
+   * `IgnoreTransaction`: lo commiteado no se deshace.
+   */
+  | 'PARTIALLY_APPLIED';
 
 /** Un boleto que Sabre alcanzó a devolver en una respuesta incierta. */
 export interface SabreUncertainTicket {

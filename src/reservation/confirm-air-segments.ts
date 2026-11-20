@@ -7,6 +7,7 @@ import {
   AirSegmentUpdate,
   type AirSegmentUpdateContext,
   type AirSegmentUpdateOptions,
+  unexpectedChange,
   validateCommon,
   validateIds,
   withPreviousStatus,
@@ -39,9 +40,15 @@ export interface ConfirmAirSegmentsResult {
    * la lectura previa. Con `'noop'`, los de la lectura previa.
    */
   segments: ReservationAirSegment[];
-  /** Los ids de los segmentos cuyo `status` cambió. Vacío con `'noop'`. */
+  /**
+   * Los ids de los segmentos cuyo `status` cambió. Vacío con `'noop'`. Si trae otros que los
+   * `expectedSegmentIds` (un `KK` que pasó a `HK`, por ejemplo), sale `UNEXPECTED_CHANGE`.
+   */
   changed: string[];
-  /** `NOT_APPLIED` si un segmento esperado no quedó en `HK`, y los `Warnings` de Sabre. */
+  /**
+   * `NOT_APPLIED` si un segmento esperado no quedó en `HK`, `UNEXPECTED_CHANGE` si `changed` trae
+   * segmentos no esperados, y los `Warnings` de Sabre.
+   */
   warnings: ReservationUpdateWarning[];
   /** `eb:Timestamp` de la última respuesta de Sabre, en ISO 8601 UTC. Falta si Sabre no lo manda. */
   respondedAt?: string;
@@ -102,6 +109,8 @@ export async function confirmAirSegments(
       segmentIds: notApplied,
     });
   }
+  const unexpected = unexpectedChange(changed, expected, (id) => now.get(id));
+  if (unexpected !== undefined) warnings.push(unexpected);
   return { status: 'confirmed', locator, segments, changed, warnings, ...respondedAtField(response.raw) };
 }
 

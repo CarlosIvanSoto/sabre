@@ -8,13 +8,22 @@ import { rejection } from './soap-helpers.js';
 
 const NOW = new Date('2026-11-20T18:00:00Z');
 
-function client(options: QueueFakeOptions) {
+/** `responses`, si se pasa, junta el cuerpo de cada respuesta del fake. */
+function client(options: QueueFakeOptions, responses?: string[]) {
   const fake = createQueueFake({ now: () => NOW, ...options });
+  const fetch: typeof fake.fetch =
+    responses === undefined
+      ? fake.fetch
+      : async (input, init) => {
+          const response = await fake.fetch(input, init);
+          responses.push(await response.clone().text());
+          return response;
+        };
   const legacy = new SabreLegacy({
     environment: 'production',
     authVersion: 'v2',
     credentials: { username: 'V1:7971:ABCD:AA', password: 'epr-pass' },
-    fetch: fake.fetch,
+    fetch,
     retry: { maxRetries: 0 },
   });
   return { fake, legacy };
@@ -236,11 +245,12 @@ async function remove(options: QueueFakeOptions, request: Partial<RemoveAirSegme
 }
 
 async function removeRejection(options: QueueFakeOptions, request: Partial<RemoveAirSegmentsRequest> = {}) {
-  const { fake, legacy } = client(options);
+  const responses: string[] = [];
+  const { fake, legacy } = client(options, responses);
   const session = await legacy.openSession();
   const error = await rejection(session.reservation.removeAirSegments({ ...REMOVE, ...request }));
   await session.close();
-  return { fake, error };
+  return { fake, error, responses };
 }
 
 describe('fake: reservation.removeAirSegments, resultado', () => {
@@ -325,6 +335,74 @@ describe('fake: reservation.removeAirSegments, inciertos', () => {
   });
 });
 
+// Las formas de ADR-034, precisiones 12 y 13 (#269). Por ahora estos tests miran el estado del fake;
+// lo que el SDK lanza o avisa con ellas (PARTIALLY_APPLIED, UNEXPECTED_CHANGE) se prueba con sus tipos.
+describe('fake: desenlaces de baja parcial, efectos laterales y UpdateResult@Status', () => {
+  const both = () => ({ locator: 'AAAAAA', segments: [segment('8', 'UN'), segment('10', 'HX'), segment('9', 'HK')] });
+
+  it('{ error, removed }: guarda solo las bajas de removed y responde con Errors', async () => {
+    const { fake, error } = await removeRejection({ reservationUpdate: { reservations: [both()], outcomes: [{ error: { code: '700432' }, removed: ['8'] }] } }, { segmentIds: ['8', '10'] });
+    expect(error).toBeInstanceOf(Error);
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['10/1:HX', '9/2:HK']);
+  });
+
+  it('{ error, removed } responde Errors con el PNR sin las bajas guardadas y su UpdateResult SUCCESS', async () => {
+    const recorded: string[] = [];
+    const { legacy } = client({ reservationUpdate: { reservations: [both()], outcomes: [{ error: { code: '700432' }, removed: ['8'] }] } }, recorded);
+    const session = await legacy.openSession();
+    await rejection(session.reservation.removeAirSegments({ ...REMOVE, segmentIds: ['8', '10'] }));
+    await session.close();
+    const body = recorded.find((text) => text.includes('UpdateReservationRS')) ?? '';
+    expect(body).toContain('700432');
+    expect(body).not.toContain('<stl19:Success>');
+    expect(body).not.toMatch(/<stl19:Air id="8"/);
+    expect(body.match(/<stl19:UpdateResult [^>]*Status="SUCCESS"/g)).toHaveLength(1);
+  });
+
+  it('{ error, removed } con un id que no es una baja de ese Update: no está simulado y no escribe', async () => {
+    const { fake, error, responses } = await removeRejection({ reservationUpdate: { reservations: [both()], outcomes: [{ error: { code: '700432' }, removed: ['9'] }] } });
+    expect(error).toBeInstanceOf(SabreUncertainOutcomeError);
+    expect(responses.join('')).toContain('removed con un id que no es una baja de ese Update');
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:UN', '10/2:HX', '9/3:HK']);
+  });
+
+  it('{ sideEffects } en una confirmación: un segmento no pedido cambia de status', async () => {
+    const { fake, legacy } = client({ reservationUpdate: { reservations: [pnr([segment('8', 'TK'), segment('9', 'HK')])], outcomes: [{ sideEffects: { '9': 'UC' } }] } });
+    const session = await legacy.openSession();
+    const result = await session.reservation.confirmAirSegments({ ...REQUEST, expectedSegmentIds: ['8'] });
+    await session.close();
+    expect(result.changed).toEqual(['8', '9']);
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:HK', '9/2:UC']);
+  });
+
+  it('{ sideEffects } en una baja: un HK no pedido desaparece y los demás se renumeran', async () => {
+    const { fake, result } = await remove({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ sideEffects: { '9': null } }] } });
+    expect(result.status).toBe('removed');
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['10/1:TK']);
+  });
+
+  it('{ sideEffects } de un id que no está en el PNR: no está simulado', async () => {
+    const { error, responses } = await removeRejection({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ sideEffects: { '77': null } }] } });
+    expect(error).toBeInstanceOf(SabreUncertainOutcomeError);
+    expect(responses.join('')).toContain("sideEffects de un segmento que no está en el PNR ('77')");
+  });
+
+  it.each([undefined, 'FAILED'])('{ notApplied: { status: %s } }: Success sin cambios y NOT_APPLIED', async (status) => {
+    const { fake, result } = await remove({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ notApplied: status === undefined ? {} : { status } }] } });
+    expect(result.warnings).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'NOT_APPLIED' })]));
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:UN', '10/2:TK', '9/3:HK']);
+  });
+
+  it('{ notApplied: { status } } responde ese UpdateResult@Status', async () => {
+    const recorded: string[] = [];
+    const { legacy } = client({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ notApplied: { status: 'FAILED' } }] } }, recorded);
+    const session = await legacy.openSession();
+    await session.reservation.removeAirSegments(REMOVE);
+    await session.close();
+    expect(recorded.find((body) => body.includes('UpdateReservationRS'))).toMatch(/<stl19:UpdateResult UpdateId="[^"]+" Status="FAILED">/);
+  });
+});
+
 describe('fake: confirmar y después borrar, como un cambio de horario completo', () => {
   it('confirmAirSegments y removeAirSegments en la misma sesión', async () => {
     const { fake, legacy } = client({ reservationUpdate: { reservations: [scheduleChange()] } });
@@ -349,6 +427,10 @@ describe('fake: reservation.confirmAirSegments, siembra', () => {
     [{ outcomes: [{ uncertain: 'NOT_COMMITTED' }] }, /uncertain/],
     [{ outcomes: [{ error: {} }] }, /code/],
     [{ outcomes: ['otro'] }, /applied/],
+    [{ outcomes: [{ notApplied: { status: '' } }] }, /notApplied.status/],
+    [{ outcomes: [{ sideEffects: {} }] }, /sideEffects/],
+    [{ outcomes: [{ sideEffects: { '9': 'hk' } }] }, /ActionCode/],
+    [{ outcomes: [{ error: { code: '700432' }, removed: [] }] }, /removed/],
   ])('una siembra inválida lanza TypeError al crear el fake (%#)', (reservationUpdate, message) => {
     expect(() => createQueueFake({ reservationUpdate: reservationUpdate as NonNullable<QueueFakeOptions['reservationUpdate']> })).toThrow(message);
   });

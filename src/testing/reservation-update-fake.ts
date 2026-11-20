@@ -53,10 +53,18 @@ export type QueueFakeReservationUpdateUncertainReason =
  * El desenlace de un `UpdateReservationRQ`. Sin forzar, `'applied'`.
  * - `'applied'`: escribe y responde `Success` con el PNR: `CONFIRM-ALL` pasa los `TK` a `HK`, y
  *   cada `ProductUpdate op="D"` borra su segmento.
- * - `'notApplied'`: responde `Success` con el PNR sin cambios; el SDK avisa `NOT_APPLIED`.
- * - `{ error }`: un `Errors/Error` de Sabre sin `Success`, sin escribir. Con `700432`, `700411`,
- *   `700408` y `500810`, el texto por defecto es el de las fuentes. Después el SDK manda
- *   `IgnoreTransactionLLSRQ`.
+ * - `'notApplied'`: responde `Success` con el PNR sin cambios; el SDK avisa `NOT_APPLIED`. Cada
+ *   baja trae su `UpdateResult` con `Status="SUCCESS"`, como la fixture `delete-not-applied`.
+ * - `{ notApplied: { status? } }`: igual, pero el `UpdateResult@Status` de cada baja es `status`
+ *   (p. ej. `'FAILED'`), que también suma a `NOT_APPLIED` (ADR-034, precisión 13).
+ * - `{ sideEffects }`: escribe lo pedido y además cambia segmentos que nadie pidió, por `Air@id`:
+ *   `null` lo borra y un `ActionCode` le pone ese status. Para forzar `UNEXPECTED_CHANGE`
+ *   (precisión 13), en los dos métodos.
+ * - `{ error, removed? }`: un `Errors/Error` de Sabre sin `Success`. Sin `removed`, no escribe;
+ *   con `700432`, `700411`, `700408` y `500810`, el texto por defecto es el de las fuentes, y
+ *   después el SDK manda `IgnoreTransactionLLSRQ`. `removed` (ids `Air@id` de bajas pedidas en
+ *   ese Update) fuerza una baja parcial: esos segmentos sí se borran, y la respuesta trae el PNR
+ *   sin ellos y su `UpdateResult` `SUCCESS`, para `PARTIALLY_APPLIED` (precisión 12).
  * - `{ uncertain, applied? }`: el SDK lanza `SabreUncertainOutcomeError` con esa `reason`.
  *   `applied` dice si el cambio queda guardado en el fake, para probar la relectura. Por
  *   defecto, sí con `END_TRANSACTION_PROBLEM` y no con las demás.
@@ -66,7 +74,9 @@ export type QueueFakeReservationUpdateUncertainReason =
 export type QueueFakeReservationUpdateOutcome =
   | 'applied'
   | 'notApplied'
-  | { error: { code: string; message?: string; severity?: string } }
+  | { notApplied: { status?: string } }
+  | { sideEffects: Readonly<Record<string, string | null>> }
+  | { error: { code: string; message?: string; severity?: string }; removed?: readonly string[] }
   | { uncertain: QueueFakeReservationUpdateUncertainReason; applied?: boolean };
 
 export interface QueueFakeReservationUpdate {
@@ -200,6 +210,24 @@ function toOutcome(value: unknown, label: string): QueueFakeReservationUpdateOut
       if (error === undefined || typeof error.code !== 'string' || error.code === '') fail(`${label}.error necesita un code`);
       if (error.message !== undefined && typeof error.message !== 'string') fail(`${label}.error.message debe ser un texto`);
       if (error.severity !== undefined && typeof error.severity !== 'string') fail(`${label}.error.severity debe ser un texto`);
+      const { removed } = value as { removed?: unknown };
+      if (removed !== undefined && (!Array.isArray(removed) || removed.length === 0 || !removed.every((id) => typeof id === 'string' && id !== ''))) {
+        fail(`${label}.removed debe ser una lista no vacía de ids`);
+      }
+      return value as QueueFakeReservationUpdateOutcome;
+    }
+    if ('notApplied' in value) {
+      const notApplied = node((value as { notApplied: unknown }).notApplied);
+      if (notApplied === undefined) fail(`${label}.notApplied debe ser un objeto`);
+      if (notApplied.status !== undefined && (typeof notApplied.status !== 'string' || notApplied.status === '')) fail(`${label}.notApplied.status debe ser un texto no vacío`);
+      return value as QueueFakeReservationUpdateOutcome;
+    }
+    if ('sideEffects' in value) {
+      const effects = node((value as { sideEffects: unknown }).sideEffects);
+      if (effects === undefined || Object.keys(effects).length === 0) fail(`${label}.sideEffects debe ser un objeto con al menos un id`);
+      for (const [id, status] of Object.entries(effects)) {
+        if (status !== null && (typeof status !== 'string' || !STATUS.test(status))) fail(`${label}.sideEffects['${id}'] debe ser null o un ActionCode de dos letras mayúsculas`);
+      }
       return value as QueueFakeReservationUpdateOutcome;
     }
     if ('uncertain' in value) {
@@ -209,7 +237,7 @@ function toOutcome(value: unknown, label: string): QueueFakeReservationUpdateOut
       return value as QueueFakeReservationUpdateOutcome;
     }
   }
-  fail(`${label} debe ser 'applied', 'notApplied', { error } o { uncertain }`);
+  fail(`${label} debe ser 'applied', 'notApplied', { notApplied }, { sideEffects }, { error } o { uncertain }`);
 }
 
 const segmentXml = (segment: Segment): string => {
@@ -301,39 +329,43 @@ export function createReservationUpdateHandler(
     if (text(node(rq.RequestType)?.['@commitTransaction']) !== 'true') return notSimulated('UpdateReservationRQ sin commitTransaction="true"');
 
     const steps: ((segments: readonly Segment[]) => Segment[])[] = [];
-    /** `Results`: un `UpdateResult` por cada baja; `CONFIRM-ALL` no trae ninguno (como el ejemplo). */
-    const results: string[] = [];
-    let removes = false;
+    /** Las bajas pedidas, en orden: cada una lleva su `UpdateResult` en `Results`; `CONFIRM-ALL` no trae ninguno (como el ejemplo). */
+    const deletes: { updateId: string; id: string; productId: string }[] = [];
+    let items = 0;
     for (const item of nodes(list?.ReservationUpdateItem)) {
-      const updateId = text(item['@UpdateId']) ?? String(results.length + 1);
+      items += 1;
+      const updateId = text(item['@UpdateId']) ?? String(items);
       const product = node(item.ProductUpdate);
       if (text(node(item.AirItineraryUpdate)?.Action) === 'CONFIRM-ALL') {
         steps.push(confirmAll);
       } else if (product !== undefined && text(product['@op']) === 'D') {
-        const id = text(product['@id']) ?? '';
-        if (!pnr.segments.some((segment) => segment.productId === id)) return notSimulated(`ProductUpdate op="D" de un segmento que no está en el PNR ('${id}')`);
-        steps.push(remove(id));
-        results.push(`<stl19:UpdateResult UpdateId="${escape(updateId)}" Status="SUCCESS"><stl19:Item op="D"/></stl19:UpdateResult>`);
-        removes = true;
+        const productId = text(product['@id']) ?? '';
+        const target = pnr.segments.find((segment) => segment.productId === productId);
+        if (target === undefined) return notSimulated(`ProductUpdate op="D" de un segmento que no está en el PNR ('${productId}')`);
+        steps.push(remove(productId));
+        deletes.push({ updateId, id: target.id, productId });
       } else {
         return notSimulated('ese ReservationUpdateItem');
       }
     }
     if (steps.length === 0) return notSimulated('UpdateReservationRQ sin ReservationUpdateItem');
-    const change = (segments: readonly Segment[]) => {
-      const changed = steps.reduce<Segment[]>((current, step) => step(current), [...segments]);
-      return removes ? renumber(changed) : changed;
-    };
 
     const outcome = outcomes.shift() ?? 'applied';
-    const apply = () => {
-      pnr.segments = change(pnr.segments);
+    const save = (segments: Segment[], renumbered: boolean) => {
+      pnr.segments = renumbered ? renumber(segments) : segments;
       pnr.sequence += 1;
     };
-    const resultsXml = results.length === 0 ? '<stl19:Results/>' : `<stl19:Results>${results.join('')}</stl19:Results>`;
-    const success = (inner = '') => ({
+    const apply = () => save(steps.reduce<Segment[]>((current, step) => step(current), [...pnr.segments]), deletes.length > 0);
+    const resultsXml = (statusOf: (remove: (typeof deletes)[number]) => string | undefined = () => 'SUCCESS') => {
+      const results = deletes.flatMap((item) => {
+        const status = statusOf(item);
+        return status === undefined ? [] : [`<stl19:UpdateResult UpdateId="${escape(item.updateId)}" Status="${escape(status)}"><stl19:Item op="D"/></stl19:UpdateResult>`];
+      });
+      return results.length === 0 ? '<stl19:Results/>' : `<stl19:Results>${results.join('')}</stl19:Results>`;
+    };
+    const success = (inner = '', results = resultsXml()) => ({
       action: 'UpdateReservationRS',
-      payload: root('UpdateReservationRS', `<stl19:Success>OK</stl19:Success>${inner}${reservationXml(pnr)}${resultsXml}`),
+      payload: root('UpdateReservationRS', `<stl19:Success>OK</stl19:Success>${inner}${reservationXml(pnr)}${results}`),
     });
 
     if (outcome === 'applied') {
@@ -341,9 +373,37 @@ export function createReservationUpdateHandler(
       return success();
     }
     if (outcome === 'notApplied') return success();
+    if ('notApplied' in outcome) {
+      const status = outcome.notApplied.status ?? 'SUCCESS';
+      return success('', resultsXml(() => status));
+    }
+    if ('sideEffects' in outcome) {
+      const effects = Object.entries(outcome.sideEffects);
+      const missing = effects.find(([id]) => !pnr.segments.some((segment) => segment.id === id));
+      if (missing !== undefined) return notSimulated(`sideEffects de un segmento que no está en el PNR ('${missing[0]}')`);
+      const requested = steps.reduce<Segment[]>((current, step) => step(current), [...pnr.segments]);
+      const effect = new Map(effects);
+      const changed = requested.flatMap((segment) => {
+        const status = effect.get(segment.id);
+        if (status === undefined) return [segment];
+        return status === null ? [] : [{ ...segment, status }];
+      });
+      save(changed, deletes.length > 0 || effects.some(([, status]) => status === null));
+      return success();
+    }
     if ('error' in outcome) {
       const { code, message, severity } = outcome.error;
-      return { action: 'UpdateReservationRS', payload: root('UpdateReservationRS', errorXml(code, message ?? KNOWN_ERRORS[code] ?? 'sabre-client/testing: error forzado', severity ?? 'MODERATE')) };
+      const errors = errorXml(code, message ?? KNOWN_ERRORS[code] ?? 'sabre-client/testing: error forzado', severity ?? 'MODERATE');
+      if (outcome.removed === undefined) return { action: 'UpdateReservationRS', payload: root('UpdateReservationRS', errors) };
+      // Baja parcial (precisión 12): solo las bajas de `removed` quedan guardadas.
+      const removed = new Set(outcome.removed);
+      const outside = [...removed].find((id) => !deletes.some((item) => item.id === id));
+      if (outside !== undefined) return notSimulated(`removed con un id que no es una baja de ese Update ('${outside}')`);
+      save(pnr.segments.filter((segment) => !removed.has(segment.id)), true);
+      return {
+        action: 'UpdateReservationRS',
+        payload: root('UpdateReservationRS', `${errors}${reservationXml(pnr)}${resultsXml((item) => (removed.has(item.id) ? 'SUCCESS' : undefined))}`),
+      };
     }
     const { uncertain: reason } = outcome;
     if (outcome.applied ?? reason === 'END_TRANSACTION_PROBLEM') apply();

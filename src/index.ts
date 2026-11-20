@@ -65,6 +65,19 @@ export type {
   ReservationHistoryText,
   ReservationHistoryTransaction,
 } from './reservation/reservation-history.js';
+export { CONFIRM_AIR_SEGMENTS_OPERATION } from './reservation/confirm-air-segments.js';
+export type {
+  ConfirmAirSegmentsOptions,
+  ConfirmAirSegmentsRequest,
+  ConfirmAirSegmentsResult,
+} from './reservation/confirm-air-segments.js';
+export { SabreReservationUpdateError, UPDATE_RESERVATION_SERVICE } from './reservation/stl-reservation.js';
+export type {
+  ReservationAirSegment,
+  ReservationUpdateErrorReason,
+  ReservationUpdateWarning,
+  SabreReservationUpdateErrorOptions,
+} from './reservation/stl-reservation.js';
 export { SabreTripSearchError, TRIP_SEARCH_MAX_ITEMS } from './reservation/search-by-update-date.js';
 export type {
   SabreTripSearchErrorOptions,

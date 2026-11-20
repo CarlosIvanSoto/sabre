@@ -139,7 +139,7 @@ export class SabreSession {
       pcc: internal.pcc,
       log: internal.transport.log,
     });
-    this.reservation = new SessionReservation({ send: (request) => this[sessionSend](request) });
+    this.reservation = new SessionReservation({ send: (request) => this[sessionSend](request), log: internal.transport.log });
     this.reporting = new SessionReporting({ send: (request) => this[sessionSend](request), pcc: internal.pcc });
     if (internal.keepAlive) this.#scheduleKeepAlive(KEEP_ALIVE_IDLE_MS);
   }

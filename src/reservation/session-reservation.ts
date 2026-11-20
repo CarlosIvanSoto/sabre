@@ -1,7 +1,14 @@
 // La reserva dentro de una sesión SOAP: el historial (B1 de ADR-027) y la búsqueda por fecha de
-// modificación (ADR-033).
+// modificación (ADR-033), y la confirmación de un cambio de horario (ADR-034).
 import type { SoapResponse } from '../http/soap-transport.js';
+import type { EventLogger } from '../logging/logger.js';
 import type { SessionRequest } from '../session/session.js';
+import {
+  type ConfirmAirSegmentsOptions,
+  type ConfirmAirSegmentsRequest,
+  type ConfirmAirSegmentsResult,
+  confirmAirSegments,
+} from './confirm-air-segments.js';
 import {
   isRecordLocator,
   parseReservationHistoryResponse,
@@ -21,6 +28,7 @@ import {
 /** @internal Lo que `SessionReservation` necesita de la sesión. */
 export interface ReservationContext {
   send(request: SessionRequest): Promise<SoapResponse>;
+  log?: EventLogger;
 }
 
 export class SessionReservation {
@@ -99,5 +107,37 @@ export class SessionReservation {
     const resolved = resolveSearchByUpdateDateRequest(request);
     const response = await this.#context.send(searchByUpdateDateRequest(resolved, options));
     return parseSearchByUpdateDateResponse(response, resolved);
+  }
+
+  /**
+   * Confirma un cambio de horario (ADR-034): pasa a `HK` los segmentos `TK` del PNR con
+   * `UpdateReservationRQ` `CONFIRM-ALL`, con el End Transaction en la misma llamada.
+   *
+   * 1. Relee el PNR con `GetReservationRQ` `Stateful`.
+   * 2. Sin ningún `TK`, devuelve `status: 'noop'` sin escribir. Si los `TK` no son exactamente
+   *    `expectedSegmentIds`, lanza `SabreReservationUpdateError` con `reason: 'SEGMENTS_CHANGED'`
+   *    sin escribir.
+   * 3. Manda `CONFIRM-ALL` y compara el PNR de la respuesta con el de la lectura: `changed` trae
+   *    los segmentos que cambiaron de estado y `warnings` trae `NOT_APPLIED` si uno esperado no
+   *    quedó en `HK`.
+   *
+   * - **`CONFIRM-ALL` confirma todos los `TK` del PNR**, no solo los esperados: por eso el
+   *   chequeo del paso 2. Sabre no confirma uno solo por id.
+   * - **Abierto (Q-139, Q-140):** si `CONFIRM-ALL` toca también los `KK`, y cómo se relaciona el
+   *   id de segmento de STL (`segments[].id`) con el `itemId` de `booking.get`. Los ids de
+   *   `expectedSegmentIds` son los de STL: salen de `segments` o de una lectura previa.
+   * - **Nunca se reintenta.** Un `Errors/Error` de Sabre lanza `SabreReservationUpdateError`
+   *   (`reason: 'SABRE_ERROR'`, con el `code` y el texto de Sabre) después de un
+   *   `IgnoreTransaction`. Lo que pudo haber llegado a Sabre sin una respuesta legible lanza
+   *   `SabreUncertainOutcomeError` (`operation: 'reservation.confirmAirSegments'`,
+   *   `confirmationId`: el localizador; `reason`: `TRANSPORT`, `GATEWAY_5XX`, `UNPARSEABLE`,
+   *   `ABORTED` o `END_TRANSACTION_PROBLEM`): **hay que releer el PNR antes de reintentar.**
+   * - Un request con forma equivocada o `retry.maxRetries` distinto de 0 lanza `TypeError` sin red.
+   *
+   * `onRawResponse` y `onRawRequest` se llaman una vez por cada llamada a Sabre: la lectura, el
+   * Update y, si hace falta, el `IgnoreTransaction` (los dos primeros traen PII).
+   */
+  confirmAirSegments(request: ConfirmAirSegmentsRequest, options: ConfirmAirSegmentsOptions = {}): Promise<ConfirmAirSegmentsResult> {
+    return confirmAirSegments(this.#context, request, options);
   }
 }

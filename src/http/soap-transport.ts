@@ -44,6 +44,11 @@ export const PREVIOUS_ENTRY_ACTIVE_RETRIES = 3;
 export const PREVIOUS_ENTRY_ACTIVE_DELAY_MS = 1000;
 const PREVIOUS_ENTRY_ACTIVE = /PREVIOUS ENTRY ACTIVE/i;
 
+/** Si un texto de error de Sabre es `PREVIOUS ENTRY ACTIVE`. */
+export function isPreviousEntryActive(text: string): boolean {
+  return PREVIOUS_ENTRY_ACTIVE.test(text);
+}
+
 type RetryReason = 'busy' | 'previous-entry-active' | 'transient';
 
 /** Credencial del header `wsse:Security`. */
@@ -80,6 +85,14 @@ export interface SoapRequest {
    */
   idempotent: boolean;
   retry?: Partial<RetryOptions>;
+  /**
+   * `false` apaga el esquema fijo de `PREVIOUS ENTRY ACTIVE` (3 × 1 s), que no depende de
+   * `idempotent` ni de `retry`. Lo usan las escrituras con End Transaction en la misma llamada
+   * (`UpdateReservationRQ` con `commitTransaction="true"`, ADR-034): ahí el error no prueba que
+   * Sabre no procesó el request, y repetirlo podría convertir un resultado incierto en uno
+   * «no escrito». Por defecto `true` (ADR-012).
+   */
+  retryPreviousEntryActive?: boolean;
   /** `true` para devolver el `BinarySecurityToken` de la respuesta (solo `SessionCreateRQ`). */
   readSecurityToken?: boolean;
   signal?: AbortSignal;
@@ -189,7 +202,8 @@ export class SoapTransport {
 
   /**
    * Dos presupuestos separados: el backoff genérico (`retry.maxRetries`, para `USG_*_BUSY` y
-   * los transitorios) y el esquema fijo de `PREVIOUS ENTRY ACTIVE`, que no se ajusta a la config.
+   * los transitorios) y el esquema fijo de `PREVIOUS ENTRY ACTIVE`, que no se ajusta a la config
+   * y solo se apaga con `retryPreviousEntryActive: false`.
    */
   async #attempts(request: SoapRequest, capture: RawCapture): Promise<SoapResponse> {
     const retry = { ...this.#config.retry, ...definedOnly(request.retry ?? {}) };
@@ -201,7 +215,11 @@ export class SoapTransport {
       } catch (error) {
         const reason = retryReason(error, request.idempotent);
         let delayMs: number;
-        if (reason === 'previous-entry-active' && previousEntryActive < PREVIOUS_ENTRY_ACTIVE_RETRIES) {
+        if (
+          reason === 'previous-entry-active' &&
+          request.retryPreviousEntryActive !== false &&
+          previousEntryActive < PREVIOUS_ENTRY_ACTIVE_RETRIES
+        ) {
           previousEntryActive++;
           delayMs = PREVIOUS_ENTRY_ACTIVE_DELAY_MS;
         } else if ((reason === 'busy' || reason === 'transient') && generic < retry.maxRetries) {

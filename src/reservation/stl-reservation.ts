@@ -67,8 +67,9 @@ export interface ReservationUpdateWarning {
  *   (`confirmAirSegments`). No se escribió nada.
  * - `SEGMENT_NOT_FOUND` / `SEGMENT_STATUS_NOT_ALLOWED`: un segmento a borrar no existe o no está
  *   en `allowedStatuses` (`removeAirSegments`). No se escribió nada.
- * - `SABRE_ERROR`: un `Errors/Error` de Sabre en la lectura (`GetReservationRS`) o en la escritura
- *   (`UpdateReservationRS` sin `Success`), con su `code` y su texto tal cual.
+ * - `SABRE_ERROR`: un `Errors/Error` (o `stl:ApplicationResults/Error`) de Sabre en la lectura
+ *   (`GetReservationRS`) o en la escritura (`UpdateReservationRS` sin `Success`), con su `code` y
+ *   su texto tal cual. `PREVIOUS ENTRY ACTIVE` en la escritura no es `SABRE_ERROR`: es incierto.
  */
 export type ReservationUpdateErrorReason = 'SEGMENTS_CHANGED' | 'SEGMENT_NOT_FOUND' | 'SEGMENT_STATUS_NOT_ALLOWED' | 'SABRE_ERROR';
 

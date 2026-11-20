@@ -644,14 +644,21 @@ const result = await legacy.withSession((session) =>
 - **Open questions (Q-139, Q-140):** whether `CONFIRM-ALL` also touches `KK` segments, and how the
   STL segment id (`segments[].id`) relates to `booking.get`'s `itemId`. Take the ids from
   `segments` or from an STL read.
-- **It is never retried**, and `retry.maxRetries` other than `0` throws a `TypeError`. An error
-  from Sabre (`Errors/Error`) sends `IgnoreTransaction` and throws `SabreReservationUpdateError`
-  (`service: 'updateReservation'`, `reason: 'SABRE_ERROR'`, Sabre's `code`, text and
-  `severity`). What may have reached Sabre without a readable answer (a network failure, a
-  `5xx`, an unreadable body, an abort after sending, or `Success` together with `Errors`) throws
-  `SabreUncertainOutcomeError` with `operation: 'reservation.confirmAirSegments'` and the locator
-  in `confirmationId`: **read the PNR again before retrying.** `USG_*_BUSY` and a session error
-  are thrown as they are: Sabre did not process the update.
+- **The update is never retried**: exactly one `UpdateReservationRQ` is sent, not even
+  `PREVIOUS ENTRY ACTIVE` is retried, and `retry.maxRetries` other than `0` throws a `TypeError`.
+- An error from Sabre (`Errors/Error`, or `stl:ApplicationResults/Error`) sends
+  `IgnoreTransaction` and throws `SabreReservationUpdateError` (`service: 'updateReservation'`,
+  `reason: 'SABRE_ERROR'`, Sabre's `code`, text and `severity`): nothing was written. The same
+  error in the read throws the same way, without `IgnoreTransaction`.
+- What may have reached Sabre without a clear answer throws `SabreUncertainOutcomeError` with
+  `operation: 'reservation.confirmAirSegments'` and the locator in `confirmationId`:
+  `TRANSPORT` (network failure), `GATEWAY_5XX` (any SOAP fault, or a `5xx`), `UNPARSEABLE` (an
+  unreadable body), `ABORTED` (an abort after sending), `END_TRANSACTION_PROBLEM` (`Success`
+  together with `Errors`) or `PREVIOUS_ENTRY_ACTIVE` (Sabre's own retries ran out while an entry
+  of the update may still be running). No `IgnoreTransaction` is sent. **Close the session and
+  read the PNR again in a new one before retrying**: the uncertain change may still be pending in
+  the session's work area, and a later End Transaction in the same session could commit it.
+- `USG_*_BUSY` and a session error are thrown as they are: Sabre did not process the update.
 - `onRawRequest` and `onRawResponse` are called once per call to Sabre: the read, the update and,
   when needed, the `IgnoreTransaction`.
 
@@ -1160,8 +1167,9 @@ and `reporting.dailySalesSummary` are reads and are retried on transient failure
 operations that move the queue cursor (`access`, `ignore`, `remove`, `place`, `exit`) are retried
 only on the `USG_*_BUSY` codes, which are taken to mean that Sabre did not process the request, and on
 `PREVIOUS ENTRY ACTIVE` (3 × 1 s). They are never retried after a network failure, because the PNR
-may already have moved: the queue state becomes `'unknown'`. `reservation.confirmAirSegments` is
-never retried.
+may already have moved: the queue state becomes `'unknown'`. The update in
+`reservation.confirmAirSegments` is never retried, not even on `PREVIOUS ENTRY ACTIVE`: it commits
+in the same call.
 
 ## Token reuse
 

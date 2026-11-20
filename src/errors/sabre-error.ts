@@ -149,7 +149,7 @@ export class SabreBusinessError extends SabreError {
   }
 }
 
-/** Por qué el SDK no sabe si una operación que mueve dinero llegó a hacerse (ADR-031). */
+/** Por qué el SDK no sabe si una escritura llegó a hacerse (ADR-031, ADR-034). */
 export type SabreUncertainOutcomeReason =
   | 'UNABLE_TO_RETRIEVE_TICKETS'
   | 'FULFILLMENT_NOT_CONFIRMED'
@@ -161,7 +161,13 @@ export type SabreUncertainOutcomeReason =
   | 'TRANSPORT'
   | 'GATEWAY_5XX'
   | 'UNPARSEABLE'
-  | 'ABORTED';
+  | 'ABORTED'
+  /**
+   * `PREVIOUS ENTRY ACTIVE` como `stl:Error` en una escritura con End Transaction
+   * (`reservation.confirmAirSegments`): Sabre ya agotó sus reintentos internos y una entrada del
+   * mismo request puede seguir en curso. Como SOAP fault es `GATEWAY_5XX`.
+   */
+  | 'PREVIOUS_ENTRY_ACTIVE';
 
 /** Un boleto que Sabre alcanzó a devolver en una respuesta incierta. */
 export interface SabreUncertainTicket {

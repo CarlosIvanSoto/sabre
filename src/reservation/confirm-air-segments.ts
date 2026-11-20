@@ -5,7 +5,7 @@
 import type { RequestOptions } from '../air/bargain-finder-max.js';
 import { SabreBusinessError, SabreGatewayError, SabreSessionError, SabreUncertainOutcomeError, type SabreUncertainOutcomeReason } from '../errors/index.js';
 import type { SabreRawRequest } from '../http/raw-request.js';
-import { BUSY_CODES, respondedAtField, type SoapResponse } from '../http/soap-transport.js';
+import { BUSY_CODES, isPreviousEntryActive, respondedAtField, type SoapResponse } from '../http/soap-transport.js';
 import type { EventLogger } from '../logging/logger.js';
 import type { SessionRequest } from '../session/session.js';
 import { isRecordLocator } from './reservation-history.js';
@@ -100,18 +100,24 @@ export async function confirmAirSegments(
     ...(signal === undefined ? {} : { signal }),
     ...(onRawResponse === undefined ? {} : { onRawResponse }),
   };
+  const withRawRequest = onRawRequest === undefined ? {} : { onRawRequest };
 
   // 1. Lectura `Stateful`: deja el PNR en el AAA para el Update. Es una lectura: los errores
-  // del transporte salen tal cual.
-  const getResponse = await context.send({
-    service: UPDATE_RESERVATION_SERVICE,
-    action: 'GetReservationRQ',
-    payload: getReservationPayload(locator),
-    idempotent: true,
-    ...(options.retry === undefined ? {} : { retry: options.retry }),
-    ...(onRawRequest === undefined ? {} : { onRawRequest }),
-    ...common,
-  });
+  // del transporte salen tal cual, salvo el `stl:Error`, que se envuelve en `SABRE_ERROR`.
+  let getResponse: SoapResponse;
+  try {
+    getResponse = await context.send({
+      service: UPDATE_RESERVATION_SERVICE,
+      action: 'GetReservationRQ',
+      payload: getReservationPayload(locator),
+      idempotent: true,
+      ...(options.retry === undefined ? {} : { retry: options.retry }),
+      ...withRawRequest,
+      ...common,
+    });
+  } catch (error) {
+    throw error instanceof SabreBusinessError ? asSabreError(error) : error;
+  }
   const before = parseStlReservation(getResponse, 'GetReservationRS');
   if (before.errors.length > 0) throw sabreErrorOf(before.errors, getResponse);
   if (before.segments === undefined) throw notRecognized(getResponse, 'GetReservationRS sin Reservation');
@@ -135,9 +141,11 @@ export async function confirmAirSegments(
     );
   }
 
-  // 3. Escritura: `CONFIRM-ALL` con el ET en la misma llamada. Sin reintentos.
+  // 3. Escritura: `CONFIRM-ALL` con el ET en la misma llamada. Sin ningún reintento, tampoco el
+  // esquema de `PREVIOUS ENTRY ACTIVE` del transporte: sale un solo `UpdateReservationRQ`.
   signal?.throwIfAborted();
   let sent = false;
+  const ignore = () => ignoreTransaction(context, { ...common, ...withRawRequest });
   let updateResponse: SoapResponse;
   try {
     updateResponse = await context.send({
@@ -146,6 +154,7 @@ export async function confirmAirSegments(
       payload: updateReservationPayload([CONFIRM_ALL_ITEM], receivedFrom),
       idempotent: false,
       retry: { maxRetries: 0 },
+      retryPreviousEntryActive: false,
       // `onRawRequest` llega si el transporte llamó a `fetch`: así se sabe si el Update salió.
       onRawRequest: (raw: SabreRawRequest) => {
         sent = true;
@@ -154,7 +163,7 @@ export async function confirmAirSegments(
       ...common,
     });
   } catch (error) {
-    throw await updateFailure(context, error, sent, locator, signal);
+    throw await updateFailure(error, sent, locator, signal, ignore);
   }
 
   let after: StlReservationResponse;
@@ -168,8 +177,10 @@ export async function confirmAirSegments(
   }
   if (!after.success) {
     if (after.errors.length === 0) throw uncertain('UNPARSEABLE', 'UpdateReservationRS sin Success ni Errors', locator, updateResponse.raw);
+    const pea = after.errors.find((e) => isPreviousEntryActive(e.message) || isPreviousEntryActive(e.code));
+    if (pea !== undefined) throw uncertain('PREVIOUS_ENTRY_ACTIVE', `${pea.code} ${pea.message}`, locator, updateResponse.raw);
     // Sabre no escribió: se descarta lo que quedó pendiente en el AAA.
-    await ignoreTransaction(context, signal);
+    await ignore();
     throw sabreErrorOf(after.errors, updateResponse);
   }
   if (after.segments === undefined) throw uncertain('UNPARSEABLE', 'UpdateReservationRS sin Reservation', locator, updateResponse.raw);
@@ -216,40 +227,61 @@ function uncertain(reason: SabreUncertainOutcomeReason, detail: string, locator:
 }
 
 /**
+ * Un `stl:ApplicationResults/Error` que lanzó el transporte, como `SabreReservationUpdateError`
+ * con `reason: 'SABRE_ERROR'`: el mismo contrato que un `Errors/Error` de STL 1.19.
+ */
+function asSabreError(error: SabreBusinessError): SabreReservationUpdateError {
+  return new SabreReservationUpdateError(error.message, {
+    reason: 'SABRE_ERROR',
+    code: error.code,
+    raw: error.raw,
+    warnings: error.warnings,
+    errors: error.errors,
+    cause: error,
+  });
+}
+
+/**
  * Un fallo del Update que no es una respuesta legible. No se escribió (sale tal cual): la sesión
  * inutilizable y el gateway ocupado (`USG_*_BUSY`), que rechazan antes de llegar al servicio, y el
- * abort antes de mandar. Lo demás pudo haber llegado a Sabre: incierto.
+ * abort antes de mandar. Un `stl:Error` es «no escrito» (`SABRE_ERROR`, con IgnoreTransaction),
+ * salvo `PREVIOUS ENTRY ACTIVE`. Lo demás pudo haber llegado a Sabre: incierto.
  */
-async function updateFailure(context: ConfirmAirSegmentsContext, error: unknown, sent: boolean, locator: string, signal: AbortSignal | undefined): Promise<unknown> {
+async function updateFailure(error: unknown, sent: boolean, locator: string, signal: AbortSignal | undefined, ignore: () => Promise<void>): Promise<unknown> {
   const make = (reason: SabreUncertainOutcomeReason, detail: string) => {
-    const raw = error instanceof SabreGatewayError ? error.raw : undefined;
+    const raw = error instanceof SabreGatewayError || error instanceof SabreBusinessError ? error.raw : undefined;
     return uncertain(reason, detail, locator, raw, error);
   };
-  if (error instanceof Error && error.name === 'AbortError') return sent ? make('ABORTED', 'abort con el Update ya mandado') : error;
-  if (signal?.aborted === true) return sent ? make('ABORTED', 'abort con el Update ya mandado') : error;
+  const aborted = (error instanceof Error && error.name === 'AbortError') || signal?.aborted === true;
+  if (aborted) return sent ? make('ABORTED', 'abort con el Update ya mandado') : error;
   if (error instanceof SabreSessionError) return error;
   if (error instanceof SabreBusinessError) {
-    // `stl:ApplicationResults/Error` en un servicio STL 1.19: no llega en las fuentes. Se trata
-    // como un `Errors/Error`: no escribió.
-    await ignoreTransaction(context, signal);
-    return error;
+    // `stl:ApplicationResults/Error`: no llega en las fuentes de STL 1.19. `PREVIOUS ENTRY ACTIVE`
+    // dice que Sabre agotó sus reintentos internos con una entrada en curso: incierto, sin IG.
+    if (isPreviousEntryActive(error.message)) return make('PREVIOUS_ENTRY_ACTIVE', error.message);
+    await ignore();
+    return asSabreError(error);
   }
   if (error instanceof SabreGatewayError && error.protocol === 'soap') {
     if (error.code !== undefined && BUSY_CODES.has(error.code)) return error;
     if (error.status === undefined) return make('TRANSPORT', 'fallo de red sin respuesta');
-    if (error.status >= 500) return make('GATEWAY_5XX', `HTTP ${error.status}${error.code === undefined ? '' : ` ${error.code}`}`);
+    // Cualquier SOAP fault (los únicos que traen `code`) o un 5xx sin sobre.
+    if (error.code !== undefined || error.status >= 500) {
+      return make('GATEWAY_5XX', `HTTP ${error.status}${error.code === undefined ? '' : ` ${error.code}`}`);
+    }
     return make('UNPARSEABLE', `HTTP ${error.status} sin una respuesta reconocible`);
   }
   return error;
 }
 
 /**
- * `IgnoreTransactionLLSRQ` después de un `Errors/Error` del Update. Si falla, se avisa al logger y
- * sigue: quien llama lanza el error original.
+ * `IgnoreTransactionLLSRQ` después de un error de Sabre en el Update. Lleva el `signal` y los
+ * callbacks crudos del consumidor. Si falla, se avisa al logger y sigue: quien llama lanza el
+ * error original.
  */
-async function ignoreTransaction(context: ConfirmAirSegmentsContext, signal: AbortSignal | undefined): Promise<void> {
+async function ignoreTransaction(context: ConfirmAirSegmentsContext, options: Partial<SessionRequest>): Promise<void> {
   try {
-    await context.send({ ...ignoreTransactionRequest(CONFIRM_AIR_SEGMENTS_OPERATION), ...(signal === undefined ? {} : { signal }) });
+    await context.send({ ...ignoreTransactionRequest(CONFIRM_AIR_SEGMENTS_OPERATION), ...options });
   } catch (error) {
     context.log?.emit('warn', 'sabre.reservation.ignoreFailed', {
       operation: CONFIRM_AIR_SEGMENTS_OPERATION,

@@ -643,14 +643,22 @@ const result = await legacy.withSession((session) =>
 - **Preguntas abiertas (Q-139, Q-140):** si `CONFIRM-ALL` toca también los `KK`, y cómo se
   relaciona el id de segmento de STL (`segments[].id`) con el `itemId` de `booking.get`. Los ids
   salen de `segments` o de una lectura STL.
-- **Nunca se reintenta**, y un `retry.maxRetries` distinto de `0` lanza `TypeError`. Un error de
-  Sabre (`Errors/Error`) manda `IgnoreTransaction` y lanza `SabreReservationUpdateError`
-  (`service: 'updateReservation'`, `reason: 'SABRE_ERROR'`, con el `code`, el texto y la
-  `severity` de Sabre). Lo que pudo haber llegado a Sabre sin una respuesta legible (un fallo de
-  red, un `5xx`, un body ilegible, un abort con el Update ya mandado, o `Success` junto con
-  `Errors`) lanza `SabreUncertainOutcomeError` con `operation: 'reservation.confirmAirSegments'`
-  y el localizador en `confirmationId`: **relee el PNR antes de reintentar.** `USG_*_BUSY` y un
-  error de sesión salen tal cual: Sabre no procesó el Update.
+- **El Update nunca se reintenta**: sale un solo `UpdateReservationRQ`, tampoco se reintenta
+  `PREVIOUS ENTRY ACTIVE`, y un `retry.maxRetries` distinto de `0` lanza `TypeError`.
+- Un error de Sabre (`Errors/Error`, o `stl:ApplicationResults/Error`) manda `IgnoreTransaction`
+  y lanza `SabreReservationUpdateError` (`service: 'updateReservation'`, `reason: 'SABRE_ERROR'`,
+  con el `code`, el texto y la `severity` de Sabre): no se escribió nada. El mismo error en la
+  lectura lanza igual, sin `IgnoreTransaction`.
+- Lo que pudo haber llegado a Sabre sin una respuesta clara lanza `SabreUncertainOutcomeError`
+  con `operation: 'reservation.confirmAirSegments'` y el localizador en `confirmationId`:
+  `TRANSPORT` (fallo de red), `GATEWAY_5XX` (cualquier SOAP fault, o un `5xx`), `UNPARSEABLE` (un
+  body ilegible), `ABORTED` (un abort con el Update ya mandado), `END_TRANSACTION_PROBLEM`
+  (`Success` junto con `Errors`) o `PREVIOUS_ENTRY_ACTIVE` (Sabre agotó sus reintentos y una
+  entrada del Update puede seguir en curso). No se manda `IgnoreTransaction`. **Cierra la sesión
+  y relee el PNR en una nueva antes de reintentar**: el cambio incierto puede seguir pendiente en
+  el área de trabajo de la sesión, y un End Transaction posterior en la misma sesión podría
+  commitearlo.
+- `USG_*_BUSY` y un error de sesión salen tal cual: Sabre no procesó el Update.
 - `onRawRequest` y `onRawResponse` se llaman una vez por cada llamada a Sabre: la lectura, el
   Update y, si hace falta, el `IgnoreTransaction`.
 
@@ -1161,8 +1169,9 @@ En `SabreLegacy`, `count`, `list`, `ping`, `reservation.history`, `reservation.s
 Las operaciones que mueven el cursor de la cola (`access`, `ignore`, `remove`, `place`, `exit`) se
 reintentan solo ante los `USG_*_BUSY`, que se toman como señal de que Sabre no procesó el request, y ante
 `PREVIOUS ENTRY ACTIVE` (3 × 1 s). Nunca se reintentan después de un fallo de red, porque el PNR
-pudo haberse movido: el estado de la cola pasa a `'unknown'`. `reservation.confirmAirSegments` no
-se reintenta nunca.
+pudo haberse movido: el estado de la cola pasa a `'unknown'`. El Update de
+`reservation.confirmAirSegments` no se reintenta nunca, tampoco ante `PREVIOUS ENTRY ACTIVE`: hace
+el commit en la misma llamada.
 
 ## Reutilizar el token
 

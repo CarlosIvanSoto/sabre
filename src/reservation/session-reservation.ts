@@ -126,12 +126,19 @@ export class SessionReservation {
    * - **Abierto (Q-139, Q-140):** si `CONFIRM-ALL` toca también los `KK`, y cómo se relaciona el
    *   id de segmento de STL (`segments[].id`) con el `itemId` de `booking.get`. Los ids de
    *   `expectedSegmentIds` son los de STL: salen de `segments` o de una lectura previa.
-   * - **Nunca se reintenta.** Un `Errors/Error` de Sabre lanza `SabreReservationUpdateError`
-   *   (`reason: 'SABRE_ERROR'`, con el `code` y el texto de Sabre) después de un
-   *   `IgnoreTransaction`. Lo que pudo haber llegado a Sabre sin una respuesta legible lanza
+   * - **El Update nunca se reintenta**: sale un solo `UpdateReservationRQ`, tampoco ante
+   *   `PREVIOUS ENTRY ACTIVE`.
+   * - Un error de Sabre (`Errors/Error` o `stl:ApplicationResults/Error`) lanza
+   *   `SabreReservationUpdateError` (`reason: 'SABRE_ERROR'`, con el `code` y el texto de Sabre):
+   *   no se escribió. En el Update va después de un `IgnoreTransaction`.
+   * - Lo que pudo haber llegado a Sabre sin una respuesta clara lanza
    *   `SabreUncertainOutcomeError` (`operation: 'reservation.confirmAirSegments'`,
-   *   `confirmationId`: el localizador; `reason`: `TRANSPORT`, `GATEWAY_5XX`, `UNPARSEABLE`,
-   *   `ABORTED` o `END_TRANSACTION_PROBLEM`): **hay que releer el PNR antes de reintentar.**
+   *   `confirmationId`: el localizador; `reason`: `TRANSPORT`, `GATEWAY_5XX` (cualquier SOAP
+   *   fault o un 5xx), `UNPARSEABLE`, `ABORTED`, `END_TRANSACTION_PROBLEM` o
+   *   `PREVIOUS_ENTRY_ACTIVE`), sin `IgnoreTransaction`. **Cierra la sesión y relee el PNR en una
+   *   nueva antes de reintentar**: el cambio puede seguir pendiente en el AAA de esta sesión, y un
+   *   End Transaction posterior en ella podría commitearlo.
+   * - `USG_*_BUSY` y un error de sesión salen tal cual: Sabre no procesó el Update.
    * - Un request con forma equivocada o `retry.maxRetries` distinto de 0 lanza `TypeError` sin red.
    *
    * `onRawResponse` y `onRawRequest` se llaman una vez por cada llamada a Sabre: la lectura, el

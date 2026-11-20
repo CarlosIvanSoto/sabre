@@ -14,7 +14,7 @@ import {
 import getFixture from './fixtures/get-reservation.synthetic-guide.json';
 import updateFixture from './fixtures/update-reservation.synthetic-guide.json';
 import { mockFetch } from './helpers.js';
-import { fault, legacyClient, rejection, sentBody, sentTag, sessionOpened, soap, xml } from './soap-helpers.js';
+import { entry, fault, legacyClient, rejection, sentBody, sentTag, sessionOpened, soap, xml } from './soap-helpers.js';
 
 type Fixture = { responses: { label: string; status: number; body: string }[] };
 const bodyOf = (fixture: Fixture, label: string) => {
@@ -29,6 +29,15 @@ const ignored = () =>
     200,
     soap(
       '<IgnoreTransactionRS xmlns="http://webservices.sabre.com/sabreXML/2011/10" xmlns:stl="http://services.sabre.com/STL/v01" Version="2.0.0"><stl:ApplicationResults status="Complete"><stl:Success timeStamp="2026-11-16T21:42:38Z"/></stl:ApplicationResults></IgnoreTransactionRS>',
+    ),
+  );
+
+/** Un `<root>` con `stl:ApplicationResults/Error`: lo lanza el transporte antes de que el SDK lo lea. */
+const applicationError = (root: 'GetReservationRS' | 'UpdateReservationRS', code: string, text: string) =>
+  xml(
+    200,
+    soap(
+      `<${root} xmlns="http://webservices.sabre.com/pnrbuilder/v1_19" xmlns:stl="http://services.sabre.com/STL/v01" Version="1.19.0"><stl:ApplicationResults status="NotProcessed">${entry('Error', code, text)}</stl:ApplicationResults></${root}>`,
     ),
   );
 
@@ -83,6 +92,24 @@ describe('reservation.confirmAirSegments: requests', () => {
       ['reservation.confirmAirSegments', 'UpdateReservationRQ'],
     ]);
     expect(responses.map((raw) => raw.operation)).toEqual(['reservation.confirmAirSegments', 'reservation.confirmAirSegments']);
+  });
+
+  it('el IgnoreTransaction también entrega onRawRequest y onRawResponse', async () => {
+    const requests: SabreRawRequest[] = [];
+    const responses: SabreRawResponse[] = [];
+    const { session } = await openWith(get('official-tk'), update('error-aaa-modified'), ignored());
+    await rejection(
+      session.reservation.confirmAirSegments(REQUEST, {
+        onRawRequest: (raw) => requests.push(raw),
+        onRawResponse: (raw) => responses.push(raw),
+      }),
+    );
+    expect(requests.map((raw) => [raw.operation, /<(\w+RQ) /.exec(raw.body ?? '')?.[1]])).toEqual([
+      ['reservation.confirmAirSegments', 'GetReservationRQ'],
+      ['reservation.confirmAirSegments', 'UpdateReservationRQ'],
+      ['reservation.confirmAirSegments', 'IgnoreTransactionRQ'],
+    ]);
+    expect(responses).toHaveLength(3);
   });
 });
 
@@ -197,6 +224,15 @@ describe('reservation.confirmAirSegments: no escribe', () => {
     expect(actions(fetch)).toEqual(['GetReservationRQ']);
   });
 
+  it('un stl:ApplicationResults/Error en la lectura: SABRE_ERROR, sin Update ni IgnoreTransaction', async () => {
+    const { fetch, session } = await openWith(applicationError('GetReservationRS', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', 'UNABLE TO RETRIEVE'));
+    const error = await rejection(session.reservation.confirmAirSegments(REQUEST));
+
+    expect(error).toBeInstanceOf(SabreReservationUpdateError);
+    expect(error).toMatchObject({ reason: 'SABRE_ERROR', code: 'ERR.SWS.HOST.ERROR_IN_RESPONSE' });
+    expect(actions(fetch)).toEqual(['GetReservationRQ']);
+  });
+
   it('PNR no encontrado en la lectura: SABRE_ERROR 700226, sin Update ni IgnoreTransaction', async () => {
     const { fetch, session } = await openWith(get('error-pnr-not-found'));
     const error = await rejection(session.reservation.confirmAirSegments(REQUEST));
@@ -251,6 +287,16 @@ describe('reservation.confirmAirSegments: errores de Sabre en el Update', () => 
     );
   });
 
+  it('un stl:ApplicationResults/Error en el Update: IgnoreTransaction y SABRE_ERROR, no un SabreBusinessError pelado', async () => {
+    const { fetch, session } = await openWith(get('official-tk'), applicationError('UpdateReservationRS', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', 'UNABLE TO PROCESS'), ignored());
+    const error = await rejection(session.reservation.confirmAirSegments(REQUEST));
+
+    expect(error).toBeInstanceOf(SabreReservationUpdateError);
+    expect(error).toMatchObject({ reason: 'SABRE_ERROR', code: 'ERR.SWS.HOST.ERROR_IN_RESPONSE', service: 'updateReservation', retryable: false });
+    expect((error as Error).cause).toBeInstanceOf(SabreBusinessError);
+    expect(actions(fetch)).toEqual(['GetReservationRQ', 'UpdateReservationRQ', 'IgnoreTransactionLLSRQ']);
+  });
+
   it('si el IgnoreTransaction falla, avisa al logger y lanza el error de Sabre', async () => {
     const { session, calls } = await openWith(
       get('official-tk'),
@@ -270,7 +316,12 @@ describe('reservation.confirmAirSegments: inciertos', () => {
   it.each([
     ['TRANSPORT', () => new TypeError('fetch failed')],
     ['GATEWAY_5XX', () => xml(500, soap(fault('soap-env:Server', 'Internal error')))],
+    ['GATEWAY_5XX', () => new Response('<html>Bad gateway</html>', { status: 502 })],
+    ['GATEWAY_5XX', () => xml(200, soap(fault('soap-env:Client', 'Invalid request')))],
+    ['GATEWAY_5XX', () => xml(400, soap(fault('soap-env:Client', 'Invalid request')))],
     ['UNPARSEABLE', () => new Response('<html>oops</html>', { status: 200 })],
+    ['UNPARSEABLE', () => new Response('<html>not found</html>', { status: 404 })],
+    ['UNPARSEABLE', () => xml(200, official.replace(/<stl19:Reservation\b[\s\S]*<\/stl19:Reservation>/, ''))],
     ['UNPARSEABLE', () => xml(200, official.replace('<stl19:Success>OK</stl19:Success>', ''))],
     ['UNPARSEABLE', () => get('official-tk')],
     [
@@ -292,6 +343,32 @@ describe('reservation.confirmAirSegments: inciertos', () => {
     expect(error).toMatchObject({ reason, operation: 'reservation.confirmAirSegments', confirmationId: 'AAAAAA', retryable: false });
     expect((error as Error).message).toContain('Relee el PNR');
     expect(actions(fetch)).toEqual(['GetReservationRQ', 'UpdateReservationRQ']);
+  });
+
+  it.each([
+    ['como SOAP fault 500', 'GATEWAY_5XX', () => xml(500, soap(fault('soap-env:Server', 'PREVIOUS ENTRY ACTIVE')))],
+    ['como stl:ApplicationResults/Error', 'PREVIOUS_ENTRY_ACTIVE', () => applicationError('UpdateReservationRS', 'ERR.SWS.HOST.ERROR_IN_RESPONSE', 'PREVIOUS ENTRY ACTIVE')],
+    [
+      'como Errors/Error de STL 1.19',
+      'PREVIOUS_ENTRY_ACTIVE',
+      () =>
+        xml(
+          200,
+          official.replace(
+            '<stl19:Success>OK</stl19:Success>',
+            '<stl19:Errors><stl19:Error><stl19:Code>700000</stl19:Code><stl19:Message>PREVIOUS ENTRY ACTIVE</stl19:Message><stl19:Severity>MODERATE</stl19:Severity></stl19:Error></stl19:Errors>',
+          ),
+        ),
+    ],
+  ] as const)('PREVIOUS ENTRY ACTIVE en el Update (%s): incierto %s, un solo UpdateReservationRQ y sin IgnoreTransaction', async (_case, reason, response) => {
+    // Si el transporte lo reintentara, el segundo Update recibiría confirm-all-official y saldría `confirmed`.
+    const { fetch, session, calls } = await openWith(get('official-tk'), response(), update('confirm-all-official'), ignored());
+    const error = await rejection(session.reservation.confirmAirSegments(REQUEST));
+
+    expect(error).toBeInstanceOf(SabreUncertainOutcomeError);
+    expect(error).toMatchObject({ reason, confirmationId: 'AAAAAA' });
+    expect(actions(fetch)).toEqual(['GetReservationRQ', 'UpdateReservationRQ']);
+    expect(calls.some(([, event]) => event === 'sabre.request.retry')).toBe(false);
   });
 
   it('un abort con el Update ya mandado da ABORTED, con el AbortError en cause', async () => {

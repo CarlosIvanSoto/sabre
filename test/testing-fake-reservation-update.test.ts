@@ -57,8 +57,8 @@ describe('fake: reservation.confirmAirSegments, resultado', () => {
     expect(result.changed).toEqual(['8', '9']);
     expect(result.warnings).toEqual([]);
     expect(result.respondedAt).toBe('2026-11-20T18:00:00Z');
-    expect(result.segments[0]).toEqual({ id: '8', sequence: 1, status: 'HK', previousStatus: 'TK', ...JFK_FLL });
-    expect(result.segments[1]).toEqual({ id: '9', sequence: 2, status: 'HK', previousStatus: 'TK' });
+    expect(result.segments[0]).toEqual({ id: '8', productId: '8', sequence: 1, status: 'HK', previousStatus: 'TK', ...JFK_FLL });
+    expect(result.segments[1]).toEqual({ id: '9', productId: '9', sequence: 2, status: 'HK', previousStatus: 'TK' });
     expect(statuses(fake.airSegments('AAAAAA'))).toEqual(['8:HK', '9:HK']);
     expect(commands(fake)).toEqual(['getReservation', 'updateReservation']);
   });
@@ -284,6 +284,36 @@ describe('fake: reservation.removeAirSegments, resultado', () => {
 });
 
 describe('fake: reservation.removeAirSegments, no escribe', () => {
+  it.each([
+    ['distinto', '18', 'Product@id 18'],
+    ['ausente (null)', null, 'Product@id ausente'],
+  ] as const)('SEGMENT_ID_MISMATCH: Product@id %s en un segmento pedido, sin mandar Update', async (_label, productId, text) => {
+    const seeded = { locator: 'AAAAAA', segments: [segment('8', 'UN', { productId }), segment('10', 'TK'), segment('9', 'HK')] };
+    const { fake, error } = await removeRejection({ reservationUpdate: { reservations: [seeded] } });
+    expect(error).toMatchObject({ name: 'SabreReservationUpdateError', reason: 'SEGMENT_ID_MISMATCH', expectedSegments: ['8'], actualSegments: ['8'] });
+    expect((error as Error).message).toContain(text);
+    expect(commands(fake)).toEqual(['getReservation']);
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:UN', '10/2:TK', '9/3:HK']);
+  });
+
+  it('SEGMENT_NOT_FOUND va antes que SEGMENT_ID_MISMATCH, y SEGMENT_ID_MISMATCH antes que SEGMENT_STATUS_NOT_ALLOWED', async () => {
+    const seeded = () => ({ locator: 'AAAAAA', segments: [segment('8', 'UN'), segment('10', 'TK'), segment('9', 'HK', { productId: '19' })] });
+    const missing = await removeRejection({ reservationUpdate: { reservations: [seeded()] } }, { segmentIds: ['9', '77'] });
+    expect(missing.error).toMatchObject({ reason: 'SEGMENT_NOT_FOUND', actualSegments: ['77'] });
+    const mismatch = await removeRejection({ reservationUpdate: { reservations: [seeded()] } }, { segmentIds: ['9', '10'] });
+    expect(mismatch.error).toMatchObject({ reason: 'SEGMENT_ID_MISMATCH', actualSegments: ['9'] });
+  });
+
+  it('un Product@id distinto en un segmento que no se pide no impide la baja ni la confirmación', async () => {
+    const seeded = () => ({ locator: 'AAAAAA', segments: [segment('8', 'UN'), segment('10', 'TK'), segment('9', 'HK', { productId: '19' })] });
+    const { fake, result } = await remove({ reservationUpdate: { reservations: [seeded()] } });
+    expect(result).toMatchObject({ status: 'removed', changed: ['8'], warnings: [] });
+    expect(result.segments.map((item) => item.productId)).toEqual(['10', '19']);
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['10/1:TK', '9/2:HK']);
+    const confirmed = await confirm({ reservationUpdate: { reservations: [seeded()] } }, { expectedSegmentIds: ['10'] });
+    expect(confirmed.result.status).toBe('confirmed');
+  });
+
   it('SEGMENT_NOT_FOUND: no manda Update, no borra los demás ni consume un desenlace', async () => {
     const { fake, error } = await removeRejection({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ uncertain: 'TRANSPORT' }] } }, { segmentIds: ['8', '99'] });
     expect(error).toMatchObject({ name: 'SabreReservationUpdateError', reason: 'SEGMENT_NOT_FOUND', actualSegments: ['99'] });
@@ -335,15 +365,38 @@ describe('fake: reservation.removeAirSegments, inciertos', () => {
   });
 });
 
-// Las formas de ADR-034, precisiones 12 y 13 (#269). Por ahora estos tests miran el estado del fake;
-// lo que el SDK lanza o avisa con ellas (PARTIALLY_APPLIED, UNEXPECTED_CHANGE) se prueba con sus tipos.
+// Las formas de ADR-034, precisiones 12 y 13 (#269): PARTIALLY_APPLIED, UNEXPECTED_CHANGE y el
+// UpdateResult@Status que suma a NOT_APPLIED, contra el SDK real.
 describe('fake: desenlaces de baja parcial, efectos laterales y UpdateResult@Status', () => {
   const both = () => ({ locator: 'AAAAAA', segments: [segment('8', 'UN'), segment('10', 'HX'), segment('9', 'HK')] });
 
-  it('{ error, removed }: guarda solo las bajas de removed y responde con Errors', async () => {
+  it('{ error, removed }: PARTIALLY_APPLIED sin IgnoreTransaction, y solo las bajas de removed quedan guardadas', async () => {
     const { fake, error } = await removeRejection({ reservationUpdate: { reservations: [both()], outcomes: [{ error: { code: '700432' }, removed: ['8'] }] } }, { segmentIds: ['8', '10'] });
-    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(SabreUncertainOutcomeError);
+    expect(error).toMatchObject({ reason: 'PARTIALLY_APPLIED', operation: 'reservation.removeAirSegments', confirmationId: 'AAAAAA' });
+    expect(commands(fake)).toEqual(['getReservation', 'updateReservation']);
     expect(ids(fake.airSegments('AAAAAA'))).toEqual(['10/1:HX', '9/2:HK']);
+  });
+
+  it('PARTIALLY_APPLIED → relectura en otra sesión: el mismo pedido da SEGMENT_NOT_FOUND y la baja que faltó sale sola', async () => {
+    const { fake, legacy } = client({ reservationUpdate: { reservations: [both()], outcomes: [{ error: { code: '700432' }, removed: ['8'] }] } });
+    const request = { ...REMOVE, segmentIds: ['8', '10'] };
+    const first = await legacy.openSession();
+    expect(await rejection(first.reservation.removeAirSegments(request))).toMatchObject({ reason: 'PARTIALLY_APPLIED' });
+    await first.close();
+    const second = await legacy.openSession();
+    expect(await rejection(second.reservation.removeAirSegments(request))).toMatchObject({ reason: 'SEGMENT_NOT_FOUND', actualSegments: ['8'] });
+    const result = await second.reservation.removeAirSegments({ ...REMOVE, segmentIds: ['10'] });
+    await second.close();
+    expect(result).toMatchObject({ status: 'removed', changed: ['10'], warnings: [] });
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['9/1:HK']);
+  });
+
+  it('{ error } sin removed con varias bajas: sin evidencia, SABRE_ERROR con IgnoreTransaction', async () => {
+    const { fake, error } = await removeRejection({ reservationUpdate: { reservations: [both()], outcomes: [{ error: { code: '700432' } }] } }, { segmentIds: ['8', '10'] });
+    expect(error).toMatchObject({ name: 'SabreReservationUpdateError', reason: 'SABRE_ERROR', code: '700432' });
+    expect(commands(fake)).toEqual(['getReservation', 'updateReservation', 'ignoreTransaction']);
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:UN', '10/2:HX', '9/3:HK']);
   });
 
   it('{ error, removed } responde Errors con el PNR sin las bajas guardadas y su UpdateResult SUCCESS', async () => {
@@ -372,12 +425,16 @@ describe('fake: desenlaces de baja parcial, efectos laterales y UpdateResult@Sta
     const result = await session.reservation.confirmAirSegments({ ...REQUEST, expectedSegmentIds: ['8'] });
     await session.close();
     expect(result.changed).toEqual(['8', '9']);
+    expect(result.warnings).toEqual([expect.objectContaining({ code: 'UNEXPECTED_CHANGE', segmentIds: ['9'] })]);
+    expect(result.warnings[0]?.message).toContain('9 (UC)');
     expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:HK', '9/2:UC']);
   });
 
   it('{ sideEffects } en una baja: un HK no pedido desaparece y los demás se renumeran', async () => {
     const { fake, result } = await remove({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ sideEffects: { '9': null } }] } });
-    expect(result.status).toBe('removed');
+    expect(result).toMatchObject({ status: 'removed', changed: ['8', '9'] });
+    expect(result.warnings).toEqual([expect.objectContaining({ code: 'UNEXPECTED_CHANGE', segmentIds: ['9'] })]);
+    expect(result.warnings[0]?.message).toContain('9 (ya no está)');
     expect(ids(fake.airSegments('AAAAAA'))).toEqual(['10/1:TK']);
   });
 
@@ -389,7 +446,11 @@ describe('fake: desenlaces de baja parcial, efectos laterales y UpdateResult@Sta
 
   it.each([undefined, 'FAILED'])('{ notApplied: { status: %s } }: Success sin cambios y NOT_APPLIED', async (status) => {
     const { fake, result } = await remove({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ notApplied: status === undefined ? {} : { status } }] } });
-    expect(result.warnings).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'NOT_APPLIED' })]));
+    expect(result.warnings).toEqual([expect.objectContaining({ code: 'NOT_APPLIED', segmentIds: ['8'] })]);
+    const message = result.warnings[0]?.message ?? '';
+    expect(message).toContain('sigue en el PNR en UN');
+    if (status === undefined) expect(message).not.toContain('UpdateResult');
+    else expect(message).toContain(`UpdateResult ${status}`);
     expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:UN', '10/2:TK', '9/3:HK']);
   });
 

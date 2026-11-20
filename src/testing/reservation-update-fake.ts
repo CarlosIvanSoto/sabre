@@ -1,8 +1,8 @@
 // Las escrituras de ADR-034 en el fake (#270): `GetReservationRQ`, `UpdateReservationRQ` e
 // `IgnoreTransactionLLSRQ` (STL 1.19) sobre PNR sembrados con sus segmentos aéreos, para probar
 // `session.reservation.confirmAirSegments` y `removeAirSegments` sin red. El fake guarda el estado de cada PNR: lo que
-// hace el SDK (`noop`, `SEGMENTS_CHANGED`, `SEGMENT_NOT_FOUND`, `SEGMENT_STATUS_NOT_ALLOWED`) sale
-// de releerlo, igual que con Sabre. Ver
+// hace el SDK (`noop`, `SEGMENTS_CHANGED`, `SEGMENT_NOT_FOUND`, `SEGMENT_ID_MISMATCH`,
+// `SEGMENT_STATUS_NOT_ALLOWED`, `UNEXPECTED_CHANGE`) sale de releerlo, igual que con Sabre. Ver
 // sabre-wiki/wiki/proyectos/sabre-client/decisiones/confirmar-cambio-de-horario.md. Solo Web
 // Standard APIs.
 

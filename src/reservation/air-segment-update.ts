@@ -113,9 +113,10 @@ export class AirSegmentUpdate {
    * `PREVIOUS ENTRY ACTIVE` del transporte: sale un solo `UpdateReservationRQ`. Devuelve la
    * respuesta solo si trae `Success` y `Reservation`; lo demás lanza (no escrito o incierto).
    *
-   * `deleted` son los ids que borran los `items` (`removeAirSegments`). Con `Errors` y sin
-   * `Success`, si hay evidencia de que algo se aplicó (un `UpdateResult` `SUCCESS`, o un `deleted`
-   * que ya no está en `Reservation`), es incierto con `PARTIALLY_APPLIED`, sin IG.
+   * `deleted` son los ids que borran los `items` (`removeAirSegments`; vacío en
+   * `confirmAirSegments`). Con `Errors` y sin `Success`, si hay evidencia de que algo se aplicó (un
+   * `UpdateResult` `SUCCESS` en cualquiera de las dos operaciones, o un `deleted` que ya no está en
+   * un `Reservation` con segmentos aéreos), es incierto con `PARTIALLY_APPLIED`, sin IG.
    */
   async write(items: readonly string[], receivedFrom: string, deleted: readonly string[] = []): Promise<{ response: SoapResponse; after: StlReservationResponse & { segments: ReservationAirSegment[] } }> {
     const { signal, onRawRequest } = this.#options;
@@ -226,12 +227,14 @@ export class AirSegmentUpdate {
 
 /**
  * Evidencia, en un `UpdateReservationRS` con `Errors`, de que alguna parte se aplicó: los
- * `UpdateResult` `SUCCESS`, o los `deleted` que ya no están en `Reservation`. `undefined` si no hay.
+ * `UpdateResult` `SUCCESS`, o los `deleted` que ya no están en `Reservation`. La ausencia solo
+ * cuenta si `Reservation` trae al menos un segmento aéreo: uno reducido (sin `Segments`) no dice
+ * nada de lo que se borró. `undefined` si no hay evidencia.
  */
 function appliedEvidence(after: StlReservationResponse, deleted: readonly string[]): string | undefined {
   const succeeded = after.updateResults.filter((result) => result.status === 'SUCCESS').map((result) => result.updateId);
   if (succeeded.length > 0) return `UpdateResult SUCCESS en UpdateId ${succeeded.join(', ')}`;
-  if (after.segments === undefined) return undefined;
+  if (after.segments === undefined || after.segments.length === 0) return undefined;
   const present = new Set(after.segments.map((segment) => segment.id));
   const gone = deleted.filter((id) => !present.has(id));
   return gone.length > 0 ? `${gone.join(', ')} ya no está en el PNR` : undefined;

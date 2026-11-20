@@ -156,15 +156,17 @@ export async function removeAirSegments(
   const now = new Map(segments.map((segment) => [segment.id, segment.status]));
   const changed = before.segments.filter((segment) => now.get(segment.id) !== segment.status).map((segment) => segment.id);
   // El `UpdateResult` de cada baja va por `UpdateId`, que es la posición en `segmentIds` (desde 1).
-  const resultOf = new Map(after.updateResults.map((result) => [result.updateId, result.status]));
-  const failedResult = (id: string) => {
-    const status = resultOf.get(String(segmentIds.indexOf(id) + 1));
-    return resultOf.has(String(segmentIds.indexOf(id) + 1)) && status !== 'SUCCESS' ? (status ?? 'sin Status') : undefined;
-  };
-  const notApplied = segmentIds.filter((id) => now.has(id) || failedResult(id) !== undefined);
+  // Uno distinto de `SUCCESS` cuenta como no aplicado aunque el segmento ya no esté en el PNR.
+  const failedResult = new Map<string, string>();
+  for (const result of after.updateResults) {
+    const id = segmentIds[Number(result.updateId) - 1];
+    if (id !== undefined && result.status !== 'SUCCESS') failedResult.set(id, result.status ?? 'sin Status');
+  }
+  const notApplied = segmentIds.filter((id) => now.has(id) || failedResult.has(id));
   const warnings: ReservationUpdateWarning[] = [...before.warnings, ...after.warnings];
   if (notApplied.length > 0) {
-    const detail = (id: string) => [now.has(id) ? `sigue en el PNR en ${now.get(id)}` : undefined, failedResult(id) === undefined ? undefined : `UpdateResult ${failedResult(id)}`].filter(Boolean).join(', ');
+    const detail = (id: string) =>
+      [now.has(id) ? `sigue en el PNR en ${now.get(id)}` : undefined, failedResult.has(id) ? `UpdateResult ${failedResult.get(id)}` : undefined].filter(Boolean).join(', ');
     warnings.push({
       code: 'NOT_APPLIED',
       message: `Sabre respondió Success, pero la baja no se aplicó en ${notApplied.map((id) => `${id} (${detail(id)})`).join(', ')}`,

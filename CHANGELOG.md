@@ -39,9 +39,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   remaining `segments`, `changed` and `warnings` (`NOT_APPLIED` when a segment is still there or
   its `UpdateResult` is not `SUCCESS`). Same errors, uncertain outcomes
   (`operation: 'reservation.removeAirSegments'`) and no-retry rule as `confirmAirSegments` (#269).
-- The `PARTIALLY_APPLIED` reason of `SabreUncertainOutcomeError`: `removeAirSegments` got
-  `Errors` from Sabre, but an `UpdateResult` with `SUCCESS` or a requested segment already gone
-  shows that some delete went through. No `IgnoreTransaction` is sent (#269).
+- The `PARTIALLY_APPLIED` reason of `SabreUncertainOutcomeError`: the update got `Errors` from
+  Sabre, but an `UpdateResult` with `SUCCESS` (in `removeAirSegments` or `confirmAirSegments`),
+  or a requested segment missing from a `Reservation` that lists air segments
+  (`removeAirSegments`), shows that part of it went through. No `IgnoreTransaction` is sent
+  (#269).
 - The `UNEXPECTED_CHANGE` warning, in `confirmAirSegments` and `removeAirSegments`: `changed`
   lists segments that were not asked for, in its `segmentIds` (#269).
 - `ReservationAirSegment.productId` (`Segment/Product@id`) and the `SEGMENT_ID_MISMATCH` reason

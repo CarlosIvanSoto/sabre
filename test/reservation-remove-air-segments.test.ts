@@ -342,6 +342,7 @@ describe('reservation.removeAirSegments: errores de Sabre en el Update', () => {
   it.each([
     ['UpdateResult sin ningún SUCCESS', '<stl19:Results><stl19:UpdateResult UpdateId="1" Status="FAILED"><stl19:Item op="D"/></stl19:UpdateResult></stl19:Results>'],
     ['Reservation con los dos segmentos', () => reservationOf(bodyOf(getFixture, 'tk-un-hx'))],
+    ['Reservation sin Segments', () => reservationOf(bodyOf(getFixture, 'tk-un-hx')).replace(/<stl19:Segments>[\s\S]*<\/stl19:Segments>/, '')],
   ] as const)('Errors sin evidencia de baja (%s): SABRE_ERROR con IgnoreTransaction', async (_case, extra) => {
     const { fetch, session } = await openWith(get('tk-un-hx'), rejectedWith(typeof extra === 'string' ? extra : extra()), ignored());
     const error = await rejection(session.reservation.removeAirSegments({ ...REQUEST, segmentIds: ['8', '10'] }));

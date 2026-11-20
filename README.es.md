@@ -654,8 +654,9 @@ const result = await legacy.withSession((session) =>
   con `operation: 'reservation.confirmAirSegments'` y el localizador en `confirmationId`:
   `TRANSPORT` (fallo de red), `GATEWAY_5XX` (cualquier SOAP fault, o un `5xx`), `UNPARSEABLE` (un
   body ilegible), `ABORTED` (un abort con el Update ya mandado), `END_TRANSACTION_PROBLEM`
-  (`Success` junto con `Errors`) o `PREVIOUS_ENTRY_ACTIVE` (Sabre agotó sus reintentos y una
-  entrada del Update puede seguir en curso). No se manda `IgnoreTransaction`. **Cierra la sesión
+  (`Success` junto con `Errors`), `PREVIOUS_ENTRY_ACTIVE` (Sabre agotó sus reintentos y una
+  entrada del Update puede seguir en curso) o `PARTIALLY_APPLIED` (`Errors`, pero algún
+  `UpdateResult` dice `SUCCESS`). No se manda `IgnoreTransaction`. **Cierra la sesión
   y relee el PNR en una nueva antes de reintentar**: el cambio incierto puede seguir pendiente en
   el área de trabajo de la sesión, y un End Transaction posterior en la misma sesión podría
   commitearlo.
@@ -694,7 +695,9 @@ const result = await legacy.withSession((session) =>
    que ya no están (o cambiaron de estado). `warnings` trae `NOT_APPLIED` si un segmento pedido
    sigue en el PNR o su `UpdateResult` no es `SUCCESS`, y `UNEXPECTED_CHANGE` (con `segmentIds`)
    si `changed` trae un segmento que no pediste (un segmento casado que la aerolínea canceló con
-   el pedido, por ejemplo).
+   el pedido, por ejemplo). `NOT_APPLIED` puede nombrar un segmento que también está en
+   `changed`: pasa cuando su `UpdateResult` no es `SUCCESS` pero el PNR ya no lo tiene, así que
+   las dos respuestas de Sabre se contradicen; relee el PNR antes de fiarte de cualquiera.
 
 - **`allowedStatuses` vale `['UN', 'HX']` por defecto** (`DEFAULT_REMOVABLE_STATUSES`): un `HK`
   nunca se borra con el default. Si pasas la lista, reemplaza el default.
@@ -702,7 +705,8 @@ const result = await legacy.withSession((session) =>
   un `HX` es un supuesto hasta la primera llamada real. El chequeo de `Product@id` del paso 2
   evita que una diferencia entre los dos ids borre otro segmento.
 - **Bajas parciales:** si Sabre responde `Errors` pero muestra que alguna baja se aplicó (un
-  `UpdateResult` con `SUCCESS`, o un segmento pedido que ya no está en `Reservation`), lanza
+  `UpdateResult` con `SUCCESS`, o un segmento pedido que falta en un `Reservation` que sí trae
+  segmentos aéreos), lanza
   `SabreUncertainOutcomeError` con `reason: 'PARTIALLY_APPLIED'` y no manda `IgnoreTransaction`.
   Sin esa evidencia, es un `SABRE_ERROR` como arriba.
 - Los errores, los inciertos (`operation: 'reservation.removeAirSegments'`), los reintentos y los

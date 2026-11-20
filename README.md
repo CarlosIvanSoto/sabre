@@ -655,8 +655,9 @@ const result = await legacy.withSession((session) =>
   `operation: 'reservation.confirmAirSegments'` and the locator in `confirmationId`:
   `TRANSPORT` (network failure), `GATEWAY_5XX` (any SOAP fault, or a `5xx`), `UNPARSEABLE` (an
   unreadable body), `ABORTED` (an abort after sending), `END_TRANSACTION_PROBLEM` (`Success`
-  together with `Errors`) or `PREVIOUS_ENTRY_ACTIVE` (Sabre's own retries ran out while an entry
-  of the update may still be running). No `IgnoreTransaction` is sent. **Close the session and
+  together with `Errors`), `PREVIOUS_ENTRY_ACTIVE` (Sabre's own retries ran out while an entry
+  of the update may still be running) or `PARTIALLY_APPLIED` (`Errors`, but some
+  `UpdateResult` says `SUCCESS`). No `IgnoreTransaction` is sent. **Close the session and
   read the PNR again in a new one before retrying**: the uncertain change may still be pending in
   the session's work area, and a later End Transaction in the same session could commit it.
 - `USG_*_BUSY` and a session error are thrown as they are: Sabre did not process the update.
@@ -693,7 +694,9 @@ const result = await legacy.withSession((session) =>
    lists the segments that are gone (or changed status). `warnings` carries `NOT_APPLIED` when a
    requested segment is still in the PNR or its `UpdateResult` is not `SUCCESS`, and
    `UNEXPECTED_CHANGE` (with `segmentIds`) when `changed` lists a segment you did not ask for (a
-   married segment the airline cancelled with it, for example).
+   married segment the airline cancelled with it, for example). `NOT_APPLIED` can name a segment
+   that is also in `changed`: that happens when its `UpdateResult` is not `SUCCESS` but the PNR
+   no longer has it, so Sabre's two answers disagree; read the PNR again before trusting either.
 
 - **`allowedStatuses` defaults to `['UN', 'HX']`** (`DEFAULT_REMOVABLE_STATUSES`): an `HK`
   segment is never deleted by default. Passing the list replaces the default.
@@ -701,7 +704,8 @@ const result = await legacy.withSession((session) =>
   and `HX` the same way is an assumption until the first real call. The `Product@id` check of
   step 2 keeps a mismatch between the two ids from deleting another segment.
 - **Partial deletes:** if Sabre answers `Errors` but shows that some delete went through (an
-  `UpdateResult` with `SUCCESS`, or a requested segment already gone from `Reservation`), it
+  `UpdateResult` with `SUCCESS`, or a requested segment missing from a `Reservation` that still
+  lists air segments), it
   throws `SabreUncertainOutcomeError` with `reason: 'PARTIALLY_APPLIED'` and sends no
   `IgnoreTransaction`. Without that evidence, it is a `SABRE_ERROR` as above.
 - Errors, uncertain outcomes (`operation: 'reservation.removeAirSegments'`), retries and raw

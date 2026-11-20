@@ -141,8 +141,9 @@ export class SessionReservation {
    * - Lo que pudo haber llegado a Sabre sin una respuesta clara lanza
    *   `SabreUncertainOutcomeError` (`operation: 'reservation.confirmAirSegments'`,
    *   `confirmationId`: el localizador; `reason`: `TRANSPORT`, `GATEWAY_5XX` (cualquier SOAP
-   *   fault o un 5xx), `UNPARSEABLE`, `ABORTED`, `END_TRANSACTION_PROBLEM` o
-   *   `PREVIOUS_ENTRY_ACTIVE`), sin `IgnoreTransaction`. **Cierra la sesión y relee el PNR en una
+   *   fault o un 5xx), `UNPARSEABLE`, `ABORTED`, `END_TRANSACTION_PROBLEM`,
+   *   `PREVIOUS_ENTRY_ACTIVE` o `PARTIALLY_APPLIED`: `Errors` con algún `UpdateResult`
+   *   `SUCCESS`), sin `IgnoreTransaction`. **Cierra la sesión y relee el PNR en una
    *   nueva antes de reintentar**: el cambio puede seguir pendiente en el AAA de esta sesión, y un
    *   End Transaction posterior en ella podría commitearlo.
    * - `USG_*_BUSY` y un error de sesión salen tal cual: Sabre no procesó el Update.
@@ -167,8 +168,9 @@ export class SessionReservation {
    *    o `SEGMENT_STATUS_NOT_ALLOWED` (su estado no está en `allowedStatuses`).
    * 3. Manda la baja y compara el PNR de la respuesta con el de la lectura: `segments` trae los
    *    que quedan, `changed` los que ya no están (o cambiaron de estado). `warnings` trae
-   *    `NOT_APPLIED` si uno pedido sigue en el PNR o su `UpdateResult` no es `SUCCESS`, y
-   *    `UNEXPECTED_CHANGE` si `changed` trae uno que no se pidió (un segmento casado, p. ej.).
+   *    `NOT_APPLIED` si uno pedido sigue en el PNR o su `UpdateResult` no es `SUCCESS` (puede
+   *    estar también en `changed` si el `UpdateResult` contradice al PNR), y `UNEXPECTED_CHANGE`
+   *    si `changed` trae uno que no se pidió (un segmento casado, p. ej.).
    *
    * - **`allowedStatuses` por defecto es `['UN', 'HX']`**: un `HK` nunca se borra con el
    *   default. Pasar la lista la reemplaza: para borrar un `HK` hay que incluirlo.
@@ -177,7 +179,8 @@ export class SessionReservation {
    *   de STL (`segments[].id`), no el `itemId` de `booking.get`. El chequeo de `Product@id` del
    *   paso 2 evita borrar otro segmento si los dos ids no coinciden.
    * - **Baja parcial:** si Sabre responde `Errors` con evidencia de que alguna baja se aplicó (un
-   *   `UpdateResult` `SUCCESS`, o un segmento pedido que ya no está en `Reservation`), lanza
+   *   `UpdateResult` `SUCCESS`, o un segmento pedido que ya no está en un `Reservation` con
+   *   segmentos aéreos), lanza
    *   `SabreUncertainOutcomeError` con `reason: 'PARTIALLY_APPLIED'`, sin `IgnoreTransaction`.
    * - **El Update nunca se reintenta**: sale un solo `UpdateReservationRQ`, tampoco ante
    *   `PREVIOUS ENTRY ACTIVE`.

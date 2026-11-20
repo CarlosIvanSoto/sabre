@@ -344,11 +344,20 @@ describe('fake: reservation.confirmAirSegments, siembra', () => {
     [{ reservations: [{ locator: 'AAAAAA', segments: [segment('1', 'tk')] }] }, /status/],
     [{ reservations: [{ locator: 'AAAAAA', segments: [segment('1', 'TK', { sequence: 0 })] }] }, /sequence/],
     [{ reservations: [pnr(), pnr()] }, /dos veces/],
+    [{ reservations: [{ locator: 'AAAAAA', segments: [segment('1', 'TK', { productId: '' })] }] }, /productId/],
+    [{ reservations: [{ locator: 'AAAAAA', segments: [segment('1', 'TK', { productId: '2' }), segment('2', 'HK')] }] }, /productId '2' está repetido/],
     [{ outcomes: [{ uncertain: 'NOT_COMMITTED' }] }, /uncertain/],
     [{ outcomes: [{ error: {} }] }, /code/],
     [{ outcomes: ['otro'] }, /applied/],
   ])('una siembra inválida lanza TypeError al crear el fake (%#)', (reservationUpdate, message) => {
     expect(() => createQueueFake({ reservationUpdate: reservationUpdate as NonNullable<QueueFakeOptions['reservationUpdate']> })).toThrow(message);
+  });
+
+  it('productId: por defecto igual al id; uno distinto o null se conserva en airSegments', () => {
+    const fake = createQueueFake({
+      reservationUpdate: { reservations: [{ locator: 'AAAAAA', segments: [segment('8', 'UN'), segment('10', 'TK', { productId: '18' }), segment('9', 'HK', { productId: null })] }] },
+    });
+    expect(fake.airSegments('AAAAAA')?.map((item) => item.productId)).toEqual([undefined, '18', null]);
   });
 
   it('airSegments de un PNR no sembrado es undefined', () => {

@@ -6,10 +6,16 @@
 // sabre-wiki/wiki/proyectos/sabre-client/decisiones/confirmar-cambio-de-horario.md. Solo Web
 // Standard APIs.
 
-/** Un segmento aéreo sembrado, con los campos que el SDK lee de `Segment/Air`. */
+/** Un segmento aéreo sembrado, con los campos que el SDK lee de `Segment/Air` y `Segment/Product`. */
 export interface QueueFakeAirSegment {
   /** `Air@id`: el que se pasa en `expectedSegmentIds` o `segmentIds`. Único dentro del PNR. */
   id: string;
+  /**
+   * `Product@id`: el que borra `ProductUpdate op="D"`. Por defecto, igual a `id`, como en los
+   * ejemplos oficiales. Uno distinto, o `null` para omitir `Product`, sirve para forzar
+   * `SEGMENT_ID_MISMATCH` (ADR-034, precisión 11). Único dentro del PNR.
+   */
+  productId?: string | null;
   /**
    * `Air@sequence`: el orden en el itinerario. Por defecto, la posición en la lista (1, 2…).
    * Después de una baja, los que quedan se renumeran de 1 en adelante, como en los ejemplos.
@@ -135,6 +141,8 @@ function text(value: unknown): string | undefined {
 
 interface Segment {
   id: string;
+  /** `Product@id`, o `undefined` si el segmento no trae `Product`. */
+  productId: string | undefined;
   sequence: number;
   status: string;
   fields: Omit<QueueFakeAirSegment, 'id' | 'sequence' | 'status'>;
@@ -154,12 +162,21 @@ function toReservation(value: QueueFakeReservation, label: string): Stored {
   if (typeof value.locator !== 'string' || !LOCATOR.test(value.locator)) fail(`${label}.locator debe tener 6 caracteres alfanuméricos en mayúscula`);
   if (!Array.isArray(value.segments)) fail(`${label}.segments debe ser una lista`);
   const ids = new Set<string>();
+  const products = new Set<string>();
   const segments = value.segments.map((segment, index): Segment => {
     const at = `${label}.segments[${index}]`;
     if (typeof segment !== 'object' || segment === null) fail(`${at} debe ser un objeto`);
     if (typeof segment.id !== 'string' || segment.id.trim() === '') fail(`${at}.id debe ser un texto no vacío`);
     if (ids.has(segment.id)) fail(`${at}.id '${segment.id}' está repetido en el PNR`);
     ids.add(segment.id);
+    if (segment.productId !== undefined && segment.productId !== null && (typeof segment.productId !== 'string' || segment.productId.trim() === '')) {
+      fail(`${at}.productId debe ser un texto no vacío o null`);
+    }
+    const productId = segment.productId === null ? undefined : (segment.productId ?? segment.id);
+    if (productId !== undefined) {
+      if (products.has(productId)) fail(`${at}.productId '${productId}' está repetido en el PNR`);
+      products.add(productId);
+    }
     if (typeof segment.status !== 'string' || !STATUS.test(segment.status)) fail(`${at}.status debe ser un ActionCode de dos letras mayúsculas (TK, HK…)`);
     const sequence = segment.sequence ?? index + 1;
     if (!Number.isInteger(sequence) || sequence < 1) fail(`${at}.sequence debe ser un entero ≥ 1`);
@@ -170,7 +187,7 @@ function toReservation(value: QueueFakeReservation, label: string): Stored {
       if (typeof found !== 'string' || found === '') fail(`${at}.${key} debe ser un texto no vacío`);
       fields[key] = found;
     }
-    return { id: segment.id, sequence, status: segment.status, fields };
+    return { id: segment.id, productId, sequence, status: segment.status, fields };
   });
   return { locator: value.locator, segments, sequence: 1 };
 }
@@ -209,7 +226,9 @@ const segmentXml = (segment: Segment): string => {
     element('ArrivalDateTime', fields.arrival),
     element('FlightNumber', fields.flightNumber),
     element('ActionCode', segment.status),
-    '</stl19:Air></stl19:Segment>',
+    '</stl19:Air>',
+    segment.productId === undefined ? '' : `<stl19:Product id="${escape(segment.productId)}"/>`,
+    '</stl19:Segment>',
   ].join('');
 };
 
@@ -253,8 +272,8 @@ export function createReservationUpdateHandler(
 
   /** `CONFIRM-ALL`: los `TK` pasan a `HK`. */
   const confirmAll = (segments: readonly Segment[]) => segments.map((segment) => (segment.status === 'TK' ? { ...segment, status: 'HK' } : segment));
-  /** `ProductUpdate op="D"`: borra el segmento con ese id. */
-  const remove = (id: string) => (segments: readonly Segment[]) => segments.filter((segment) => segment.id !== id);
+  /** `ProductUpdate op="D"`: borra el segmento con ese `Product@id`. */
+  const remove = (productId: string) => (segments: readonly Segment[]) => segments.filter((segment) => segment.productId !== productId);
   /** Después de una baja, los que quedan se renumeran de 1 en adelante (como en los ejemplos de Delete). */
   const renumber = (segments: readonly Segment[]) =>
     [...segments].sort((a, b) => a.sequence - b.sequence).map((segment, index) => ({ ...segment, sequence: index + 1 }));
@@ -292,7 +311,7 @@ export function createReservationUpdateHandler(
         steps.push(confirmAll);
       } else if (product !== undefined && text(product['@op']) === 'D') {
         const id = text(product['@id']) ?? '';
-        if (!pnr.segments.some((segment) => segment.id === id)) return notSimulated(`ProductUpdate op="D" de un segmento que no está en el PNR ('${id}')`);
+        if (!pnr.segments.some((segment) => segment.productId === id)) return notSimulated(`ProductUpdate op="D" de un segmento que no está en el PNR ('${id}')`);
         steps.push(remove(id));
         results.push(`<stl19:UpdateResult UpdateId="${escape(updateId)}" Status="SUCCESS"><stl19:Item op="D"/></stl19:UpdateResult>`);
         removes = true;
@@ -356,7 +375,13 @@ export function createReservationUpdateHandler(
 
   /** Los segmentos aéreos actuales de un PNR sembrado, o `undefined` si no está. */
   const segments = (locator: string): QueueFakeAirSegment[] | undefined =>
-    stored.get(locator)?.segments.map((segment) => ({ id: segment.id, sequence: segment.sequence, status: segment.status, ...segment.fields }));
+    stored.get(locator)?.segments.map((segment) => ({
+      id: segment.id,
+      ...(segment.productId === segment.id ? {} : { productId: segment.productId ?? null }),
+      sequence: segment.sequence,
+      status: segment.status,
+      ...segment.fields,
+    }));
 
   return { get, update, ignore, segments, forget: (session: string) => read.delete(session) };
 }

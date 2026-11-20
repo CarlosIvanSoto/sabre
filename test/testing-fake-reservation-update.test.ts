@@ -444,6 +444,25 @@ describe('fake: desenlaces de baja parcial, efectos laterales y UpdateResult@Sta
     expect(responses.join('')).toContain("sideEffects de un segmento que no está en el PNR ('77')");
   });
 
+  it('{ notApplied: { status } } en una confirmación: CONFIRM-ALL no trae UpdateResult, así que es igual que notApplied', async () => {
+    const { fake, result } = await confirm({ reservationUpdate: { reservations: [pnr()], outcomes: [{ notApplied: { status: 'FAILED' } }] } });
+    expect(result.warnings).toEqual([expect.objectContaining({ code: 'NOT_APPLIED', segmentIds: ['8', '9'] })]);
+    expect(result.warnings[0]?.message).not.toContain('FAILED');
+    expect(statuses(fake.airSegments('AAAAAA'))).toEqual(['8:TK', '9:TK']);
+  });
+
+  it('PREVIOUS_ENTRY_ACTIVE con applied: true no deja evidencia: sigue PREVIOUS_ENTRY_ACTIVE, y el reintento lo revela', async () => {
+    const { fake, legacy } = client({ reservationUpdate: { reservations: [both()], outcomes: [{ uncertain: 'PREVIOUS_ENTRY_ACTIVE', applied: true }] } });
+    const request = { ...REMOVE, segmentIds: ['8', '10'] };
+    const first = await legacy.openSession();
+    expect(await rejection(first.reservation.removeAirSegments(request))).toMatchObject({ reason: 'PREVIOUS_ENTRY_ACTIVE' });
+    await first.close();
+    const second = await legacy.openSession();
+    expect(await rejection(second.reservation.removeAirSegments(request))).toMatchObject({ reason: 'SEGMENT_NOT_FOUND', actualSegments: ['8', '10'] });
+    await second.close();
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['9/1:HK']);
+  });
+
   it.each([undefined, 'FAILED'])('{ notApplied: { status: %s } }: Success sin cambios y NOT_APPLIED', async (status) => {
     const { fake, result } = await remove({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ notApplied: status === undefined ? {} : { status } }] } });
     expect(result.warnings).toEqual([expect.objectContaining({ code: 'NOT_APPLIED', segmentIds: ['8'] })]);

@@ -56,7 +56,9 @@ export type QueueFakeReservationUpdateUncertainReason =
  * - `'notApplied'`: responde `Success` con el PNR sin cambios; el SDK avisa `NOT_APPLIED`. Cada
  *   baja trae su `UpdateResult` con `Status="SUCCESS"`, como la fixture `delete-not-applied`.
  * - `{ notApplied: { status? } }`: igual, pero el `UpdateResult@Status` de cada baja es `status`
- *   (p. ej. `'FAILED'`), que también suma a `NOT_APPLIED` (ADR-034, precisión 13).
+ *   (p. ej. `'FAILED'`), que también suma a `NOT_APPLIED` (ADR-034, precisión 13). Solo tiene
+ *   efecto en `removeAirSegments`: `CONFIRM-ALL` no trae `UpdateResult`, así que en
+ *   `confirmAirSegments` el `status` se ignora y es igual que `'notApplied'`.
  * - `{ sideEffects }`: escribe lo pedido y además cambia segmentos que nadie pidió, por `Air@id`:
  *   `null` lo borra y un `ActionCode` le pone ese status. Para forzar `UNEXPECTED_CHANGE`
  *   (precisión 13), en los dos métodos.
@@ -67,7 +69,11 @@ export type QueueFakeReservationUpdateUncertainReason =
  *   sin ellos y su `UpdateResult` `SUCCESS`, para `PARTIALLY_APPLIED` (precisión 12).
  * - `{ uncertain, applied? }`: el SDK lanza `SabreUncertainOutcomeError` con esa `reason`.
  *   `applied` dice si el cambio queda guardado en el fake, para probar la relectura. Por
- *   defecto, sí con `END_TRANSACTION_PROBLEM` y no con las demás.
+ *   defecto, sí con `END_TRANSACTION_PROBLEM` y no con las demás. Solo `END_TRANSACTION_PROBLEM`
+ *   trae el PNR en la respuesta; con las demás, `applied: true` no deja evidencia en ella. Por
+ *   ejemplo, `PREVIOUS_ENTRY_ACTIVE` responde solo `Errors`, así que el SDK da
+ *   `PREVIOUS_ENTRY_ACTIVE` igual (no `PARTIALLY_APPLIED`). Lo revela el reintento en una sesión
+ *   nueva: `noop` en `confirmAirSegments`, `SEGMENT_NOT_FOUND` en `removeAirSegments`.
  *
  * El fake no simula el AAA: un `700408` (`No PNR in AAA`) solo sale si se fuerza como `error`.
  */

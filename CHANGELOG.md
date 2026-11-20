@@ -7,6 +7,29 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `session.reservation.confirmAirSegments` (ADR-034): confirms a schedule change by moving the
+  PNR's `TK` segments to `HK` with `UpdateReservationRQ` 1.19.0 `CONFIRM-ALL` and the End
+  Transaction in the same call. It reads the PNR first (`GetReservationRQ`, `Stateful`): with no
+  `TK` it returns `status: 'noop'`, and if the `TK` segments are not exactly
+  `expectedSegmentIds` it throws without writing. The result has the air `segments` with their
+  `previousStatus`, `changed` and `warnings` (`NOT_APPLIED`). The update is sent exactly once,
+  with no retries at all, `PREVIOUS ENTRY ACTIVE` included (#268).
+- `SabreReservationUpdateError`, a `SabreBusinessError` (`service: 'updateReservation'`) with
+  `reason` (`SEGMENTS_CHANGED`, `SEGMENT_NOT_FOUND`, `SEGMENT_STATUS_NOT_ALLOWED` or
+  `SABRE_ERROR`), `severity`, `expectedSegments` and `actualSegments` (segment ids). An error from
+  Sabre in the update (`Errors/Error` or `stl:ApplicationResults/Error`) sends
+  `IgnoreTransactionLLSRQ` 2.0.0 first. What may have reached Sabre without a clear answer throws
+  `SabreUncertainOutcomeError` with `operation: 'reservation.confirmAirSegments'` and the locator
+  in `confirmationId`; close the session and read the PNR again in a new one (#268).
+- The `PREVIOUS_ENTRY_ACTIVE` reason of `SabreUncertainOutcomeError`: `PREVIOUS ENTRY ACTIVE` as
+  an `stl:Error` in a write that commits in the same call (#268).
+- The `retryPreviousEntryActive` option of the SOAP request (internal): `false` turns off the
+  fixed `PREVIOUS ENTRY ACTIVE` retry scheme for writes with End Transaction (#268).
+- The `ReservationAirSegment`, `ReservationUpdateWarning` and `ConfirmAirSegments*` types, and the
+  `sabre.reservation.ignoreFailed` log event (#268).
+
 ## [0.8.0] - 2026-11-16
 
 PNR search by update date, the synchronization entry point BX3 asked for (ADR-033). Everything is

@@ -85,6 +85,7 @@ Tier 3 adds the `SabreLegacy` SOAP client, with a stateful session and Queue Man
 | Queue paragraph | — (pure function) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
 | PNR history | `TravelItineraryHistoryLLSRQ` 2.4.0 | `session.reservation.history` |
 | PNR search by update date | `Trip_SearchRQ` 4.5.0 (Search For Itineraries, `0.8.0`) | `session.reservation.searchByUpdateDate` |
+| Confirm a schedule change | `GetReservationRQ` / `UpdateReservationRQ` 1.19.0 (`CONFIRM-ALL`), `IgnoreTransactionLLSRQ` 2.0.0 | `session.reservation.confirmAirSegments` |
 | Host commands | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 | Daily sales | `TKT_TravelAgencyReportsRQ` / `DailySalesSummaryRQ` 1.2.2 (the DQB «Summary») | `session.reporting.dailySalesSummary` |
 
@@ -610,6 +611,57 @@ const result = await legacy.withSession((session) =>
   or `UNKNOWN`. Only `TOO_MANY_RESULTS` has been seen in a real response (CERT, `200206` with
   `severity: 'WARNING'`); the shape of the others comes from Sabre's guide.
 
+### Confirming a schedule change
+
+`session.reservation.confirmAirSegments(request, options?)` (ADR-034) moves the PNR's `TK`
+segments to `HK` with `UpdateReservationRQ` 1.19.0 `CONFIRM-ALL`, with the End Transaction in the
+same call. It is a write.
+
+```ts
+const result = await legacy.withSession((session) =>
+  session.reservation.confirmAirSegments({
+    locator: 'ABCDEF',
+    receivedFrom: 'SCHEDULE CHANGE',   // the transaction's received-from: required
+    expectedSegmentIds: ['8', '9'],    // the TK segments you expect, by STL segment id
+  }),
+);
+// result.status → 'confirmed' | 'noop'
+// result.segments → [{ id: '8', sequence: 1, marketingCarrier: 'B6', flightNumber: '3309',
+//   from: 'JFK', to: 'FLL', departure: '2021-03-30T11:45:00', previousStatus: 'TK', status: 'HK' }, …]
+// result.changed → ['8', '9']; result.warnings → []
+```
+
+1. It reads the PNR again (`GetReservationRQ`, `Stateful`).
+2. With no `TK` segment it returns `status: 'noop'` and writes nothing. If the `TK` segments are
+   not exactly `expectedSegmentIds` (in any order), it throws `SabreReservationUpdateError` with
+   `reason: 'SEGMENTS_CHANGED'`, `expectedSegments` and `actualSegments` (ids), and writes nothing.
+3. It sends `CONFIRM-ALL` and compares the PNR in the response with the one it read: `changed`
+   lists the segments whose status changed, and `warnings` carries `NOT_APPLIED` when an expected
+   segment did not end up in `HK`.
+
+- **`CONFIRM-ALL` confirms every `TK` in the PNR**, not just the ones you expect: that is why
+  step 2 exists. Sabre has no way to confirm a single segment by id.
+- **Open questions (Q-139, Q-140):** whether `CONFIRM-ALL` also touches `KK` segments, and how the
+  STL segment id (`segments[].id`) relates to `booking.get`'s `itemId`. Take the ids from
+  `segments` or from an STL read.
+- **The update is never retried**: exactly one `UpdateReservationRQ` is sent, not even
+  `PREVIOUS ENTRY ACTIVE` is retried, and `retry.maxRetries` other than `0` throws a `TypeError`.
+- An error from Sabre (`Errors/Error`, or `stl:ApplicationResults/Error`) sends
+  `IgnoreTransaction` and throws `SabreReservationUpdateError` (`service: 'updateReservation'`,
+  `reason: 'SABRE_ERROR'`, Sabre's `code`, text and `severity`): nothing was written. The same
+  error in the read throws the same way, without `IgnoreTransaction`.
+- What may have reached Sabre without a clear answer throws `SabreUncertainOutcomeError` with
+  `operation: 'reservation.confirmAirSegments'` and the locator in `confirmationId`:
+  `TRANSPORT` (network failure), `GATEWAY_5XX` (any SOAP fault, or a `5xx`), `UNPARSEABLE` (an
+  unreadable body), `ABORTED` (an abort after sending), `END_TRANSACTION_PROBLEM` (`Success`
+  together with `Errors`) or `PREVIOUS_ENTRY_ACTIVE` (Sabre's own retries ran out while an entry
+  of the update may still be running). No `IgnoreTransaction` is sent. **Close the session and
+  read the PNR again in a new one before retrying**: the uncertain change may still be pending in
+  the session's work area, and a later End Transaction in the same session could commit it.
+- `USG_*_BUSY` and a session error are thrown as they are: Sabre did not process the update.
+- `onRawRequest` and `onRawResponse` are called once per call to Sabre: the read, the update and,
+  when needed, the `IgnoreTransaction`.
+
 ### Daily sales
 
 `session.reporting.dailySalesSummary(request?, options?)` reads the day's sales (the DQB
@@ -1004,8 +1056,9 @@ Every error thrown by the SDK extends `SabreError`:
 | `SabreOrchestrationError` | Orchestrated service error inside a `200` (`SP.*`) | `code` |
 | `SabreBusinessError` | Error from a service's own catalog (e.g. `No Availability`, a booking that was not created) | `service`, `code`, `warnings`, `errors` |
 | `SabreSessionError` | SOAP session failure in `SabreLegacy`, a subclass of `SabreGatewayError` | `kind`: `'limit'` (more than 50 sessions), `'invalid'`, `'expired'`, `'blocked'` |
-| `SabreUncertainOutcomeError` | Issuance or void may or may not have happened (`tickets.fulfill`, `booking.cancel` with `VOID`): verify before retrying | `operation`, `confirmationId`, `reason`, `tickets`, `warnings` |
+| `SabreUncertainOutcomeError` | Issuance, void or PNR update may or may not have happened (`tickets.fulfill`, `booking.cancel` with `VOID`, `reservation.confirmAirSegments`): verify before retrying | `operation`, `confirmationId`, `reason`, `tickets`, `warnings` |
 | `SabreTripSearchError` | Error from `Trip_SearchRQ` in `reservation.searchByUpdateDate`, a subclass of `SabreBusinessError` | `reason`, `severity`, plus those of `SabreBusinessError` |
+| `SabreReservationUpdateError` | A write of `reservation.confirmAirSegments` that did not happen (Sabre's error or the local check), a subclass of `SabreBusinessError` | `reason`, `severity`, `expectedSegments`, `actualSegments`, plus those of `SabreBusinessError` |
 | `SabreWarning` | Non-fatal warning (e.g. `category: WARNING` in Create Booking) | `service`, `code` |
 
 All of them have `retryable`, which says whether the retry policy may try again.
@@ -1061,7 +1114,7 @@ const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r)
 
 In `SabreLegacy`, `protocol` is `'soap'`, `body` is the whole SOAP envelope, and `operation` is
 `'openSession'`, `'close'`, `'ping'`, `'command'`, `'queue.<method>'`, `'reservation.history'`,
-`'reservation.searchByUpdateDate'` or `'reporting.dailySalesSummary'`. `tickets.verify` reports `'booking.get'`, the Get Booking it runs. The session token
+`'reservation.searchByUpdateDate'`, `'reservation.confirmAirSegments'` or `'reporting.dailySalesSummary'`. `tickets.verify` reports `'booking.get'`, the Get Booking it runs. The session token
 (`BinarySecurityToken`) is replaced by `[REDACTED]` wherever it appears. Nothing else is changed.
 
 > [!WARNING]
@@ -1114,7 +1167,9 @@ and `reporting.dailySalesSummary` are reads and are retried on transient failure
 operations that move the queue cursor (`access`, `ignore`, `remove`, `place`, `exit`) are retried
 only on the `USG_*_BUSY` codes, which are taken to mean that Sabre did not process the request, and on
 `PREVIOUS ENTRY ACTIVE` (3 × 1 s). They are never retried after a network failure, because the PNR
-may already have moved: the queue state becomes `'unknown'`.
+may already have moved: the queue state becomes `'unknown'`. The update in
+`reservation.confirmAirSegments` is never retried, not even on `PREVIOUS ENTRY ACTIVE`: it commits
+in the same call.
 
 ## Token reuse
 
@@ -1163,7 +1218,8 @@ The SDK logs structured events (`sabre.request.start`, `sabre.request.end`,
 `sabre.request.rawRequestHookFailed`, `sabre.auth.token.refresh`,
 `sabre.auth.token.store`, `sabre.booking.seat.priced`, `sabre.session.open`,
 `sabre.session.close`, `sabre.session.closeFailed`, `sabre.session.keepAliveFailed`,
-`sabre.session.command`, `sabre.queue.exitTolerated`, `sabre.queue.exitFailed`), never raw
+`sabre.session.command`, `sabre.queue.exitTolerated`, `sabre.queue.exitFailed`,
+`sabre.reservation.ignoreFailed`), never raw
 request or response bodies. Secrets, the `Authorization` header and passenger data are always
 redacted before they reach your logger.
 

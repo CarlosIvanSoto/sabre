@@ -82,6 +82,20 @@ describe('SoapTransport: PREVIOUS ENTRY ACTIVE', () => {
     expect(error.retryable).toBe(true);
   });
 
+  it.each([
+    ['como stl:Error', previousEntryActive],
+    ['como SOAP fault', () => xml(500, soap(fault('soap-env:Server', 'PREVIOUS ENTRY ACTIVE')))],
+  ])('con retryPreviousEntryActive: false no lo reintenta (%s)', async (_case, response) => {
+    const { fetch, transport, sleep, calls } = setup(response(), ok());
+
+    const error = await rejection(transport.request(request({ ...CURSOR, retry: { maxRetries: 0 }, retryPreviousEntryActive: false })));
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect(calls.some(([, event]) => event === 'sabre.request.retry')).toBe(false);
+    expect((error as Error).message).toMatch(/PREVIOUS ENTRY ACTIVE/);
+  });
+
   it('también lo reconoce dentro de un SOAP fault', async () => {
     const { fetch, transport } = setup(xml(500, soap(fault('soap-env:Server', 'PREVIOUS ENTRY ACTIVE'))), ok());
     await transport.request(request(CURSOR));

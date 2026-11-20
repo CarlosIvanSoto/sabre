@@ -32,11 +32,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `session.reservation.removeAirSegments` (ADR-034): deletes the air segments you pick (the old
   `UN`/`HX` flights of a schedule change) with one `ProductUpdate op="D"` per segment in a single
   `UpdateReservationRQ` 1.19.0, with the End Transaction in the same call. It reads the PNR first:
-  a segment that is not there throws `SEGMENT_NOT_FOUND`, and one whose status is not in
-  `allowedStatuses` (default `UN` and `HX`, never `HK`) throws `SEGMENT_STATUS_NOT_ALLOWED`;
-  nothing is written in either case. The result has the remaining `segments`, `changed` and
-  `warnings` (`NOT_APPLIED` when a segment is still there). Same errors, uncertain outcomes
+  a segment that is not there throws `SEGMENT_NOT_FOUND`; one whose `Product@id` (what `op="D"`
+  deletes) is missing or differs from its id throws `SEGMENT_ID_MISMATCH`; and one whose status
+  is not in `allowedStatuses` (default `UN` and `HX`, never `HK`) throws
+  `SEGMENT_STATUS_NOT_ALLOWED`. Nothing is written in any of those cases. The result has the
+  remaining `segments`, `changed` and `warnings` (`NOT_APPLIED` when a segment is still there or
+  its `UpdateResult` is not `SUCCESS`). Same errors, uncertain outcomes
   (`operation: 'reservation.removeAirSegments'`) and no-retry rule as `confirmAirSegments` (#269).
+- The `PARTIALLY_APPLIED` reason of `SabreUncertainOutcomeError`: `removeAirSegments` got
+  `Errors` from Sabre, but an `UpdateResult` with `SUCCESS` or a requested segment already gone
+  shows that some delete went through. No `IgnoreTransaction` is sent (#269).
+- The `UNEXPECTED_CHANGE` warning, in `confirmAirSegments` and `removeAirSegments`: `changed`
+  lists segments that were not asked for, in its `segmentIds` (#269).
+- `ReservationAirSegment.productId` (`Segment/Product@id`) and the `SEGMENT_ID_MISMATCH` reason
+  of `SabreReservationUpdateError` (#269).
 - The `RemoveAirSegments*` types and the `DEFAULT_REMOVABLE_STATUSES` and
   `REMOVE_AIR_SEGMENTS_OPERATION` constants (#269).
 

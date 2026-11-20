@@ -637,7 +637,8 @@ const result = await legacy.withSession((session) =>
    `reason: 'SEGMENTS_CHANGED'`, `expectedSegments` and `actualSegments` (ids), and writes nothing.
 3. It sends `CONFIRM-ALL` and compares the PNR in the response with the one it read: `changed`
    lists the segments whose status changed, and `warnings` carries `NOT_APPLIED` when an expected
-   segment did not end up in `HK`.
+   segment did not end up in `HK`, and `UNEXPECTED_CHANGE` (with `segmentIds`) when `changed` lists
+   a segment you did not expect (a `KK` that became `HK`, for example).
 
 - **`CONFIRM-ALL` confirms every `TK` in the PNR**, not just the ones you expect: that is why
   step 2 exists. Sabre has no way to confirm a single segment by id.
@@ -683,18 +684,26 @@ const result = await legacy.withSession((session) =>
 ```
 
 1. It reads the PNR again (`GetReservationRQ`, `Stateful`).
-2. If a segment in `segmentIds` is not in the PNR, it throws `SabreReservationUpdateError` with
-   `reason: 'SEGMENT_NOT_FOUND'`; if its status is not in `allowedStatuses`, with
-   `'SEGMENT_STATUS_NOT_ALLOWED'`. `actualSegments` lists the ids that failed. Nothing is
-   written, not even the other segments.
+2. It checks every segment in `segmentIds` and throws `SabreReservationUpdateError`, writing
+   nothing (not even the other segments), with the first `reason` that applies:
+   `'SEGMENT_NOT_FOUND'` (not in the PNR), `'SEGMENT_ID_MISMATCH'` (its `Product@id`, which is
+   what `op="D"` deletes, is missing or differs from its id) or `'SEGMENT_STATUS_NOT_ALLOWED'`
+   (its status is not in `allowedStatuses`). `actualSegments` lists the ids that failed.
 3. It sends the deletes and compares the PNR in the response with the one it read: `changed`
-   lists the segments that are gone (or changed status), and `warnings` carries `NOT_APPLIED`
-   when a requested segment is still in the PNR.
+   lists the segments that are gone (or changed status). `warnings` carries `NOT_APPLIED` when a
+   requested segment is still in the PNR or its `UpdateResult` is not `SUCCESS`, and
+   `UNEXPECTED_CHANGE` (with `segmentIds`) when `changed` lists a segment you did not ask for (a
+   married segment the airline cancelled with it, for example).
 
 - **`allowedStatuses` defaults to `['UN', 'HX']`** (`DEFAULT_REMOVABLE_STATUSES`): an `HK`
   segment is never deleted by default. Passing the list replaces the default.
 - **Untested (Q-140):** Sabre's example of `op="D"` deletes an `HK` segment; that it deletes `UN`
-  and `HX` the same way is an assumption until the first real call.
+  and `HX` the same way is an assumption until the first real call. The `Product@id` check of
+  step 2 keeps a mismatch between the two ids from deleting another segment.
+- **Partial deletes:** if Sabre answers `Errors` but shows that some delete went through (an
+  `UpdateResult` with `SUCCESS`, or a requested segment already gone from `Reservation`), it
+  throws `SabreUncertainOutcomeError` with `reason: 'PARTIALLY_APPLIED'` and sends no
+  `IgnoreTransaction`. Without that evidence, it is a `SABRE_ERROR` as above.
 - Errors, uncertain outcomes (`operation: 'reservation.removeAirSegments'`), retries and raw
   callbacks work exactly as in `confirmAirSegments`: the update is sent exactly once, `PREVIOUS
   ENTRY ACTIVE` included, and after an uncertain outcome you close the session and read the PNR

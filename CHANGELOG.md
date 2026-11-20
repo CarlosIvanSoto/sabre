@@ -29,6 +29,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fixed `PREVIOUS ENTRY ACTIVE` retry scheme for writes with End Transaction (#268).
 - The `ReservationAirSegment`, `ReservationUpdateWarning` and `ConfirmAirSegments*` types, and the
   `sabre.reservation.ignoreFailed` log event (#268).
+- `session.reservation.removeAirSegments` (ADR-034): deletes the air segments you pick (the old
+  `UN`/`HX` flights of a schedule change) with one `ProductUpdate op="D"` per segment in a single
+  `UpdateReservationRQ` 1.19.0, with the End Transaction in the same call. It reads the PNR first:
+  a segment that is not there throws `SEGMENT_NOT_FOUND`, and one whose status is not in
+  `allowedStatuses` (default `UN` and `HX`, never `HK`) throws `SEGMENT_STATUS_NOT_ALLOWED`;
+  nothing is written in either case. The result has the remaining `segments`, `changed` and
+  `warnings` (`NOT_APPLIED` when a segment is still there). Same errors, uncertain outcomes
+  (`operation: 'reservation.removeAirSegments'`) and no-retry rule as `confirmAirSegments` (#269).
+- The `RemoveAirSegments*` types and the `DEFAULT_REMOVABLE_STATUSES` and
+  `REMOVE_AIR_SEGMENTS_OPERATION` constants (#269).
 
 ## [0.8.0] - 2026-11-16
 

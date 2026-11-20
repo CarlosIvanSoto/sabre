@@ -164,8 +164,9 @@ export type SabreUncertainOutcomeReason =
   | 'ABORTED'
   /**
    * `PREVIOUS ENTRY ACTIVE` como `stl:Error` en una escritura con End Transaction
-   * (`reservation.confirmAirSegments`): Sabre ya agotó sus reintentos internos y una entrada del
-   * mismo request puede seguir en curso. Como SOAP fault es `GATEWAY_5XX`.
+   * (`reservation.confirmAirSegments`, `reservation.removeAirSegments`): Sabre ya agotó sus
+   * reintentos internos y una entrada del mismo request puede seguir en curso. Como SOAP fault es
+   * `GATEWAY_5XX`.
    */
   | 'PREVIOUS_ENTRY_ACTIVE';
 

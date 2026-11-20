@@ -1018,6 +1018,44 @@ fake.openSessions; // 0: the session was closed
   }));
   ```
 
+#### Itinerary changes (`confirmAirSegments`)
+
+`reservationUpdate` seeds the PNRs with their air segments (`id`, `status` and, optionally,
+`sequence`, airline, flight, origin, destination and local times). The fake answers
+`GetReservationRQ`, `UpdateReservationRQ` with `CONFIRM-ALL` and `IgnoreTransactionLLSRQ`, and
+keeps each PNR's state: `session.reservation.confirmAirSegments` reads back what the previous
+write left, so `noop` and `SEGMENTS_CHANGED` come out as with Sabre.
+
+```ts
+const fake = createQueueFake({
+  reservationUpdate: {
+    reservations: [{ locator: 'ABCDEF', segments: [{ id: '8', status: 'TK' }, { id: '9', status: 'UN' }] }],
+    outcomes: [{ uncertain: 'TRANSPORT', applied: true }],
+  },
+});
+
+await session.reservation.confirmAirSegments(request); // SabreUncertainOutcomeError, reason TRANSPORT
+fake.airSegments('ABCDEF'); // [{ id: '8', status: 'HK', … }, { id: '9', status: 'UN', … }]
+await otherSession.reservation.confirmAirSegments(request); // noop: the change was already saved
+```
+
+- A locator that is not seeded gives `700226` on the read.
+- `reservationUpdate.outcomes` forces the outcome of each `UpdateReservationRQ`, in order. A
+  `noop` or a `SEGMENTS_CHANGED` sends no Update, so it consumes none:
+  - `'applied'` (the default): the `TK` segments become `HK`;
+  - `'notApplied'`: `Success` with no change, and the SDK warns `NOT_APPLIED`;
+  - `{ error: { code, message?, severity? } }`: a Sabre error with nothing written, followed by
+    the SDK's `IgnoreTransaction`. `700432`, `700411`, `700408` and `500810` carry the text from
+    the sources;
+  - `{ uncertain, applied? }`, with `TRANSPORT`, `GATEWAY_5XX`, `UNPARSEABLE`, `ABORTED` (an
+    `AbortError` even when the call has no `signal`), `END_TRANSACTION_PROBLEM` and
+    `PREVIOUS_ENTRY_ACTIVE`. `applied` says whether the change was saved, to test your re-read;
+    by default, only with `END_TRANSACTION_PROBLEM`.
+- `fake.calls` records `getReservation`, `updateReservation` (with the locator and the
+  `receivedFrom`) and `ignoreTransaction`. `fake.airSegments(locator)` returns the current state.
+- **Not simulated**: the AAA. An Update with no previous read in the session gets a fault marked
+  as not simulated, and `700408` only comes out when forced.
+
 #### Bookings and ticketing (REST)
 
 The same `fake.fetch` also answers the REST client (`Sabre`): the token, Create, Get and Cancel

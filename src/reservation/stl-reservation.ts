@@ -77,9 +77,9 @@ export interface SabreReservationUpdateErrorOptions extends Omit<SabreBusinessEr
   /** `Error/Severity` de Sabre, tal cual (`MODERATE`…). Solo con `SABRE_ERROR`. */
   severity?: string;
   /** Los ids que mandó el consumidor (`expectedSegmentIds` o `segmentIds`). */
-  expectedSegmentIds?: readonly string[];
+  expectedSegments?: readonly string[];
   /** Con `SEGMENTS_CHANGED`: los ids que están en `TK` en el PNR. */
-  actualSegmentIds?: readonly string[];
+  actualSegments?: readonly string[];
 }
 
 /**
@@ -91,15 +91,15 @@ export class SabreReservationUpdateError extends SabreBusinessError {
   override name = 'SabreReservationUpdateError';
   readonly reason: ReservationUpdateErrorReason;
   readonly severity: string | undefined;
-  readonly expectedSegmentIds: readonly string[];
-  readonly actualSegmentIds: readonly string[];
+  readonly expectedSegments: readonly string[];
+  readonly actualSegments: readonly string[];
 
   constructor(message: string, options: SabreReservationUpdateErrorOptions) {
     super(message, { ...options, service: UPDATE_RESERVATION_SERVICE });
     this.reason = options.reason;
     this.severity = options.severity;
-    this.expectedSegmentIds = options.expectedSegmentIds ?? [];
-    this.actualSegmentIds = options.actualSegmentIds ?? [];
+    this.expectedSegments = options.expectedSegments ?? [];
+    this.actualSegments = options.actualSegments ?? [];
   }
 }
 

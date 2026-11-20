@@ -17,7 +17,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `previousStatus`, `changed` and `warnings` (`NOT_APPLIED`). It is never retried (#268).
 - `SabreReservationUpdateError`, a `SabreBusinessError` (`service: 'updateReservation'`) with
   `reason` (`SEGMENTS_CHANGED`, `SEGMENT_NOT_FOUND`, `SEGMENT_STATUS_NOT_ALLOWED` or
-  `SABRE_ERROR`), `severity`, `expectedSegmentIds` and `actualSegmentIds`. An error from Sabre
+  `SABRE_ERROR`), `severity`, `expectedSegments` and `actualSegments` (segment ids). An error from Sabre
   in the update sends `IgnoreTransactionLLSRQ` 2.0.0 first. What may have reached Sabre without a
   readable answer throws `SabreUncertainOutcomeError` with
   `operation: 'reservation.confirmAirSegments'` and the locator in `confirmationId` (#268).

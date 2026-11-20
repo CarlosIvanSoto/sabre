@@ -191,8 +191,8 @@ describe('reservation.confirmAirSegments: no escribe', () => {
       reason: 'SEGMENTS_CHANGED',
       code: 'SEGMENTS_CHANGED',
       retryable: false,
-      expectedSegmentIds: [...new Set(expectedSegmentIds)],
-      actualSegmentIds: ['8', '9'],
+      expectedSegments: [...new Set(expectedSegmentIds)],
+      actualSegments: ['8', '9'],
     });
     expect(actions(fetch)).toEqual(['GetReservationRQ']);
   });

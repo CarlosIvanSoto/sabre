@@ -131,7 +131,7 @@ export async function confirmAirSegments(
   if (!sameIds(tk, expected)) {
     throw new SabreReservationUpdateError(
       `${UPDATE_RESERVATION_SERVICE}: los segmentos TK del PNR (${tk.join(', ')}) no son los esperados (${expected.join(', ')}); no se escribió nada`,
-      { reason: 'SEGMENTS_CHANGED', code: 'SEGMENTS_CHANGED', raw: getResponse.raw, expectedSegmentIds: expected, actualSegmentIds: tk },
+      { reason: 'SEGMENTS_CHANGED', code: 'SEGMENTS_CHANGED', raw: getResponse.raw, expectedSegments: expected, actualSegments: tk },
     );
   }
 

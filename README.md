@@ -634,7 +634,7 @@ const result = await legacy.withSession((session) =>
 1. It reads the PNR again (`GetReservationRQ`, `Stateful`).
 2. With no `TK` segment it returns `status: 'noop'` and writes nothing. If the `TK` segments are
    not exactly `expectedSegmentIds` (in any order), it throws `SabreReservationUpdateError` with
-   `reason: 'SEGMENTS_CHANGED'`, `expectedSegmentIds` and `actualSegmentIds`, and writes nothing.
+   `reason: 'SEGMENTS_CHANGED'`, `expectedSegments` and `actualSegments` (ids), and writes nothing.
 3. It sends `CONFIRM-ALL` and compares the PNR in the response with the one it read: `changed`
    lists the segments whose status changed, and `warnings` carries `NOT_APPLIED` when an expected
    segment did not end up in `HK`.
@@ -1051,7 +1051,7 @@ Every error thrown by the SDK extends `SabreError`:
 | `SabreSessionError` | SOAP session failure in `SabreLegacy`, a subclass of `SabreGatewayError` | `kind`: `'limit'` (more than 50 sessions), `'invalid'`, `'expired'`, `'blocked'` |
 | `SabreUncertainOutcomeError` | Issuance, void or PNR update may or may not have happened (`tickets.fulfill`, `booking.cancel` with `VOID`, `reservation.confirmAirSegments`): verify before retrying | `operation`, `confirmationId`, `reason`, `tickets`, `warnings` |
 | `SabreTripSearchError` | Error from `Trip_SearchRQ` in `reservation.searchByUpdateDate`, a subclass of `SabreBusinessError` | `reason`, `severity`, plus those of `SabreBusinessError` |
-| `SabreReservationUpdateError` | A write of `reservation.confirmAirSegments` that did not happen (Sabre's error or the local check), a subclass of `SabreBusinessError` | `reason`, `severity`, `expectedSegmentIds`, `actualSegmentIds`, plus those of `SabreBusinessError` |
+| `SabreReservationUpdateError` | A write of `reservation.confirmAirSegments` that did not happen (Sabre's error or the local check), a subclass of `SabreBusinessError` | `reason`, `severity`, `expectedSegments`, `actualSegments`, plus those of `SabreBusinessError` |
 | `SabreWarning` | Non-fatal warning (e.g. `category: WARNING` in Create Booking) | `service`, `code` |
 
 All of them have `retryable`, which says whether the retry policy may try again.

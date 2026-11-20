@@ -633,7 +633,7 @@ const result = await legacy.withSession((session) =>
 1. Relee el PNR (`GetReservationRQ`, `Stateful`).
 2. Sin ningún `TK`, devuelve `status: 'noop'` y no escribe. Si los `TK` no son exactamente
    `expectedSegmentIds` (en cualquier orden), lanza `SabreReservationUpdateError` con
-   `reason: 'SEGMENTS_CHANGED'`, `expectedSegmentIds` y `actualSegmentIds`, y no escribe.
+   `reason: 'SEGMENTS_CHANGED'`, `expectedSegments` y `actualSegments` (ids), y no escribe.
 3. Manda `CONFIRM-ALL` y compara el PNR de la respuesta con el que leyó: `changed` trae los
    segmentos que cambiaron de estado, y `warnings` trae `NOT_APPLIED` si uno esperado no quedó
    en `HK`.
@@ -1052,7 +1052,7 @@ Todos los errores que lanza el SDK extienden `SabreError`:
 | `SabreSessionError` | Falla de la sesión SOAP de `SabreLegacy`, subclase de `SabreGatewayError` | `kind`: `'limit'` (más de 50 sesiones), `'invalid'`, `'expired'`, `'blocked'` |
 | `SabreUncertainOutcomeError` | La emisión, el void o el cambio del PNR pudieron haberse hecho, o no (`tickets.fulfill`, `booking.cancel` con `VOID`, `reservation.confirmAirSegments`): verifica antes de reintentar | `operation`, `confirmationId`, `reason`, `tickets`, `warnings` |
 | `SabreTripSearchError` | Error de `Trip_SearchRQ` en `reservation.searchByUpdateDate`, subclase de `SabreBusinessError` | `reason`, `severity`, más los de `SabreBusinessError` |
-| `SabreReservationUpdateError` | Una escritura de `reservation.confirmAirSegments` que no se hizo (error de Sabre o el chequeo local), subclase de `SabreBusinessError` | `reason`, `severity`, `expectedSegmentIds`, `actualSegmentIds`, más los de `SabreBusinessError` |
+| `SabreReservationUpdateError` | Una escritura de `reservation.confirmAirSegments` que no se hizo (error de Sabre o el chequeo local), subclase de `SabreBusinessError` | `reason`, `severity`, `expectedSegments`, `actualSegments`, más los de `SabreBusinessError` |
 | `SabreWarning` | Aviso no fatal (p. ej. `category: WARNING` en Create Booking) | `service`, `code` |
 
 Todos tienen `retryable`, que indica si la política de reintentos puede volver a intentar.

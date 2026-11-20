@@ -51,8 +51,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The `RemoveAirSegments*` types and the `DEFAULT_REMOVABLE_STATUSES` and
   `REMOVE_AIR_SEGMENTS_OPERATION` constants (#269).
 - `sabre-client/testing`: `reservationUpdate` seeds PNRs with their air segments for
-  `session.reservation.confirmAirSegments`. The fake answers `GetReservationRQ`,
-  `UpdateReservationRQ` (`CONFIRM-ALL`) and `IgnoreTransactionLLSRQ`, keeps each PNR's state
+  `session.reservation.confirmAirSegments` and `removeAirSegments`. The fake answers
+  `GetReservationRQ`, `UpdateReservationRQ` (`CONFIRM-ALL` and `ProductUpdate op="D"`) and
+  `IgnoreTransactionLLSRQ`, keeps each PNR's state
   (`fake.airSegments(locator)`) and records the `receivedFrom` of each write in `fake.calls`.
   `reservationUpdate.outcomes` forces, in order, `notApplied`, a Sabre error, or an uncertain
   outcome per `reason`, with `applied` to say whether the change was saved (#270).

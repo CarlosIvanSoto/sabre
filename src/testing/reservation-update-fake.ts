@@ -1,15 +1,19 @@
 // Las escrituras de ADR-034 en el fake (#270): `GetReservationRQ`, `UpdateReservationRQ` e
 // `IgnoreTransactionLLSRQ` (STL 1.19) sobre PNR sembrados con sus segmentos aéreos, para probar
-// `session.reservation.confirmAirSegments` sin red. El fake guarda el estado de cada PNR: lo que
-// hace el SDK (`noop`, `SEGMENTS_CHANGED`) sale de releerlo, igual que con Sabre. Ver
+// `session.reservation.confirmAirSegments` y `removeAirSegments` sin red. El fake guarda el estado de cada PNR: lo que
+// hace el SDK (`noop`, `SEGMENTS_CHANGED`, `SEGMENT_NOT_FOUND`, `SEGMENT_STATUS_NOT_ALLOWED`) sale
+// de releerlo, igual que con Sabre. Ver
 // sabre-wiki/wiki/proyectos/sabre-client/decisiones/confirmar-cambio-de-horario.md. Solo Web
 // Standard APIs.
 
 /** Un segmento aéreo sembrado, con los campos que el SDK lee de `Segment/Air`. */
 export interface QueueFakeAirSegment {
-  /** `Air@id`: el que se pasa en `expectedSegmentIds`. Único dentro del PNR. */
+  /** `Air@id`: el que se pasa en `expectedSegmentIds` o `segmentIds`. Único dentro del PNR. */
   id: string;
-  /** `Air@sequence`: el orden en el itinerario. Por defecto, la posición en la lista (1, 2…). */
+  /**
+   * `Air@sequence`: el orden en el itinerario. Por defecto, la posición en la lista (1, 2…).
+   * Después de una baja, los que quedan se renumeran de 1 en adelante, como en los ejemplos.
+   */
   sequence?: number;
   /** `ActionCode`: `TK`, `UN`, `HX`, `HK`, `KK`… */
   status: string;
@@ -22,7 +26,7 @@ export interface QueueFakeAirSegment {
   arrival?: string;
 }
 
-/** Un PNR para las escrituras de ADR-034. */
+/** Un PNR para las escrituras de ADR-034 (`confirmAirSegments` y `removeAirSegments`). */
 export interface QueueFakeReservation {
   /** Localizador de 6 caracteres alfanuméricos en mayúscula. */
   locator: string;
@@ -41,7 +45,8 @@ export type QueueFakeReservationUpdateUncertainReason =
 
 /**
  * El desenlace de un `UpdateReservationRQ`. Sin forzar, `'applied'`.
- * - `'applied'`: escribe y responde `Success` con el PNR.
+ * - `'applied'`: escribe y responde `Success` con el PNR: `CONFIRM-ALL` pasa los `TK` a `HK`, y
+ *   cada `ProductUpdate op="D"` borra su segmento.
  * - `'notApplied'`: responde `Success` con el PNR sin cambios; el SDK avisa `NOT_APPLIED`.
  * - `{ error }`: un `Errors/Error` de Sabre sin `Success`, sin escribir. Con `700432`, `700411`,
  *   `700408` y `500810`, el texto por defecto es el de las fuentes. Después el SDK manda
@@ -248,6 +253,11 @@ export function createReservationUpdateHandler(
 
   /** `CONFIRM-ALL`: los `TK` pasan a `HK`. */
   const confirmAll = (segments: readonly Segment[]) => segments.map((segment) => (segment.status === 'TK' ? { ...segment, status: 'HK' } : segment));
+  /** `ProductUpdate op="D"`: borra el segmento con ese id. */
+  const remove = (id: string) => (segments: readonly Segment[]) => segments.filter((segment) => segment.id !== id);
+  /** Después de una baja, los que quedan se renumeran de 1 en adelante (como en los ejemplos de Delete). */
+  const renumber = (segments: readonly Segment[]) =>
+    [...segments].sort((a, b) => a.sequence - b.sequence).map((segment, index) => ({ ...segment, sequence: index + 1 }));
 
   const get = (session: string, rq: XmlNode): ReservationUpdateReply => {
     const locator = text(rq.Locator) ?? '';
@@ -271,20 +281,41 @@ export function createReservationUpdateHandler(
     if (pnr === undefined) return notSimulated('UpdateReservationRQ sin un GetReservationRQ previo en la sesión');
     if (text(node(rq.RequestType)?.['@commitTransaction']) !== 'true') return notSimulated('UpdateReservationRQ sin commitTransaction="true"');
 
-    let change = (segments: readonly Segment[]): Segment[] => [...segments];
+    const steps: ((segments: readonly Segment[]) => Segment[])[] = [];
+    /** `Results`: un `UpdateResult` por cada baja; `CONFIRM-ALL` no trae ninguno (como el ejemplo). */
+    const results: string[] = [];
+    let removes = false;
     for (const item of nodes(list?.ReservationUpdateItem)) {
-      const action = text(node(item.AirItineraryUpdate)?.Action);
-      if (action !== 'CONFIRM-ALL') return notSimulated('ese ReservationUpdateItem');
-      const before = change;
-      change = (segments) => confirmAll(before(segments));
+      const updateId = text(item['@UpdateId']) ?? String(results.length + 1);
+      const product = node(item.ProductUpdate);
+      if (text(node(item.AirItineraryUpdate)?.Action) === 'CONFIRM-ALL') {
+        steps.push(confirmAll);
+      } else if (product !== undefined && text(product['@op']) === 'D') {
+        const id = text(product['@id']) ?? '';
+        if (!pnr.segments.some((segment) => segment.id === id)) return notSimulated(`ProductUpdate op="D" de un segmento que no está en el PNR ('${id}')`);
+        steps.push(remove(id));
+        results.push(`<stl19:UpdateResult UpdateId="${escape(updateId)}" Status="SUCCESS"><stl19:Item op="D"/></stl19:UpdateResult>`);
+        removes = true;
+      } else {
+        return notSimulated('ese ReservationUpdateItem');
+      }
     }
+    if (steps.length === 0) return notSimulated('UpdateReservationRQ sin ReservationUpdateItem');
+    const change = (segments: readonly Segment[]) => {
+      const changed = steps.reduce<Segment[]>((current, step) => step(current), [...segments]);
+      return removes ? renumber(changed) : changed;
+    };
 
     const outcome = outcomes.shift() ?? 'applied';
     const apply = () => {
       pnr.segments = change(pnr.segments);
       pnr.sequence += 1;
     };
-    const success = (inner = '') => ({ action: 'UpdateReservationRS', payload: root('UpdateReservationRS', `<stl19:Success>OK</stl19:Success>${inner}${reservationXml(pnr)}<stl19:Results/>`) });
+    const resultsXml = results.length === 0 ? '<stl19:Results/>' : `<stl19:Results>${results.join('')}</stl19:Results>`;
+    const success = (inner = '') => ({
+      action: 'UpdateReservationRS',
+      payload: root('UpdateReservationRS', `<stl19:Success>OK</stl19:Success>${inner}${reservationXml(pnr)}${resultsXml}`),
+    });
 
     if (outcome === 'applied') {
       apply();

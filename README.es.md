@@ -1020,13 +1020,14 @@ fake.openSessions; // 0: la sesión se cerró
   }));
   ```
 
-#### Cambios de itinerario (`confirmAirSegments`)
+#### Cambios de itinerario (`confirmAirSegments` y `removeAirSegments`)
 
 `reservationUpdate` siembra los PNR con sus segmentos aéreos (`id`, `status` y, si quieres,
 `sequence`, aerolínea, vuelo, origen, destino y horas locales). El fake responde
-`GetReservationRQ`, `UpdateReservationRQ` con `CONFIRM-ALL` e `IgnoreTransactionLLSRQ`, y guarda
-el estado de cada PNR: `session.reservation.confirmAirSegments` relee lo que dejó la escritura
-anterior, así que `noop` y `SEGMENTS_CHANGED` salen igual que con Sabre.
+`GetReservationRQ`, `UpdateReservationRQ` (`CONFIRM-ALL` y `ProductUpdate op="D"`) e
+`IgnoreTransactionLLSRQ`, y guarda el estado de cada PNR: `confirmAirSegments` y
+`removeAirSegments` releen lo que dejó la escritura anterior, así que `noop`, `SEGMENTS_CHANGED`,
+`SEGMENT_NOT_FOUND` y `SEGMENT_STATUS_NOT_ALLOWED` salen igual que con Sabre.
 
 ```ts
 const fake = createQueueFake({
@@ -1044,7 +1045,8 @@ await otherSession.reservation.confirmAirSegments(request); // noop: el cambio y
 - Un localizador no sembrado da `700226` en la lectura.
 - `reservationUpdate.outcomes` fuerza el desenlace de cada `UpdateReservationRQ`, en orden. Un
   `noop` o un `SEGMENTS_CHANGED` no mandan Update, así que no consumen ninguno:
-  - `'applied'` (sin forzar): los `TK` pasan a `HK`;
+  - `'applied'` (sin forzar): los `TK` pasan a `HK`, o los segmentos pedidos salen del PNR y los
+    demás se renumeran;
   - `'notApplied'`: `Success` sin cambios, y el SDK avisa `NOT_APPLIED`;
   - `{ error: { code, message?, severity? } }`: un error de Sabre sin escribir, seguido del
     `IgnoreTransaction` del SDK. `700432`, `700411`, `700408` y `500810` llevan el texto de las

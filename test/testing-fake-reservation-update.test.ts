@@ -1,7 +1,8 @@
 // El fake de sabre-client/testing con las escrituras de ADR-034 (#270): los mismos casos que
-// reservation-confirm-air-segments.test.ts (U.2), contra el estado del fake.
+// reservation-confirm-air-segments.test.ts (U.2) y reservation-remove-air-segments.test.ts (U.3),
+// contra el estado del fake.
 import { describe, expect, it } from 'vitest';
-import { type ConfirmAirSegmentsRequest, SabreLegacy, SabreReservationUpdateError, SabreUncertainOutcomeError } from '../src/index.js';
+import { type ConfirmAirSegmentsRequest, type RemoveAirSegmentsRequest, SabreLegacy, SabreReservationUpdateError, SabreUncertainOutcomeError } from '../src/index.js';
 import { createQueueFake, type QueueFakeAirSegment, type QueueFakeOptions, type QueueFakeReservationUpdateUncertainReason } from '../src/testing/index.js';
 import { rejection } from './soap-helpers.js';
 
@@ -216,6 +217,123 @@ describe('fake: reservation.confirmAirSegments, inciertos', () => {
     await second.close();
     expect(retried).toMatchObject({ status: 'confirmed', changed: ['8', '9'] });
     expect(statuses(fake.airSegments('AAAAAA'))).toEqual(['8:HK', '9:HK']);
+  });
+});
+
+/** Como el ejemplo de Delete: el UN viejo (8), el TK nuevo (10) y un HK (9). */
+const scheduleChange = (old = 'UN') => ({ locator: 'AAAAAA', segments: [segment('8', old), segment('10', 'TK'), segment('9', 'HK')] });
+const REMOVE: RemoveAirSegmentsRequest = { locator: 'AAAAAA', receivedFrom: 'SCHEDULE CHANGE', segmentIds: ['8'] };
+const ids = (segments: readonly { id: string; sequence?: number; status: string }[] | undefined) => segments?.map((item) => `${item.id}/${item.sequence}:${item.status}`);
+
+async function remove(options: QueueFakeOptions, request: Partial<RemoveAirSegmentsRequest> = {}) {
+  const { fake, legacy } = client(options);
+  const session = await legacy.openSession();
+  try {
+    return { fake, result: await session.reservation.removeAirSegments({ ...REMOVE, ...request }) };
+  } finally {
+    await session.close();
+  }
+}
+
+async function removeRejection(options: QueueFakeOptions, request: Partial<RemoveAirSegmentsRequest> = {}) {
+  const { fake, legacy } = client(options);
+  const session = await legacy.openSession();
+  const error = await rejection(session.reservation.removeAirSegments({ ...REMOVE, ...request }));
+  await session.close();
+  return { fake, error };
+}
+
+describe('fake: reservation.removeAirSegments, resultado', () => {
+  it.each(['UN', 'HX'])('baja de un %s: sale del PNR y los demás se renumeran', async (old) => {
+    const { fake, result } = await remove({ reservationUpdate: { reservations: [scheduleChange(old)] } });
+    expect(result).toMatchObject({ status: 'removed', changed: ['8'], warnings: [] });
+    expect(ids(result.segments)).toEqual(['10/1:TK', '9/2:HK']);
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['10/1:TK', '9/2:HK']);
+    expect(fake.calls.filter((call) => call.command === 'updateReservation')).toEqual([{ command: 'updateReservation', locator: 'AAAAAA', receivedFrom: 'SCHEDULE CHANGE' }]);
+  });
+
+  it('baja de un UN y un HX juntos, en una sola escritura', async () => {
+    const options = { reservationUpdate: { reservations: [{ locator: 'AAAAAA', segments: [segment('8', 'UN'), segment('10', 'HX'), segment('12', 'TK'), segment('9', 'HK')] }] } };
+    const { fake, result } = await remove(options, { segmentIds: ['10', '8'] });
+    expect(result.changed).toEqual(['8', '10']);
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['12/1:TK', '9/2:HK']);
+    expect(commands(fake)).toEqual(['getReservation', 'updateReservation']);
+  });
+
+  it('allowedStatuses ampliado: borra un HK si se incluye', async () => {
+    const { fake } = await remove({ reservationUpdate: { reservations: [scheduleChange()] } }, { segmentIds: ['9'], allowedStatuses: ['UN', 'HX', 'HK'] });
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:UN', '10/2:TK']);
+  });
+
+  it('NOT_APPLIED: Success, pero el segmento sigue en el PNR', async () => {
+    const { fake, result } = await remove({ reservationUpdate: { reservations: [scheduleChange()], outcomes: ['notApplied'] } });
+    expect(result.changed).toEqual([]);
+    expect(result.warnings).toEqual([expect.objectContaining({ code: 'NOT_APPLIED', segmentIds: ['8'] })]);
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:UN', '10/2:TK', '9/3:HK']);
+  });
+});
+
+describe('fake: reservation.removeAirSegments, no escribe', () => {
+  it('SEGMENT_NOT_FOUND: no manda Update, no borra los demás ni consume un desenlace', async () => {
+    const { fake, error } = await removeRejection({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ uncertain: 'TRANSPORT' }] } }, { segmentIds: ['8', '99'] });
+    expect(error).toMatchObject({ name: 'SabreReservationUpdateError', reason: 'SEGMENT_NOT_FOUND', actualSegments: ['99'] });
+    expect(commands(fake)).toEqual(['getReservation']);
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:UN', '10/2:TK', '9/3:HK']);
+  });
+
+  it.each([
+    ['un HK con el default', ['9'], undefined, ['9']],
+    ['un TK con el default', ['10'], undefined, ['10']],
+    ['un UN fuera de allowedStatuses', ['8'], ['HX'], ['8']],
+  ])('SEGMENT_STATUS_NOT_ALLOWED: %s, sin mandar Update', async (_label, segmentIds, allowedStatuses, blocked) => {
+    const { fake, error } = await removeRejection(
+      { reservationUpdate: { reservations: [scheduleChange()] } },
+      { segmentIds, ...(allowedStatuses === undefined ? {} : { allowedStatuses }) },
+    );
+    expect(error).toMatchObject({ reason: 'SEGMENT_STATUS_NOT_ALLOWED', actualSegments: blocked });
+    expect(commands(fake)).toEqual(['getReservation']);
+  });
+
+  it('error de negocio forzado: IgnoreTransaction y SABRE_ERROR, sin borrar', async () => {
+    const { fake, error } = await removeRejection({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ error: { code: '700432' } }] } });
+    expect(error).toMatchObject({ reason: 'SABRE_ERROR', code: '700432' });
+    expect((error as Error).message).toContain('UNABLE TO CANCEL - AIRLINE DENIES CANCELLATION');
+    expect(commands(fake)).toEqual(['getReservation', 'updateReservation', 'ignoreTransaction']);
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['8/1:UN', '10/2:TK', '9/3:HK']);
+  });
+});
+
+describe('fake: reservation.removeAirSegments, inciertos', () => {
+  it.each(['TRANSPORT', 'GATEWAY_5XX', 'UNPARSEABLE', 'ABORTED', 'END_TRANSACTION_PROBLEM', 'PREVIOUS_ENTRY_ACTIVE'] as const)(
+    '%s: SabreUncertainOutcomeError con la operación de la baja',
+    async (reason) => {
+      const { error } = await removeRejection({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ uncertain: reason }] } });
+      expect(error).toBeInstanceOf(SabreUncertainOutcomeError);
+      expect(error).toMatchObject({ reason, operation: 'reservation.removeAirSegments', confirmationId: 'AAAAAA' });
+    },
+  );
+
+  it('incierto que sí se guardó → el reintento en otra sesión da SEGMENT_NOT_FOUND, y el PNR ya no tiene el segmento', async () => {
+    const { fake, legacy } = client({ reservationUpdate: { reservations: [scheduleChange()], outcomes: [{ uncertain: 'GATEWAY_5XX', applied: true }] } });
+    const first = await legacy.openSession();
+    expect(await rejection(first.reservation.removeAirSegments(REMOVE))).toMatchObject({ reason: 'GATEWAY_5XX' });
+    await first.close();
+    const second = await legacy.openSession();
+    expect(await rejection(second.reservation.removeAirSegments(REMOVE))).toMatchObject({ reason: 'SEGMENT_NOT_FOUND' });
+    await second.close();
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['10/1:TK', '9/2:HK']);
+  });
+});
+
+describe('fake: confirmar y después borrar, como un cambio de horario completo', () => {
+  it('confirmAirSegments y removeAirSegments en la misma sesión', async () => {
+    const { fake, legacy } = client({ reservationUpdate: { reservations: [scheduleChange()] } });
+    const session = await legacy.openSession();
+    await session.reservation.confirmAirSegments({ ...REQUEST, expectedSegmentIds: ['10'] });
+    await session.reservation.removeAirSegments(REMOVE);
+    await session.close();
+    expect(ids(fake.airSegments('AAAAAA'))).toEqual(['10/1:HK', '9/2:HK']);
+    expect(commands(fake)).toEqual(['getReservation', 'updateReservation', 'getReservation', 'updateReservation']);
   });
 });
 

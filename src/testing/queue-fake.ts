@@ -143,11 +143,11 @@ export interface QueueFakeOptions {
    */
   tripSearchTimeZone?: string;
   /**
-   * Los PNR de `reservation.confirmAirSegments` (ADR-034), con sus segmentos aéreos, y los
-   * desenlaces forzados de cada `UpdateReservationRQ`: un error de Sabre, un incierto (con el
-   * cambio guardado o no) o `notApplied`. Simula `GetReservationRQ`, `UpdateReservationRQ` con
-   * `CONFIRM-ALL` e `IgnoreTransactionLLSRQ`; cada escritura queda en `calls` con su
-   * `receivedFrom`, y `airSegments()` muestra el estado.
+   * Los PNR de `reservation.confirmAirSegments` y `removeAirSegments` (ADR-034), con sus
+   * segmentos aéreos, y los desenlaces forzados de cada `UpdateReservationRQ`: un error de Sabre,
+   * un incierto (con el cambio guardado o no) o `notApplied`. Simula `GetReservationRQ`,
+   * `UpdateReservationRQ` con `CONFIRM-ALL` o `ProductUpdate op="D"` e `IgnoreTransactionLLSRQ`;
+   * cada escritura queda en `calls` con su `receivedFrom`, y `airSegments()` muestra el estado.
    */
   reservationUpdate?: QueueFakeReservationUpdate;
   /**

@@ -1018,13 +1018,14 @@ fake.openSessions; // 0: the session was closed
   }));
   ```
 
-#### Itinerary changes (`confirmAirSegments`)
+#### Itinerary changes (`confirmAirSegments` and `removeAirSegments`)
 
 `reservationUpdate` seeds the PNRs with their air segments (`id`, `status` and, optionally,
 `sequence`, airline, flight, origin, destination and local times). The fake answers
-`GetReservationRQ`, `UpdateReservationRQ` with `CONFIRM-ALL` and `IgnoreTransactionLLSRQ`, and
-keeps each PNR's state: `session.reservation.confirmAirSegments` reads back what the previous
-write left, so `noop` and `SEGMENTS_CHANGED` come out as with Sabre.
+`GetReservationRQ`, `UpdateReservationRQ` (`CONFIRM-ALL` and `ProductUpdate op="D"`) and
+`IgnoreTransactionLLSRQ`, and keeps each PNR's state: `confirmAirSegments` and
+`removeAirSegments` read back what the previous write left, so `noop`, `SEGMENTS_CHANGED`,
+`SEGMENT_NOT_FOUND` and `SEGMENT_STATUS_NOT_ALLOWED` come out as with Sabre.
 
 ```ts
 const fake = createQueueFake({
@@ -1042,7 +1043,8 @@ await otherSession.reservation.confirmAirSegments(request); // noop: the change 
 - A locator that is not seeded gives `700226` on the read.
 - `reservationUpdate.outcomes` forces the outcome of each `UpdateReservationRQ`, in order. A
   `noop` or a `SEGMENTS_CHANGED` sends no Update, so it consumes none:
-  - `'applied'` (the default): the `TK` segments become `HK`;
+  - `'applied'` (the default): the `TK` segments become `HK`, or the requested segments leave
+    the PNR and the rest are renumbered;
   - `'notApplied'`: `Success` with no change, and the SDK warns `NOT_APPLIED`;
   - `{ error: { code, message?, severity? } }`: a Sabre error with nothing written, followed by
     the SDK's `IgnoreTransaction`. `700432`, `700411`, `700408` and `500810` carry the text from

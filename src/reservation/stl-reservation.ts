@@ -79,7 +79,11 @@ export interface SabreReservationUpdateErrorOptions extends Omit<SabreBusinessEr
   severity?: string;
   /** Los ids que mandó el consumidor (`expectedSegmentIds` o `segmentIds`). */
   expectedSegments?: readonly string[];
-  /** Con `SEGMENTS_CHANGED`: los ids que están en `TK` en el PNR. */
+  /**
+   * Con `SEGMENTS_CHANGED`: los ids que están en `TK` en el PNR. Con `SEGMENT_NOT_FOUND` y
+   * `SEGMENT_STATUS_NOT_ALLOWED`: los ids pedidos que no están en el PNR, o cuyo estado no está
+   * en `allowedStatuses`.
+   */
   actualSegments?: readonly string[];
 }
 
@@ -138,6 +142,14 @@ export function updateReservationPayload(items: readonly string[], receivedFrom:
 
 /** `AirItineraryUpdate/Action = CONFIRM-ALL`: pasa todos los `TK` a `HK`. */
 export const CONFIRM_ALL_ITEM = '<AirItineraryUpdate><Action>CONFIRM-ALL</Action></AirItineraryUpdate>';
+
+/**
+ * `ProductUpdate id="<id>" op="D"`: borra el segmento con ese `Product@id`, que en los ejemplos
+ * oficiales coincide con `Air@id` (Cancel Air Segments). Un `ReservationUpdateItem` por segmento.
+ */
+export function deleteSegmentItem(id: string): string {
+  return `<ProductUpdate id="${xmlEscape(id)}" op="D"/>`;
+}
 
 /** `IgnoreTransactionLLSRQ` 2.0.0 (el `I` del host): descarta lo que no se commiteó en el AAA. */
 export function ignoreTransactionRequest(operation: string): SessionRequest {

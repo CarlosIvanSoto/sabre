@@ -71,6 +71,12 @@ export type {
   ConfirmAirSegmentsRequest,
   ConfirmAirSegmentsResult,
 } from './reservation/confirm-air-segments.js';
+export { DEFAULT_REMOVABLE_STATUSES, REMOVE_AIR_SEGMENTS_OPERATION } from './reservation/remove-air-segments.js';
+export type {
+  RemoveAirSegmentsOptions,
+  RemoveAirSegmentsRequest,
+  RemoveAirSegmentsResult,
+} from './reservation/remove-air-segments.js';
 export { SabreReservationUpdateError, UPDATE_RESERVATION_SERVICE } from './reservation/stl-reservation.js';
 export type {
   ReservationAirSegment,

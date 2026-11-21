@@ -164,10 +164,19 @@ export type SabreUncertainOutcomeReason =
   | 'ABORTED'
   /**
    * `PREVIOUS ENTRY ACTIVE` como `stl:Error` en una escritura con End Transaction
-   * (`reservation.confirmAirSegments`): Sabre ya agotó sus reintentos internos y una entrada del
-   * mismo request puede seguir en curso. Como SOAP fault es `GATEWAY_5XX`.
+   * (`reservation.confirmAirSegments`, `reservation.removeAirSegments`): Sabre ya agotó sus
+   * reintentos internos y una entrada del mismo request puede seguir en curso. Como SOAP fault es
+   * `GATEWAY_5XX`.
    */
-  | 'PREVIOUS_ENTRY_ACTIVE';
+  | 'PREVIOUS_ENTRY_ACTIVE'
+  /**
+   * Un `UpdateReservationRQ` de ADR-034 que Sabre rechazó con `Errors`, pero con evidencia de que
+   * una parte se aplicó: un `Results/UpdateResult` `SUCCESS` (`reservation.removeAirSegments` o
+   * `reservation.confirmAirSegments`), o, en `removeAirSegments`, un segmento pedido que ya no
+   * está en un `Reservation` que trae segmentos aéreos. Sin `IgnoreTransaction`: lo commiteado no
+   * se deshace.
+   */
+  | 'PARTIALLY_APPLIED';
 
 /** Un boleto que Sabre alcanzó a devolver en una respuesta incierta. */
 export interface SabreUncertainTicket {

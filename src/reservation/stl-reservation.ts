@@ -25,6 +25,12 @@ export interface ReservationAirSegment {
    * `booking.get`**: la relación entre los dos está sin confirmar (Q-140).
    */
   id: string;
+  /**
+   * `Segment/Product@id`: el id que borra `ProductUpdate op="D"`. Falta si el `Segment` no trae
+   * `Product`. `removeAirSegments` exige que sea igual a `id` en cada segmento a borrar
+   * (`SEGMENT_ID_MISMATCH`), porque la relación entre los dos está sin confirmar (Q-140).
+   */
+  productId?: string;
   /** `Air@sequence`: el orden del segmento en el itinerario (1, 2…). */
   sequence: number;
   /** `MarketingAirlineCode`. */
@@ -52,8 +58,10 @@ export interface ReservationAirSegment {
 export interface ReservationUpdateWarning {
   /**
    * `NOT_APPLIED`: Sabre respondió `Success`, pero un segmento no quedó como se pidió (un
-   * confirmado que no está en `HK`, o un borrado que sigue en el PNR). `SABRE_WARNING`: un
-   * `Warnings/Warning` de Sabre sin código; si trae `Code`, va ese.
+   * confirmado que no está en `HK`, o un borrado que sigue en el PNR o cuyo `UpdateResult` no es
+   * `SUCCESS`). `UNEXPECTED_CHANGE`: `changed` trae segmentos que no se pidieron (desaparecieron
+   * o cambiaron de estado); van en `segmentIds`. `SABRE_WARNING`: un `Warnings/Warning` de Sabre
+   * sin código; si trae `Code`, va ese.
    */
   code: string;
   message: string;
@@ -67,11 +75,14 @@ export interface ReservationUpdateWarning {
  *   (`confirmAirSegments`). No se escribió nada.
  * - `SEGMENT_NOT_FOUND` / `SEGMENT_STATUS_NOT_ALLOWED`: un segmento a borrar no existe o no está
  *   en `allowedStatuses` (`removeAirSegments`). No se escribió nada.
+ * - `SEGMENT_ID_MISMATCH`: un segmento a borrar no trae `Product@id`, o no es igual a su
+ *   `Air@id` (`removeAirSegments`): el `ProductUpdate op="D"` podría borrar otro segmento (Q-140).
+ *   No se escribió nada.
  * - `SABRE_ERROR`: un `Errors/Error` (o `stl:ApplicationResults/Error`) de Sabre en la lectura
  *   (`GetReservationRS`) o en la escritura (`UpdateReservationRS` sin `Success`), con su `code` y
  *   su texto tal cual. `PREVIOUS ENTRY ACTIVE` en la escritura no es `SABRE_ERROR`: es incierto.
  */
-export type ReservationUpdateErrorReason = 'SEGMENTS_CHANGED' | 'SEGMENT_NOT_FOUND' | 'SEGMENT_STATUS_NOT_ALLOWED' | 'SABRE_ERROR';
+export type ReservationUpdateErrorReason = 'SEGMENTS_CHANGED' | 'SEGMENT_NOT_FOUND' | 'SEGMENT_ID_MISMATCH' | 'SEGMENT_STATUS_NOT_ALLOWED' | 'SABRE_ERROR';
 
 export interface SabreReservationUpdateErrorOptions extends Omit<SabreBusinessErrorOptions, 'service'> {
   reason: ReservationUpdateErrorReason;
@@ -79,7 +90,12 @@ export interface SabreReservationUpdateErrorOptions extends Omit<SabreBusinessEr
   severity?: string;
   /** Los ids que mandó el consumidor (`expectedSegmentIds` o `segmentIds`). */
   expectedSegments?: readonly string[];
-  /** Con `SEGMENTS_CHANGED`: los ids que están en `TK` en el PNR. */
+  /**
+   * Con `SEGMENTS_CHANGED`: los ids que están en `TK` en el PNR. Con `SEGMENT_NOT_FOUND`,
+   * `SEGMENT_ID_MISMATCH` y `SEGMENT_STATUS_NOT_ALLOWED`: los ids pedidos que no pasaron el
+   * chequeo (no están en el PNR, su `Product@id` falta o es otro, o su estado no está en
+   * `allowedStatuses`).
+   */
   actualSegments?: readonly string[];
 }
 
@@ -138,6 +154,15 @@ export function updateReservationPayload(items: readonly string[], receivedFrom:
 
 /** `AirItineraryUpdate/Action = CONFIRM-ALL`: pasa todos los `TK` a `HK`. */
 export const CONFIRM_ALL_ITEM = '<AirItineraryUpdate><Action>CONFIRM-ALL</Action></AirItineraryUpdate>';
+
+/**
+ * `ProductUpdate id="<id>" op="D"`: borra el segmento con ese `Product@id`, que en los ejemplos
+ * oficiales coincide con `Air@id` (Cancel Air Segments). `removeAirSegments` lo comprueba antes
+ * de escribir (`SEGMENT_ID_MISMATCH`). Un `ReservationUpdateItem` por segmento.
+ */
+export function deleteSegmentItem(id: string): string {
+  return `<ProductUpdate id="${xmlEscape(id)}" op="D"/>`;
+}
 
 /** `IgnoreTransactionLLSRQ` 2.0.0 (el `I` del host): descarta lo que no se commiteó en el AAA. */
 export function ignoreTransactionRequest(operation: string): SessionRequest {
@@ -249,7 +274,8 @@ function airSegments(reservation: XmlNode, response: SoapResponse): ReservationA
       departure: text(air.DepartureDateTime),
       arrival: text(air.ArrivalDateTime),
     };
-    const found: ReservationAirSegment = { id, sequence: Number(sequenceText), status };
+    const productId = attribute(node(asArray(node(segment)?.Product)[0]), 'id');
+    const found: ReservationAirSegment = { id, ...(productId === undefined ? {} : { productId }), sequence: Number(sequenceText), status };
     for (const [key, value] of Object.entries(fields)) if (value !== undefined) (found as unknown as Record<string, string>)[key] = value;
     result.push(found);
   }

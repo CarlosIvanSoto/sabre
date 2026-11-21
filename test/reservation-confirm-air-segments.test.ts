@@ -124,6 +124,7 @@ describe('reservation.confirmAirSegments: resultado', () => {
       segments: [
         {
           id: '8',
+          productId: '8',
           sequence: 1,
           marketingCarrier: 'B6',
           flightNumber: '3309',
@@ -136,6 +137,7 @@ describe('reservation.confirmAirSegments: resultado', () => {
         },
         {
           id: '9',
+          productId: '9',
           sequence: 2,
           marketingCarrier: 'B6',
           flightNumber: '1908',
@@ -188,11 +190,12 @@ describe('reservation.confirmAirSegments: resultado', () => {
     ]);
   });
 
-  it('TK con KK: el chequeo solo mira los TK; lo que hizo Sabre con el KK sale en changed (Q-139)', async () => {
+  it('TK con KK: el chequeo solo mira los TK; el KK tocado sale en changed y en UNEXPECTED_CHANGE (Q-139)', async () => {
     const { session } = await openWith(get('tk-kk'), update('confirm-all-official'));
     const result = await session.reservation.confirmAirSegments({ ...REQUEST, expectedSegmentIds: ['8'] });
     expect(result.changed).toEqual(['8', '9']);
     expect(result.segments.find((segment) => segment.id === '9')).toMatchObject({ previousStatus: 'KK', status: 'HK' });
+    expect(result.warnings).toEqual([{ code: 'UNEXPECTED_CHANGE', message: expect.stringContaining('9 (HK)'), segmentIds: ['9'] }]);
   });
 
   it('expectedSegmentIds se compara como conjunto: orden y repetidos no importan', async () => {

@@ -1,5 +1,6 @@
 // La reserva dentro de una sesión SOAP: el historial (B1 de ADR-027) y la búsqueda por fecha de
-// modificación (ADR-033), y la confirmación de un cambio de horario (ADR-034).
+// modificación (ADR-033), y la confirmación de un cambio de horario y la baja de los segmentos
+// viejos (ADR-034).
 import type { SoapResponse } from '../http/soap-transport.js';
 import type { EventLogger } from '../logging/logger.js';
 import type { SessionRequest } from '../session/session.js';
@@ -9,6 +10,12 @@ import {
   type ConfirmAirSegmentsResult,
   confirmAirSegments,
 } from './confirm-air-segments.js';
+import {
+  type RemoveAirSegmentsOptions,
+  type RemoveAirSegmentsRequest,
+  type RemoveAirSegmentsResult,
+  removeAirSegments,
+} from './remove-air-segments.js';
 import {
   isRecordLocator,
   parseReservationHistoryResponse,
@@ -119,7 +126,7 @@ export class SessionReservation {
    *    sin escribir.
    * 3. Manda `CONFIRM-ALL` y compara el PNR de la respuesta con el de la lectura: `changed` trae
    *    los segmentos que cambiaron de estado y `warnings` trae `NOT_APPLIED` si uno esperado no
-   *    quedó en `HK`.
+   *    quedó en `HK`, y `UNEXPECTED_CHANGE` si `changed` trae uno no esperado (un `KK`, p. ej.).
    *
    * - **`CONFIRM-ALL` confirma todos los `TK` del PNR**, no solo los esperados: por eso el
    *   chequeo del paso 2. Sabre no confirma uno solo por id.
@@ -134,8 +141,9 @@ export class SessionReservation {
    * - Lo que pudo haber llegado a Sabre sin una respuesta clara lanza
    *   `SabreUncertainOutcomeError` (`operation: 'reservation.confirmAirSegments'`,
    *   `confirmationId`: el localizador; `reason`: `TRANSPORT`, `GATEWAY_5XX` (cualquier SOAP
-   *   fault o un 5xx), `UNPARSEABLE`, `ABORTED`, `END_TRANSACTION_PROBLEM` o
-   *   `PREVIOUS_ENTRY_ACTIVE`), sin `IgnoreTransaction`. **Cierra la sesión y relee el PNR en una
+   *   fault o un 5xx), `UNPARSEABLE`, `ABORTED`, `END_TRANSACTION_PROBLEM`,
+   *   `PREVIOUS_ENTRY_ACTIVE` o `PARTIALLY_APPLIED`: `Errors` con algún `UpdateResult`
+   *   `SUCCESS`), sin `IgnoreTransaction`. **Cierra la sesión y relee el PNR en una
    *   nueva antes de reintentar**: el cambio puede seguir pendiente en el AAA de esta sesión, y un
    *   End Transaction posterior en ella podría commitearlo.
    * - `USG_*_BUSY` y un error de sesión salen tal cual: Sabre no procesó el Update.
@@ -146,5 +154,54 @@ export class SessionReservation {
    */
   confirmAirSegments(request: ConfirmAirSegmentsRequest, options: ConfirmAirSegmentsOptions = {}): Promise<ConfirmAirSegmentsResult> {
     return confirmAirSegments(this.#context, request, options);
+  }
+
+  /**
+   * Borra segmentos aéreos del PNR (ADR-034): los vuelos viejos de un cambio de horario (`UN`,
+   * `HX`) que elige el consumidor, con un `ProductUpdate op="D"` por segmento en un solo
+   * `UpdateReservationRQ`, con el End Transaction en la misma llamada.
+   *
+   * 1. Relee el PNR con `GetReservationRQ` `Stateful`.
+   * 2. Revisa cada `segmentIds` y lanza `SabreReservationUpdateError`, sin escribir nada (tampoco
+   *    los demás), con el primer `reason` que aplique: `SEGMENT_NOT_FOUND` (no está en el PNR),
+   *    `SEGMENT_ID_MISMATCH` (su `Product@id`, lo que borra `op="D"`, falta o no es su `Air@id`)
+   *    o `SEGMENT_STATUS_NOT_ALLOWED` (su estado no está en `allowedStatuses`).
+   * 3. Manda la baja y compara el PNR de la respuesta con el de la lectura: `segments` trae los
+   *    que quedan, `changed` los que ya no están (o cambiaron de estado). `warnings` trae
+   *    `NOT_APPLIED` si uno pedido sigue en el PNR o su `UpdateResult` no es `SUCCESS` (puede
+   *    estar también en `changed` si el `UpdateResult` contradice al PNR), y `UNEXPECTED_CHANGE`
+   *    si `changed` trae uno que no se pidió (un segmento casado, p. ej.).
+   *
+   * - **`allowedStatuses` por defecto es `['UN', 'HX']`**: un `HK` nunca se borra con el
+   *   default. Pasar la lista la reemplaza: para borrar un `HK` hay que incluirlo.
+   * - **Sin probar (Q-140):** el ejemplo oficial de `op="D"` borra un `HK`; que borre un `UN` o
+   *   un `HX` igual es un supuesto hasta la primera llamada real. Los ids de `segmentIds` son los
+   *   de STL (`segments[].id`), no el `itemId` de `booking.get`. El chequeo de `Product@id` del
+   *   paso 2 evita borrar otro segmento si los dos ids no coinciden.
+   * - **Baja parcial:** si Sabre responde `Errors` con evidencia de que alguna baja se aplicó (un
+   *   `UpdateResult` `SUCCESS`, o un segmento pedido que ya no está en un `Reservation` con
+   *   segmentos aéreos), lanza
+   *   `SabreUncertainOutcomeError` con `reason: 'PARTIALLY_APPLIED'`, sin `IgnoreTransaction`.
+   * - **El Update nunca se reintenta**: sale un solo `UpdateReservationRQ`, tampoco ante
+   *   `PREVIOUS ENTRY ACTIVE`.
+   * - Un error de Sabre (`Errors/Error` o `stl:ApplicationResults/Error`, p. ej. `700432`, la
+   *   aerolínea no deja cancelar) lanza `SabreReservationUpdateError` (`reason: 'SABRE_ERROR'`,
+   *   con el `code` y el texto de Sabre): no se escribió. En el Update va después de un
+   *   `IgnoreTransaction`.
+   * - Lo que pudo haber llegado a Sabre sin una respuesta clara lanza
+   *   `SabreUncertainOutcomeError` (`operation: 'reservation.removeAirSegments'`,
+   *   `confirmationId`: el localizador; `reason`: `TRANSPORT`, `GATEWAY_5XX` (cualquier SOAP
+   *   fault o un 5xx), `UNPARSEABLE`, `ABORTED`, `END_TRANSACTION_PROBLEM`,
+   *   `PREVIOUS_ENTRY_ACTIVE` o `PARTIALLY_APPLIED`), sin `IgnoreTransaction`. **Cierra la sesión y relee el PNR en una
+   *   nueva antes de reintentar**: el cambio puede seguir pendiente en el AAA de esta sesión, y un
+   *   End Transaction posterior en ella podría commitearlo.
+   * - `USG_*_BUSY` y un error de sesión salen tal cual: Sabre no procesó el Update.
+   * - Un request con forma equivocada o `retry.maxRetries` distinto de 0 lanza `TypeError` sin red.
+   *
+   * `onRawResponse` y `onRawRequest` se llaman una vez por cada llamada a Sabre: la lectura, el
+   * Update y, si hace falta, el `IgnoreTransaction` (los dos primeros traen PII).
+   */
+  removeAirSegments(request: RemoveAirSegmentsRequest, options: RemoveAirSegmentsOptions = {}): Promise<RemoveAirSegmentsResult> {
+    return removeAirSegments(this.#context, request, options);
   }
 }

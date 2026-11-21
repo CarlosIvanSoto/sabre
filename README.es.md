@@ -85,7 +85,7 @@ El Tier 3 agrega el cliente SOAP `SabreLegacy`, con una sesión stateful y Queue
 | Párrafo de cola | — (función pura) | `parseQueueParagraph`, `parseQueuePlaceRemark`, `resolveHostDate` |
 | Historial del PNR | `TravelItineraryHistoryLLSRQ` 2.4.0 | `session.reservation.history` |
 | Búsqueda de PNR por fecha de modificación | `Trip_SearchRQ` 4.5.0 (Search For Itineraries, `0.8.0`) | `session.reservation.searchByUpdateDate` |
-| Confirmar un cambio de horario | `GetReservationRQ` / `UpdateReservationRQ` 1.19.0 (`CONFIRM-ALL`), `IgnoreTransactionLLSRQ` 2.0.0 | `session.reservation.confirmAirSegments` |
+| Confirmar un cambio de horario | `GetReservationRQ` / `UpdateReservationRQ` 1.19.0 (`CONFIRM-ALL`, `ProductUpdate op="D"`), `IgnoreTransactionLLSRQ` 2.0.0 | `session.reservation.confirmAirSegments`, `removeAirSegments` |
 | Comandos de host | `SabreCommandLLSRQ` 2.0.0 | `session.command` |
 | Ventas del día | `TKT_TravelAgencyReportsRQ` / `DailySalesSummaryRQ` 1.2.2 (el «Summary» del DQB) | `session.reporting.dailySalesSummary` |
 
@@ -636,7 +636,8 @@ const result = await legacy.withSession((session) =>
    `reason: 'SEGMENTS_CHANGED'`, `expectedSegments` y `actualSegments` (ids), y no escribe.
 3. Manda `CONFIRM-ALL` y compara el PNR de la respuesta con el que leyó: `changed` trae los
    segmentos que cambiaron de estado, y `warnings` trae `NOT_APPLIED` si uno esperado no quedó
-   en `HK`.
+   en `HK`, y `UNEXPECTED_CHANGE` (con `segmentIds`) si `changed` trae un segmento que no
+   esperabas (un `KK` que pasó a `HK`, por ejemplo).
 
 - **`CONFIRM-ALL` confirma todos los `TK` del PNR**, no solo los que esperas: para eso está el
   paso 2. Sabre no permite confirmar un solo segmento por id.
@@ -653,14 +654,65 @@ const result = await legacy.withSession((session) =>
   con `operation: 'reservation.confirmAirSegments'` y el localizador en `confirmationId`:
   `TRANSPORT` (fallo de red), `GATEWAY_5XX` (cualquier SOAP fault, o un `5xx`), `UNPARSEABLE` (un
   body ilegible), `ABORTED` (un abort con el Update ya mandado), `END_TRANSACTION_PROBLEM`
-  (`Success` junto con `Errors`) o `PREVIOUS_ENTRY_ACTIVE` (Sabre agotó sus reintentos y una
-  entrada del Update puede seguir en curso). No se manda `IgnoreTransaction`. **Cierra la sesión
+  (`Success` junto con `Errors`), `PREVIOUS_ENTRY_ACTIVE` (Sabre agotó sus reintentos y una
+  entrada del Update puede seguir en curso) o `PARTIALLY_APPLIED` (`Errors`, pero algún
+  `UpdateResult` dice `SUCCESS`). No se manda `IgnoreTransaction`. **Cierra la sesión
   y relee el PNR en una nueva antes de reintentar**: el cambio incierto puede seguir pendiente en
   el área de trabajo de la sesión, y un End Transaction posterior en la misma sesión podría
   commitearlo.
 - `USG_*_BUSY` y un error de sesión salen tal cual: Sabre no procesó el Update.
 - `onRawRequest` y `onRawResponse` se llaman una vez por cada llamada a Sabre: la lectura, el
   Update y, si hace falta, el `IgnoreTransaction`.
+
+#### Quitar los segmentos viejos
+
+`session.reservation.removeAirSegments(request, options?)` (ADR-034) borra los segmentos aéreos
+que elijas (casi siempre los vuelos viejos `UN`/`HX` de un cambio de horario) con un
+`ProductUpdate op="D"` por segmento, todos en un solo `UpdateReservationRQ` con el End
+Transaction. Es una escritura.
+
+```ts
+const result = await legacy.withSession((session) =>
+  session.reservation.removeAirSegments({
+    locator: 'ABCDEF',
+    receivedFrom: 'SCHEDULE CHANGE',   // obligatorio
+    segmentIds: ['8', '10'],           // ids de segmento de STL, uno o más
+    // allowedStatuses: ['UN', 'HX'],  // el default; HK nunca está
+  }),
+);
+// result.status → 'removed'
+// result.segments → los segmentos aéreos que quedan en el PNR, con previousStatus
+// result.changed → ['8', '10']; result.warnings → []
+```
+
+1. Relee el PNR (`GetReservationRQ`, `Stateful`).
+2. Revisa cada segmento de `segmentIds` y lanza `SabreReservationUpdateError`, sin escribir nada
+   (tampoco los demás segmentos), con el primer `reason` que aplique: `'SEGMENT_NOT_FOUND'` (no
+   está en el PNR), `'SEGMENT_ID_MISMATCH'` (su `Product@id`, que es lo que borra `op="D"`, falta
+   o no es igual a su id) o `'SEGMENT_STATUS_NOT_ALLOWED'` (su estado no está en
+   `allowedStatuses`). `actualSegments` trae los ids que no pasaron.
+3. Manda las bajas y compara el PNR de la respuesta con el que leyó: `changed` trae los segmentos
+   que ya no están (o cambiaron de estado). `warnings` trae `NOT_APPLIED` si un segmento pedido
+   sigue en el PNR o su `UpdateResult` no es `SUCCESS`, y `UNEXPECTED_CHANGE` (con `segmentIds`)
+   si `changed` trae un segmento que no pediste (un segmento casado que la aerolínea canceló con
+   el pedido, por ejemplo). `NOT_APPLIED` puede nombrar un segmento que también está en
+   `changed`: pasa cuando su `UpdateResult` no es `SUCCESS` pero el PNR ya no lo tiene, así que
+   las dos respuestas de Sabre se contradicen; relee el PNR antes de fiarte de cualquiera.
+
+- **`allowedStatuses` vale `['UN', 'HX']` por defecto** (`DEFAULT_REMOVABLE_STATUSES`): un `HK`
+  nunca se borra con el default. Si pasas la lista, reemplaza el default.
+- **Sin probar (Q-140):** el ejemplo de Sabre de `op="D"` borra un `HK`; que borre igual un `UN` o
+  un `HX` es un supuesto hasta la primera llamada real. El chequeo de `Product@id` del paso 2
+  evita que una diferencia entre los dos ids borre otro segmento.
+- **Bajas parciales:** si Sabre responde `Errors` pero muestra que alguna baja se aplicó (un
+  `UpdateResult` con `SUCCESS`, o un segmento pedido que falta en un `Reservation` que sí trae
+  segmentos aéreos), lanza
+  `SabreUncertainOutcomeError` con `reason: 'PARTIALLY_APPLIED'` y no manda `IgnoreTransaction`.
+  Sin esa evidencia, es un `SABRE_ERROR` como arriba.
+- Los errores, los inciertos (`operation: 'reservation.removeAirSegments'`), los reintentos y los
+  callbacks crudos funcionan igual que en `confirmAirSegments`: el Update sale una sola vez,
+  también con `PREVIOUS ENTRY ACTIVE`, y después de un incierto cierras la sesión y relees el PNR
+  en una nueva.
 
 ### Ventas del día
 
@@ -1058,9 +1110,9 @@ Todos los errores que lanza el SDK extienden `SabreError`:
 | `SabreOrchestrationError` | Error de un servicio orquestado dentro de un `200` (`SP.*`) | `code` |
 | `SabreBusinessError` | Error del catálogo propio de un servicio (p. ej. `No Availability`, una reserva que no se creó) | `service`, `code`, `warnings`, `errors` |
 | `SabreSessionError` | Falla de la sesión SOAP de `SabreLegacy`, subclase de `SabreGatewayError` | `kind`: `'limit'` (más de 50 sesiones), `'invalid'`, `'expired'`, `'blocked'` |
-| `SabreUncertainOutcomeError` | La emisión, el void o el cambio del PNR pudieron haberse hecho, o no (`tickets.fulfill`, `booking.cancel` con `VOID`, `reservation.confirmAirSegments`): verifica antes de reintentar | `operation`, `confirmationId`, `reason`, `tickets`, `warnings` |
+| `SabreUncertainOutcomeError` | La emisión, el void o el cambio del PNR pudieron haberse hecho, o no (`tickets.fulfill`, `booking.cancel` con `VOID`, `reservation.confirmAirSegments`, `reservation.removeAirSegments`): verifica antes de reintentar | `operation`, `confirmationId`, `reason`, `tickets`, `warnings` |
 | `SabreTripSearchError` | Error de `Trip_SearchRQ` en `reservation.searchByUpdateDate`, subclase de `SabreBusinessError` | `reason`, `severity`, más los de `SabreBusinessError` |
-| `SabreReservationUpdateError` | Una escritura de `reservation.confirmAirSegments` que no se hizo (error de Sabre o el chequeo local), subclase de `SabreBusinessError` | `reason`, `severity`, `expectedSegments`, `actualSegments`, más los de `SabreBusinessError` |
+| `SabreReservationUpdateError` | Una escritura de `reservation.confirmAirSegments` o `removeAirSegments` que no se hizo (error de Sabre o el chequeo local), subclase de `SabreBusinessError` | `reason`, `severity`, `expectedSegments`, `actualSegments`, más los de `SabreBusinessError` |
 | `SabreWarning` | Aviso no fatal (p. ej. `category: WARNING` en Create Booking) | `service`, `code` |
 
 Todos tienen `retryable`, que indica si la política de reintentos puede volver a intentar.
@@ -1116,7 +1168,7 @@ const booking = await sabre.booking.get({ confirmationId }, { onRawResponse: (r)
 
 En `SabreLegacy`, `protocol` es `'soap'`, `body` es el sobre SOAP completo, y `operation` es
 `'openSession'`, `'close'`, `'ping'`, `'command'`, `'queue.<método>'`, `'reservation.history'`,
-`'reservation.searchByUpdateDate'`, `'reservation.confirmAirSegments'` o `'reporting.dailySalesSummary'`. `tickets.verify` reporta `'booking.get'`, el Get Booking que corre. El token de la sesión
+`'reservation.searchByUpdateDate'`, `'reservation.confirmAirSegments'`, `'reservation.removeAirSegments'` o `'reporting.dailySalesSummary'`. `tickets.verify` reporta `'booking.get'`, el Get Booking que corre. El token de la sesión
 (`BinarySecurityToken`) se reemplaza por `[REDACTED]` donde aparezca. No se cambia nada más.
 
 > [!WARNING]
@@ -1170,7 +1222,7 @@ Las operaciones que mueven el cursor de la cola (`access`, `ignore`, `remove`, `
 reintentan solo ante los `USG_*_BUSY`, que se toman como señal de que Sabre no procesó el request, y ante
 `PREVIOUS ENTRY ACTIVE` (3 × 1 s). Nunca se reintentan después de un fallo de red, porque el PNR
 pudo haberse movido: el estado de la cola pasa a `'unknown'`. El Update de
-`reservation.confirmAirSegments` no se reintenta nunca, tampoco ante `PREVIOUS ENTRY ACTIVE`: hace
+`reservation.confirmAirSegments` y `removeAirSegments` no se reintenta nunca, tampoco ante `PREVIOUS ENTRY ACTIVE`: hace
 el commit en la misma llamada.
 
 ## Reutilizar el token

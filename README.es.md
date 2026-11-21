@@ -1020,6 +1020,52 @@ fake.openSessions; // 0: la sesión se cerró
   }));
   ```
 
+#### Cambios de itinerario (`confirmAirSegments` y `removeAirSegments`)
+
+`reservationUpdate` siembra los PNR con sus segmentos aéreos (`id`, `status` y, si quieres,
+`sequence`, aerolínea, vuelo, origen, destino y horas locales). `productId` es el `Product@id`
+que borra `op="D"`: por defecto, igual a `id`; uno distinto, o `null` para omitirlo, fuerza
+`SEGMENT_ID_MISMATCH`. El fake responde
+`GetReservationRQ`, `UpdateReservationRQ` (`CONFIRM-ALL` y `ProductUpdate op="D"`) e
+`IgnoreTransactionLLSRQ`, y guarda el estado de cada PNR: `confirmAirSegments` y
+`removeAirSegments` releen lo que dejó la escritura anterior, así que `noop`, `SEGMENTS_CHANGED`,
+`SEGMENT_NOT_FOUND` y `SEGMENT_STATUS_NOT_ALLOWED` salen igual que con Sabre.
+
+```ts
+const fake = createQueueFake({
+  reservationUpdate: {
+    reservations: [{ locator: 'ABCDEF', segments: [{ id: '8', status: 'TK' }, { id: '9', status: 'UN' }] }],
+    outcomes: [{ uncertain: 'TRANSPORT', applied: true }],
+  },
+});
+
+await session.reservation.confirmAirSegments(request); // SabreUncertainOutcomeError, reason TRANSPORT
+fake.airSegments('ABCDEF'); // [{ id: '8', status: 'HK', … }, { id: '9', status: 'UN', … }]
+await otherSession.reservation.confirmAirSegments(request); // noop: el cambio ya estaba guardado
+```
+
+- Un localizador no sembrado da `700226` en la lectura.
+- `reservationUpdate.outcomes` fuerza el desenlace de cada `UpdateReservationRQ`, en orden. Un
+  `noop` o un `SEGMENTS_CHANGED` no mandan Update, así que no consumen ninguno:
+  - `'applied'` (sin forzar): los `TK` pasan a `HK`, o los segmentos pedidos salen del PNR y los
+    demás se renumeran;
+  - `'notApplied'`: `Success` sin cambios, y el SDK avisa `NOT_APPLIED`. Con
+    `{ notApplied: { status: 'FAILED' } }`, el `UpdateResult@Status` de cada baja es ese;
+  - `{ sideEffects: { '9': null } }`: escribe lo pedido y además borra (`null`) o cambia de
+    status (`'UC'`) un segmento que nadie pidió, para probar `UNEXPECTED_CHANGE`;
+  - `{ error: { code, message?, severity? } }`: un error de Sabre sin escribir, seguido del
+    `IgnoreTransaction` del SDK. `700432`, `700411`, `700408` y `500810` llevan el texto de las
+    fuentes. Con `removed: ['8']` (bajas pedidas en ese Update), es una baja parcial: esas sí se
+    guardan y la respuesta trae su evidencia, para probar `PARTIALLY_APPLIED`;
+  - `{ uncertain, applied? }`, con `TRANSPORT`, `GATEWAY_5XX`, `UNPARSEABLE`, `ABORTED` (un
+    `AbortError` aunque la llamada no traiga `signal`), `END_TRANSACTION_PROBLEM` y
+    `PREVIOUS_ENTRY_ACTIVE`. `applied` dice si el cambio quedó guardado, para probar la
+    relectura; por defecto, sí solo con `END_TRANSACTION_PROBLEM`.
+- `fake.calls` registra `getReservation`, `updateReservation` (con el localizador y el
+  `receivedFrom`) e `ignoreTransaction`. `fake.airSegments(locator)` devuelve el estado actual.
+- **No se simula** el AAA: un Update sin lectura previa en la sesión recibe un fault marcado como
+  no simulado, y `700408` solo sale si se fuerza.
+
 #### Reservas y emisión (REST)
 
 El mismo `fake.fetch` responde también al cliente REST (`Sabre`): el token, Create, Get y Cancel

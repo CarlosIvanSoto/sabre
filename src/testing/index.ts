@@ -22,6 +22,13 @@ export type {
   QueueFakeVoidOutcome,
 } from './booking-fake.js';
 export type { QueueFakeTripSearch, QueueFakeTripSearchReservation } from './trip-search-fake.js';
+export type {
+  QueueFakeAirSegment,
+  QueueFakeReservation,
+  QueueFakeReservationUpdate,
+  QueueFakeReservationUpdateOutcome,
+  QueueFakeReservationUpdateUncertainReason,
+} from './reservation-update-fake.js';
 export { createAnonymizer, isSafeHostLine } from './anonymize.js';
 export type { Anonymizer, AnonymizerLeak, AnonymizerOptions } from './anonymize.js';
 export { queueFakePnrs } from './fixture-pnrs.js';

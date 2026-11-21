@@ -1,6 +1,7 @@
 // Fake de colas para los tests de los consumidores: un `fetch` que responde como Sabre a la sesión
-// SOAP, a Queue Management y a las ventas del día (ADR-030), y en REST a la reserva y la emisión
-// (F3.1, ADR-031; ver booking-fake.ts), sin red. Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md
+// SOAP, a Queue Management, a las ventas del día (ADR-030) y a los cambios de itinerario (ADR-034;
+// ver reservation-update-fake.ts), y en REST a la reserva y la emisión (F3.1, ADR-031; ver
+// booking-fake.ts), sin red. Ver sabre-wiki/wiki/sdk/tier-3-sesion-y-colas-soap.md
 // (punto 7 y su decisión). Se publica en `sabre-client/testing`, fuera del bundle principal.
 //
 // Las respuestas imitan lo observado en producción (#95, #96 y #97): la cola vacía como
@@ -15,6 +16,7 @@ import type { QueueActivityCounters } from '../queue/queue-activity.js';
 import { MAX_QUEUE_NUMBER, MESSAGE_QUEUE, MIN_QUEUE_NUMBER, type QueueRef, toQueueRef } from '../queue/queue-ref.js';
 import type { DailySalesTransaction } from '../reporting/daily-sales-summary.js';
 import { createTripSearchHandler, type QueueFakeTripSearch } from './trip-search-fake.js';
+import { createReservationUpdateHandler, type QueueFakeAirSegment, type QueueFakeReservationUpdate, type ReservationUpdateFakeCommand, type ReservationUpdateReply } from './reservation-update-fake.js';
 import type {
   ReservationHistoryAccounting,
   ReservationHistoryFlightSegment,
@@ -141,6 +143,14 @@ export interface QueueFakeOptions {
    */
   tripSearchTimeZone?: string;
   /**
+   * Los PNR de `reservation.confirmAirSegments` y `removeAirSegments` (ADR-034), con sus
+   * segmentos aéreos, y los desenlaces forzados de cada `UpdateReservationRQ`: un error de Sabre,
+   * un incierto (con el cambio guardado o no) o `notApplied`. Simula `GetReservationRQ`,
+   * `UpdateReservationRQ` con `CONFIRM-ALL` o `ProductUpdate op="D"` e `IgnoreTransactionLLSRQ`;
+   * cada escritura queda en `calls` con su `receivedFrom`, y `airSegments()` muestra el estado.
+   */
+  reservationUpdate?: QueueFakeReservationUpdate;
+  /**
    * Reservas para el cliente REST (`Sabre`), por localizador, sin pasar por `booking.create`. Las
    * que crea `booking.create` se suman solas, con localizadores `FAKEAA`, `FAKEAB`…
    */
@@ -171,14 +181,20 @@ export type QueueFakeCommand =
   | 'history'
   | 'dailySalesSummary'
   | 'tripSearch'
+  | ReservationUpdateFakeCommand
   | BookingFakeCommand;
 
 export interface QueueFakeCall {
   command: QueueFakeCommand;
   /** La cola de `access` y `list`. */
   queue?: QueueRef;
-  /** El localizador de `history` y de las llamadas REST de reserva y emisión. */
+  /**
+   * El localizador de `history`, de las llamadas REST de reserva y emisión, de `getReservation`
+   * y de `updateReservation` (el PNR que leyó la sesión).
+   */
   locator?: string;
+  /** El `ReceivedFrom` de `updateReservation`, tal cual llegó. */
+  receivedFrom?: string;
   /** El PCC de `tripSearch`, y el PCC y la fecha que pidió `dailySalesSummary`, si los mandó. */
   pcc?: string;
   date?: string;
@@ -191,6 +207,11 @@ export interface QueueFake {
   locators(queue: QueueRef): string[];
   /** El texto de los mensajes que siguen en la cola `S`, en orden. */
   messages(): string[][];
+  /**
+   * Los segmentos aéreos actuales de un PNR de `reservationUpdate`, con lo que hayan cambiado las
+   * escrituras, o `undefined` si no está sembrado.
+   */
+  airSegments(locator: string): QueueFakeAirSegment[] | undefined;
   /** Las llamadas recibidas, en orden. */
   readonly calls: readonly QueueFakeCall[];
   /** Cuántas sesiones siguen abiertas: sirve para comprobar que el consumidor las cierra. */
@@ -654,6 +675,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     }
   }
   const tripSearch = createTripSearchHandler(options.tripSearch, options.tripSearchTimeZone, now);
+  const reservationUpdate = createReservationUpdateHandler(options.reservationUpdate, (call) => calls.push(call));
   const histories = new Map<string, QueueFakeHistoryTransaction[]>();
   for (const [locator, transactions] of Object.entries(options.histories ?? {})) {
     if (!LOCATOR.test(locator)) fail(`histories['${locator}']: la clave debe ser un localizador de 6 caracteres alfanuméricos en mayúscula`);
@@ -1078,9 +1100,26 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     ].join('');
   };
 
+  // --- Escrituras de ADR-034 ---------------------------------------------------------------
+
+  const reservationReply = (result: ReservationUpdateReply, session: Session, token: string): Reply | 'transport' | 'abort' => {
+    if (typeof result === 'string') return result;
+    if ('payload' in result) return { status: 200, body: envelope(result.action, session.conversationId, token, result.payload, now()) };
+    if ('html' in result) return { status: 200, body: result.html };
+    return {
+      status: 500,
+      body: envelope(
+        'ErrorRS',
+        session.conversationId,
+        token,
+        `<soap-env:Fault><faultcode>${escape(result.fault.code)}</faultcode><faultstring>${escape(result.fault.text)}</faultstring></soap-env:Fault>`,
+      ),
+    };
+  };
+
   // --- Despacho --------------------------------------------------------------------------
 
-  const handle = (raw: string): Reply => {
+  const handle = (raw: string): Reply | 'transport' | 'abort' => {
     let document: XmlNode | undefined;
     try {
       document = node(node(parser.parse(raw))?.Envelope);
@@ -1120,6 +1159,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
       case 'SessionCloseRQ':
         calls.push({ command: 'close' });
         sessions.delete(token);
+        reservationUpdate.forget(token);
         return reply('SessionCloseRS', session, token, '<SessionCloseRS xmlns="http://www.opentravel.org/OTA/2002/11" version="1" status="Approved"/>');
       case 'OTA_PingRQ': {
         calls.push({ command: 'ping' });
@@ -1170,6 +1210,12 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
           ),
         };
       }
+      case 'GetReservationRQ':
+        return reservationReply(reservationUpdate.get(token, rq), session, token);
+      case 'UpdateReservationRQ':
+        return reservationReply(reservationUpdate.update(token, rq), session, token);
+      case 'IgnoreTransactionLLSRQ':
+        return reservationReply(reservationUpdate.ignore(token), session, token);
       default:
         return {
           status: 500,
@@ -1198,7 +1244,10 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     if (restReply === 'transport') throw new TypeError('fetch failed (sabre-client/testing: fallo de red forzado)');
     if (restReply === 'abort') throw new DOMException('The operation was aborted. (sabre-client/testing: abort forzado)', 'AbortError');
     if (restReply !== undefined) return restReply;
-    const { status, body } = handle(raw);
+    const soapReply = handle(raw);
+    if (soapReply === 'transport') throw new TypeError('fetch failed (sabre-client/testing: fallo de red forzado)');
+    if (soapReply === 'abort') throw new DOMException('The operation was aborted. (sabre-client/testing: abort forzado)', 'AbortError');
+    const { status, body } = soapReply;
     return new Response(body, { status, headers: { 'Content-Type': 'text/xml;charset=UTF-8' } });
   };
 
@@ -1206,6 +1255,7 @@ export function createQueueFake(options: QueueFakeOptions = {}): QueueFake {
     fetch: fakeFetch as typeof fetch,
     locators: (ref) => (queues.get(queueKey(ref)) ?? []).filter((entry) => entry.message === undefined).map((entry) => entry.locator),
     messages: () => (queues.get(MESSAGE_QUEUE) ?? []).map((entry) => [...(entry.message ?? [])]),
+    airSegments: (locator) => reservationUpdate.segments(locator),
     get calls() {
       return [...calls];
     },

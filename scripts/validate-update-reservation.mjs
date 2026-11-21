@@ -3,44 +3,57 @@
 // y `removeAirSegments` contra producción, con la API pública del SDK compilado. Lo corre el
 // usuario a mano, con su ok en cada corrida; nunca la CI. Necesita `npm run build` antes.
 //
-// Tres pasos, elegidos con SABRE_UPDATE_STEP. Una sola sesión SOAP por corrida, cerrada siempre.
+// Cuatro pasos, elegidos con SABRE_UPDATE_STEP. Una sola sesión SOAP por corrida, cerrada siempre.
 //
-// A. `read` (default), SOLO LECTURA. Lista las colas SABRE_UPDATE_QUEUES (5 y 6: ahí están los PNR
-//    con TK de cambio de horario, ver sabre-wiki/wiki/concepts/cambio-de-horario.md), revisa hasta
-//    SABRE_UPDATE_SCAN PNR con `GetReservationRQ` `Stateless` (no deja nada en el AAA) y elige el
-//    primero con un segmento en TK. Con SABRE_UPDATE_LOCATOR, salta las colas y lee ese PNR. Del
-//    elegido graba el `GetReservationRQ` `Stateful` (el mismo request que manda el SDK antes de
-//    escribir, por el método interno de la sesión: el SDK no tiene una lectura pública de STL) y,
-//    ya con la sesión cerrada, su `booking.get` (REST), para comparar los ids STL con
-//    `flights[].itemId` (Q-140). Nunca llama a confirmAirSegments ni a removeAirSegments.
+// 0. `scan`, SOLO LECTURA, para que las agentes elijan un PNR. Lista las colas SABRE_UPDATE_QUEUES
+//    (5 y 6: ahí están los PNR con TK de cambio de horario, ver sabre-wiki/wiki/concepts/
+//    cambio-de-horario.md), lee hasta SABRE_UPDATE_SCAN PNR (de 1 a 20) con `GetReservationRQ`
+//    `Stateless` (no deja nada en el AAA) e imprime una tabla: colas, aerolíneas, segmentos viejos y
+//    nuevos (id, estado, vuelo, ruta, salida), boleto, marriage, pasajeros y otros estados que
+//    tocaría CONFIRM-ALL. No llama a booking.get, no lee en Stateful y no graba fixture.
 //
-//      SABRE_ENVIRONMENT=production node --env-file=.env.production scripts/validate-update-reservation.mjs
+//      SABRE_ENVIRONMENT=production SABRE_UPDATE_STEP=scan node --env-file=.env.production scripts/validate-update-reservation.mjs
+//
+// A. `read` (default), SOLO LECTURA. Con SABRE_UPDATE_LOCATOR lee ese PNR; sin ella, revisa las
+//    colas como `scan` y elige el primero con un segmento en TK. Del elegido graba el
+//    `GetReservationRQ` `Stateful` (el mismo request que manda el SDK antes de escribir, por el
+//    método interno de la sesión: el SDK no tiene una lectura pública de STL) y, ya con la sesión
+//    cerrada, su `booking.get` (REST), para comparar los ids STL con `flights[].itemId` (Q-140).
+//    Nunca llama a confirmAirSegments ni a removeAirSegments.
+//
+//      SABRE_ENVIRONMENT=production SABRE_UPDATE_LOCATOR=ABC123 node --env-file=.env.production scripts/validate-update-reservation.mjs
 //
 // B. `confirm`, ESCRITURA: `confirmAirSegments` (CONFIRM-ALL) sobre SABRE_UPDATE_LOCATOR con
 //    SABRE_UPDATE_EXPECTED_IDS. C. `remove`, ESCRITURA: `removeAirSegments` (`op="D"`) de
 //    SABRE_UPDATE_SEGMENT_IDS, con el default del SDK (solo UN y HX; el script no deja ampliarlo).
-//    Sin candado, los dos son una corrida en seco: imprimen lo que harían y no llaman a Sabre ni
-//    leen credenciales. Solo escriben con SABRE_UPDATE_WRITE=<paso>:<localizador> (p. ej.
-//    `confirm:ABC123`), que repite el paso y el localizador, y en producción. Un candado que no
-//    cuadra corta con código 2 sin escribir. Después de escribir, y con la sesión ya cerrada, relee
-//    con `booking.get`.
+//    Sin candado, los dos son una corrida en seco: imprimen lo que harían y el candado exacto, y no
+//    llaman a Sabre ni leen credenciales. Solo escriben con el argumento `--write=<paso>:<localizador>:<ids>`
+//    (p. ej. `--write=confirm:ABC123:8,10`, los ids en el orden de la variable), en producción y con
+//    SABRE_UPDATE_RECEIVED_FROM, que no tiene default. El candado va en la línea de comandos y no en
+//    el entorno, para que un `export` o una línea de .env.production no conviertan en escritura un
+//    comando de lectura; SABRE_UPDATE_WRITE es un error. Un candado que no cuadra corta con código 2
+//    sin escribir. Después de escribir, y con la sesión ya cerrada, relee con `booking.get`.
 //
 //      SABRE_ENVIRONMENT=production SABRE_UPDATE_STEP=confirm SABRE_UPDATE_LOCATOR=ABC123 \
-//        SABRE_UPDATE_EXPECTED_IDS=3,4 node --env-file=.env.production scripts/validate-update-reservation.mjs
-//      … y con SABRE_UPDATE_WRITE=confirm:ABC123 para escribir de verdad.
+//        SABRE_UPDATE_EXPECTED_IDS=8,10 SABRE_UPDATE_RECEIVED_FROM=BX3 \
+//        node --env-file=.env.production scripts/validate-update-reservation.mjs
+//      … y con --write=confirm:ABC123:8,10 al final para escribir de verdad.
 //
 // Variables: las credenciales (scripts/lib/env-credentials.mjs, siempre v3), SABRE_ENVIRONMENT
 // (`sandbox` por defecto), SABRE_QUEUE_PCC (el PCC de las colas y el `targetPcc` de `booking.get`;
 // `target` toma SABRE_TARGET_PCC; sin ella, el de la sesión), SABRE_UPDATE_RECEIVED_FROM
-// (`SABRE CLIENT U6` por defecto; Q-141) y las de cada paso de arriba.
+// (obligatoria para escribir, sin default: el «recibido de» que verá la agencia en el historial,
+// p. ej. BX3; Q-141 y R3) y las de cada paso de arriba.
 //
-// Fixtures en test/fixtures: get-reservation.<entorno>-schedule-change.json (A) y
+// Fixtures en test/fixtures (`scan` no graba): get-reservation.<entorno>-schedule-change.json (A) y
 // update-reservation.<entorno>-confirm.json / -remove.json (B, C). Guardan los requests
 // (`onRawRequest`) y las respuestas (`onRawResponse`) de la reserva y de `booking.get`, no los de
 // colas. Anonimización por lista blanca (scripts/lib/update-reservation.mjs): localizadores (del
 // PNR y de la aerolínea) a alias, PCC a XXXX, firmas a AAA, y nombres, teléfonos, correos,
-// boletos, remarks y `ReceivedFrom` enmascarados. Si queda un dato real, no escribe nada (código 1).
-// La consola sí muestra el localizador real del elegido: hace falta para el paso B o C.
+// boletos, remarks y `ReceivedFrom` enmascarados; el texto que no es de un elemento hoja (contenido
+// mixto, CDATA, comentarios), siempre enmascarado. Si queda un dato real (también una palabra de un
+// nombre del PNR), no escribe nada (código 1). La consola sí muestra los localizadores reales: hacen
+// falta para el paso siguiente.
 import { writeFileSync } from 'node:fs';
 import { Sabre, SabreReservationUpdateError, SabreUncertainOutcomeError } from '../dist/index.js';
 import { createAnonymizer } from '../dist/testing.js';
@@ -50,28 +63,37 @@ import {
   REMOVABLE_STATUSES,
   compareSegmentIds,
   createScrubber,
+  RECEIVED_FROM_EXAMPLE,
   describeError,
   getReservationPayload,
+  isLocator,
   mask,
   previewUpdate,
   readStlReservation,
   receivedFromShape,
   resolvePlan,
+  scanRow,
   statusCounts,
 } from './lib/update-reservation.mjs';
 
-const plan = resolvePlan(process.env);
+const plan = resolvePlan(process.env, process.argv.slice(2));
 if (plan.error !== undefined) {
   console.error(plan.error);
   process.exit(2);
 }
 
-if (plan.step !== 'read' && !plan.write) {
+if ((plan.step === 'confirm' || plan.step === 'remove') && !plan.write) {
   const method = plan.step === 'confirm' ? 'confirmAirSegments' : `removeAirSegments (allowedStatuses: ${REMOVABLE_STATUSES.join(', ')})`;
+  const receivedFrom = plan.receivedFrom ?? RECEIVED_FROM_EXAMPLE;
   console.log(`EN SECO: no se llama a Sabre. Entorno ${plan.environment}, ${method} sobre ${plan.locator}`);
-  console.log(`${plan.step === 'confirm' ? 'expectedSegmentIds' : 'segmentIds'}: ${plan.segmentIds.join(', ')} · receivedFrom: "${plan.receivedFrom}" (${plan.receivedFrom.length} caracteres)\n`);
+  console.log(`${plan.step === 'confirm' ? 'expectedSegmentIds' : 'segmentIds'}: ${plan.segmentIds.join(', ')} · receivedFrom: "${receivedFrom}" (${receivedFrom.length} caracteres)${plan.receivedFrom === undefined ? ' · EJEMPLO: falta SABRE_UPDATE_RECEIVED_FROM' : ''}\n`);
   console.log(previewUpdate(plan));
-  console.log(`\nPara escribir de verdad, con el ok del usuario: SABRE_UPDATE_WRITE=${plan.lock}${plan.environment === 'production' ? '' : ' y SABRE_ENVIRONMENT=production'}`);
+  const missing = [
+    ...(plan.environment === 'production' ? [] : ['SABRE_ENVIRONMENT=production']),
+    ...(plan.receivedFrom === undefined ? [`SABRE_UPDATE_RECEIVED_FROM=${RECEIVED_FROM_EXAMPLE} (o el que corresponda; no hay default)`] : []),
+  ];
+  console.log(`\nPara escribir de verdad, con el ok del usuario, el mismo comando con este argumento al final: --write=${plan.lock}`);
+  if (missing.length > 0) console.log(`y además: ${missing.join(' y ')}`);
   process.exit(0);
 }
 
@@ -225,27 +247,66 @@ const restFlights = () => {
   }
 };
 
+// ---------- Colas (0 y A) ----------
+
+/**
+ * Lista las colas y lee hasta `plan.scan` PNR con `GetReservationRQ` `Stateless`, que no deja nada
+ * en el AAA y no se graba (`reservation.scan` no está en RECORDED). Solo se leen los localizadores
+ * con forma de PNR (N-1). Devuelve cada PNR leído, con sus colas y lo que dio `readStlReservation`.
+ */
+async function scanQueues(conn) {
+  const pccRequest = queuePcc === undefined ? {} : { pcc: queuePcc };
+  const queuesOf = new Map();
+  let discarded = 0;
+  for (const queue of plan.queues) {
+    const listed = await step(`list cola ${queue}`, () => conn.session.queue.list({ queue, ...pccRequest }), (r) => ({ locators: r.locators.length }));
+    for (const locator of listed.value?.locators ?? []) {
+      if (!isLocator(locator)) {
+        discarded += 1;
+        continue;
+      }
+      if (!queuesOf.has(locator)) queuesOf.set(locator, new Set());
+      queuesOf.get(locator).add(queue);
+    }
+  }
+  if (discarded > 0) console.log(`se descartaron ${discarded} localizadores de la cola sin forma de PNR`);
+  const scanned = [];
+  for (const [locator, queues] of [...queuesOf].slice(0, plan.scan)) {
+    const read = await step(`revisar ${scrub.alias(locator)} (Stateless)`, () => rawGet(conn, locator, 'Stateless', 'reservation.scan'), () => ({}));
+    if (read.value === undefined) continue;
+    scanned.push({ locator, queues: [...queues], pnr: readStlReservation(read.value.raw) });
+  }
+  return { listed: queuesOf.size, scanned };
+}
+
+// ---------- 0. Escaneo ----------
+
+async function scanStep() {
+  console.log(`entorno ${environment} · SOLO LECTURA, sin fixture · colas ${plan.queues.join(', ')}, hasta ${plan.scan} PNR · PCC de las colas: ${queuePccLabel}`);
+  const conn = await openSession();
+  let found;
+  try {
+    found = await scanQueues(conn);
+  } finally {
+    await step('close', () => conn.session.close());
+  }
+  for (const r of results.filter((r) => !r.ok)) console.log(`✘ ${r.step}: ${r.error?.name ?? ''} ${r.error?.message ?? ''}`);
+  console.log(`\n${found.listed} PNR en las colas, ${found.scanned.length} leídos (la consola muestra los localizadores reales):`);
+  if (found.scanned.length > 0) console.table(found.scanned.map(({ locator, queues, pnr }) => scanRow(queues, locator, pnr)));
+  console.log(`\npara leer uno y grabar su fixture: SABRE_ENVIRONMENT=${environment} SABRE_UPDATE_STEP=read SABRE_UPDATE_LOCATOR=<localizador>`);
+}
+
 // ---------- A. Lectura ----------
 
 async function readStep() {
   console.log(`entorno ${environment} · SOLO LECTURA · ${plan.locator === undefined ? `colas ${plan.queues.join(', ')}, hasta ${plan.scan} PNR` : `PNR ${plan.locator}`} · PCC de las colas: ${queuePccLabel}`);
-  const pccRequest = queuePcc === undefined ? {} : { pcc: queuePcc };
   const candidates = [];
   let chosen = plan.locator;
   const conn = await openSession();
   try {
     if (chosen === undefined) {
-      const queueOf = new Map();
-      for (const queue of plan.queues) {
-        const listed = await step(`list cola ${queue}`, () => conn.session.queue.list({ queue, ...pccRequest }), (r) => ({ locators: r.locators.length }));
-        for (const locator of listed.value?.locators ?? []) if (!queueOf.has(locator)) queueOf.set(locator, queue);
-      }
-      for (const [locator, queue] of [...queueOf].slice(0, plan.scan)) {
-        const read = await step(`revisar ${scrub.alias(locator)} (Stateless)`, () => rawGet(conn, locator, 'Stateless', 'reservation.scan'), () => ({}));
-        if (read.value === undefined) continue;
-        const pnr = readStlReservation(read.value.raw);
-        candidates.push({ locator, queue, statuses: statusCounts(pnr.segments), errors: pnr.errors.map((e) => e.code) });
-      }
+      const { scanned } = await scanQueues(conn);
+      for (const { locator, queues, pnr } of scanned) candidates.push({ locator, queue: queues.join(','), statuses: statusCounts(pnr.segments), errors: pnr.errors.map((e) => e.code) });
       chosen = candidates.find((c) => (c.statuses.TK ?? 0) > 0)?.locator;
     } else {
       scrub.alias(chosen);
@@ -271,9 +332,11 @@ async function readStep() {
   printSegments(`segmentos de ${chosen} (alias ${scrub.alias(chosen)}):`, stateful.segments, comparison);
   const tk = stateful.segments.filter((s) => s.status === 'TK').map((s) => s.airId);
   const removable = stateful.segments.filter((s) => REMOVABLE_STATUSES.includes(s.status)).map((s) => s.airId);
-  const base = `SABRE_ENVIRONMENT=${environment} SABRE_UPDATE_LOCATOR=${chosen}`;
-  if (tk.length > 0) console.log(`\npaso B, en seco: ${base} SABRE_UPDATE_STEP=confirm SABRE_UPDATE_EXPECTED_IDS=${tk.join(',')}`);
-  if (removable.length > 0) console.log(`paso C, en seco: ${base} SABRE_UPDATE_STEP=remove SABRE_UPDATE_SEGMENT_IDS=<de ${removable.join(',')}>`);
+  const base = `SABRE_ENVIRONMENT=${environment} SABRE_UPDATE_LOCATOR=${chosen} SABRE_UPDATE_RECEIVED_FROM=${RECEIVED_FROM_EXAMPLE}`;
+  if (tk.length > 0) console.log(`\npaso B, en seco (sin --write; el seco imprime el candado): ${base} SABRE_UPDATE_STEP=confirm SABRE_UPDATE_EXPECTED_IDS=${tk.join(',')}`);
+  if (removable.length > 0) console.log(`paso C, en seco (sin --write): ${base} SABRE_UPDATE_STEP=remove SABRE_UPDATE_SEGMENT_IDS=<de ${removable.join(',')}>`);
+  const airIdMissing = stateful.segments.filter((s) => s.airIdFromSegment).map((s) => s.segmentId);
+  if (airIdMissing.length > 0) console.log(`⚠️ sin Air@id (se usa Segment@id, como el SDK): ${airIdMissing.join(', ')}`);
 
   const statuses = statusCounts(stateful.segments);
   writeFixture(
@@ -288,12 +351,13 @@ async function readStep() {
       // ScheduleChangeIndicator sirve de señal.
       q139: {
         statuses,
-        otherConfirmable: ['KK', 'KL', 'TL', 'TN'].filter((s) => statuses[s] !== undefined),
+        otherConfirmable: OTHER_CONFIRMABLE.filter((s) => statuses[s] !== undefined),
         scheduleChangeIndicator: [...new Set(stateful.segments.filter((s) => s.status === 'TK').map((s) => s.scheduleChangeIndicator))],
-        candidatesWithOtherConfirmable: candidates.filter((c) => ['KK', 'KL', 'TL', 'TN'].some((s) => c.statuses[s] !== undefined)).length,
+        candidatesWithOtherConfirmable: candidates.filter((c) => OTHER_CONFIRMABLE.some((s) => c.statuses[s] !== undefined)).length,
       },
       // Q-140: Air@id, Segment@id y Product@id contra flights[].itemId, y si Get Booking lista los UN/HX.
-      q140: { ...comparison, restListsRemovable: removable.length === 0 ? undefined : removable.every((id) => comparison.pairs.find((p) => p.airId === id)?.matched) },
+      // `airIdMissing`: los Segment@id de los segmentos sin Air@id, cuyo id salió de Segment@id (M-4).
+      q140: { ...comparison, airIdMissing, restListsRemovable: removable.length === 0 ? undefined : removable.every((id) => comparison.pairs.find((p) => p.airId === id)?.matched) },
       // Q-141: cómo guarda el PNR el ReceivedFrom (elementos y largos, sin el valor).
       q141: { receivedFromInPnr: receivedFromShape(stateful.raw) ?? null },
     },
@@ -376,11 +440,13 @@ async function writeStep() {
       // Q-140 (remove): si op="D" borró los UN/HX y si itemId sigue igual al id STL después.
       q140: {
         removed: plan.step === 'remove' ? plan.segmentIds.map((id) => ({ id, before: was[id], gone: after === undefined ? null : !(id in now) })) : undefined,
+        airIdMissing: [...new Set([...(before?.segments ?? []), ...(after?.segments ?? [])].filter((s) => s.airIdFromSegment).map((s) => s.segmentId))],
         idsAfter: after === undefined ? null : compareSegmentIds(after.segments, flights),
       },
-      // Q-141: si el EPR pudo escribir y cómo vuelve el ReceivedFrom (elementos y largos).
+      // Q-141: si el EPR pudo escribir y cómo vuelve el ReceivedFrom (elementos y largos). Con un
+      // resultado incierto, `wrote` es `null`: Sabre pudo haber aplicado el cambio (M-5).
       q141: {
-        wrote: result !== undefined && result.status !== 'noop',
+        wrote: outcome.error instanceof SabreUncertainOutcomeError ? null : result !== undefined && result.status !== 'noop',
         errorCode: outcome.error?.code ?? null,
         receivedFromLength: plan.receivedFrom.length,
         receivedFromInResponse: after === undefined ? null : (receivedFromShape(after.raw) ?? null),
@@ -389,5 +455,6 @@ async function writeStep() {
   );
 }
 
-if (plan.step === 'read') await readStep();
+if (plan.step === 'scan') await scanStep();
+else if (plan.step === 'read') await readStep();
 else await writeStep();

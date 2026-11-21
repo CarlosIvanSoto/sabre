@@ -64,7 +64,7 @@ function queuesAndScan(env, maxScan) {
  *
  * @param {Record<string, string | undefined>} env
  * @param {ReadonlyArray<string>} [argv]
- * @returns {{ error?: string, step?: string, environment?: string, sessionPcc?: string, sessionPccLabel?: string, write?: boolean, locator?: string, segmentIds?: string[], receivedFrom?: string, lock?: string, queues?: number[], scan?: number }}
+ * @returns {{ error?: string, step?: string, environment?: string, sessionPcc?: string, sessionPccLabel?: string, sessionContext?: string, restCheck?: boolean, write?: boolean, locator?: string, segmentIds?: string[], receivedFrom?: string, lock?: string, queues?: number[], scan?: number }}
  */
 export function resolvePlan(env, argv = []) {
   if (env.SABRE_UPDATE_WRITE !== undefined) return { error: 'SABRE_UPDATE_WRITE ya no se acepta: el candado va en la línea de comandos (--write=<paso>:<localizador>:<ids>); quítala del entorno y de .env.production. No se escribe nada' };
@@ -80,14 +80,18 @@ export function resolvePlan(env, argv = []) {
   if (locator !== undefined && !isLocator(locator)) return { error: `SABRE_UPDATE_LOCATOR debe tener 6 letras o dígitos (recibido: ${locatorText})` };
   const session = resolveSessionPcc(env);
   if (session.error !== undefined) return { error: session.error };
-  const sessionPart = session.pcc === undefined ? {} : { sessionPcc: session.pcc, sessionPccLabel: session.label };
+  const context = resolveSessionContext(env, session.pcc);
+  if (context.error !== undefined) return { error: context.error };
+  const sessionPart = session.pcc === undefined ? {} : { sessionPcc: session.pcc, sessionPccLabel: session.label, sessionContext: context.context };
+  const restCheck = resolveRestCheck(env, step);
+  if (restCheck.error !== undefined) return { error: restCheck.error };
 
   if (step === 'scan' || step === 'read') {
     if (lock !== undefined) return { error: `--write no va con SABRE_UPDATE_STEP=${step}: ${step} no escribe` };
     if (step === 'scan') {
       if (locator !== undefined) return { error: 'scan no usa SABRE_UPDATE_LOCATOR: para leer un PNR concreto, SABRE_UPDATE_STEP=read' };
       const found = queuesAndScan(env, 20);
-      return found.error === undefined ? { step, environment, write: false, ...sessionPart, ...found } : found;
+      return found.error === undefined ? { step, environment, write: false, ...sessionPart, ...restCheck.plan, ...found } : found;
     }
     const found = queuesAndScan(env, 20);
     if (found.error !== undefined) return found;
@@ -154,6 +158,92 @@ export function resolveSessionPcc(env) {
   if (value === undefined || value === '') return { error: 'SABRE_SESSION_PCC=target pide SABRE_TARGET_PCC, y no está definida' };
   if (!isPcc(value)) return { error: `${variable} debe ser un PCC de 3 o 4 letras mayúsculas o dígitos (recibido: ${viaTarget ? 'un valor que no lo es' : value})` };
   return { pcc: value, label: viaTarget ? 'SABRE_TARGET_PCC' : 'SABRE_SESSION_PCC' };
+}
+
+/** Cómo cambia el script de PCC dentro de la sesión (`SABRE_SESSION_CONTEXT`). */
+export const SESSION_CONTEXTS = ['aaa', 'context-change', 'context-change-cpaid'];
+
+/**
+ * `SABRE_SESSION_CONTEXT`: `aaa` (default, `AAA<PCC>` por SabreCommandLLSRQ), `context-change`
+ * (ContextChangeLLSRQ 2.0.3; el token nuevo, si viene, se usa en los requests siguientes) o
+ * `context-change-cpaid` (lo mismo y además el `CPAId` pasa al PCC destino). Las dos últimas
+ * necesitan `SABRE_SESSION_PCC`: sin PCC destino no hay a dónde cambiar.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {string | undefined} sessionPcc el PCC ya resuelto de SABRE_SESSION_PCC
+ * @returns {{ context?: string, error?: string }}
+ */
+export function resolveSessionContext(env, sessionPcc) {
+  const raw = env.SABRE_SESSION_CONTEXT;
+  const context = raw === undefined || raw === '' ? 'aaa' : raw;
+  if (!SESSION_CONTEXTS.includes(context)) return { error: `SABRE_SESSION_CONTEXT debe ser ${SESSION_CONTEXTS.join(', ')} (recibido: ${raw})` };
+  if (context !== 'aaa' && sessionPcc === undefined) return { error: `SABRE_SESSION_CONTEXT=${context} pide SABRE_SESSION_PCC (el PCC destino), y no está definida` };
+  return { context };
+}
+
+/** `SABRE_UPDATE_REST_CHECK=1`: solo con `scan`. Cualquier otro valor es un error, no un «apagado». */
+function resolveRestCheck(env, step) {
+  const raw = env.SABRE_UPDATE_REST_CHECK;
+  if (raw === undefined || raw === '') return { plan: {} };
+  if (raw !== '1') return { error: `SABRE_UPDATE_REST_CHECK solo acepta 1 (recibido: ${raw})` };
+  if (step !== 'scan') return { error: `SABRE_UPDATE_REST_CHECK=1 solo va con SABRE_UPDATE_STEP=scan (paso: ${step})` };
+  return { plan: { restCheck: true } };
+}
+
+const CONTEXT_CHANGE_NAMESPACE = 'http://webservices.sabre.com/sabreXML/2011/10';
+
+/** El cuerpo de `ContextChangeLLSRQ` 2.0.3 hacia `pcc`. Lanza si no es un PCC: nunca arma otra cosa. */
+export function contextChangePayload(pcc) {
+  if (!isPcc(pcc)) throw new TypeError('el PCC del cambio de contexto debe ser de 3 o 4 letras mayúsculas o dígitos');
+  return `<ContextChangeRQ ReturnHostCommand="true" Version="2.0.3" xmlns="${CONTEXT_CHANGE_NAMESPACE}"><ChangeAAA PseudoCityCode="${pcc}"/></ContextChangeRQ>`;
+}
+
+const textOfNode = (node) => (typeof node === 'string' ? node : typeof node?.['#text'] === 'string' ? node['#text'] : '');
+
+/**
+ * Lee `ContextChangeRS` (el `payload` ya parseado del sobre). Cuenta como cambio confirmado si
+ * `ApplicationResults` está `Complete` y el primer `Text` empieza con el PCC pedido
+ * (`7TZA.IH9A*AMG.A`). `token` solo está si `SecurityToken` trae `Updated="true"`; es un secreto: la
+ * propiedad no es enumerable (no sale en `JSON.stringify` ni en `console.log`) y quien la lee no debe
+ * imprimirla ni grabarla. Pura: no llama a nada.
+ *
+ * @param {Record<string, any> | undefined} payload
+ * @param {string} pcc el PCC pedido
+ * @returns {{ ok: boolean, reason: string, status?: string, screen: string, tokenUpdated: boolean, token?: string }}
+ */
+export function parseContextChange(payload, pcc) {
+  const node = payload ?? {};
+  const status = node.ApplicationResults?.['@status'];
+  const tokenNode = node.SecurityToken;
+  const token = textOfNode(tokenNode).trim();
+  const tokenUpdated = tokenNode?.['@Updated'] === 'true' && token !== '';
+  const lines = [node.Text].flat().filter((t) => t !== undefined).map(textOfNode);
+  const screen = lines.join('\n');
+  const first = lines.map((line) => line.trim()).find((line) => line !== '');
+  let verdict;
+  if (status !== 'Complete') verdict = { ok: false, reason: `ApplicationResults no está Complete (${status ?? 'sin status'})` };
+  else if (first === undefined) verdict = { ok: false, reason: 'la respuesta no trae Text' };
+  else if (!first.startsWith(pcc)) verdict = { ok: false, reason: `el Text no empieza con ${pcc}` };
+  else verdict = { ok: true, reason: `el host confirma el cambio de contexto a ${pcc}` };
+  const result = { ...verdict, ...(status === undefined ? {} : { status }), screen, tokenUpdated };
+  if (tokenUpdated) Object.defineProperty(result, 'token', { value: token, enumerable: false });
+  return result;
+}
+
+/**
+ * El primer error de lectura (`revisar …`) de `results`, completo, para la consola de `scan`: nombre,
+ * código, mensaje y errores anidados. Es solo para la consola, que puede mostrar el PCC; no va a una
+ * fixture. `undefined` si ninguna lectura falló.
+ */
+export function firstReadError(results) {
+  const failed = results.find((r) => !r.ok && r.step.startsWith('revisar'));
+  return failed === undefined ? undefined : { step: failed.step, ...failed.error };
+}
+
+/** `firstReadError` en líneas de texto. */
+export function formatReadError(error, indent = '') {
+  const head = `${indent}${error.name ?? 'Error'}${error.code === undefined ? '' : ` [código ${error.code}]`}${error.reason === undefined ? '' : ` (reason ${error.reason})`}: ${error.message ?? error.thrown ?? ''}`;
+  return [head, ...(error.errors ?? []).map((nested) => formatReadError(nested, `${indent}  ↳ `))].join('\n');
 }
 
 /** El comando de host que cambia el AAA de la sesión. Lanza si `pcc` no es un PCC: nunca arma otra cosa. */

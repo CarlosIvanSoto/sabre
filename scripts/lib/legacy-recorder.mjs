@@ -146,3 +146,11 @@ export function legacyClient(environment, credentials, logger) {
 export function sessionSendOf(session) {
   return Object.getOwnPropertySymbols(Object.getPrototypeOf(session)).find((s) => s.description === 'sabre-client.session.send');
 }
+
+/**
+ * El setter interno de la sesión (`sessionSecurity`): reemplaza el token y/o el `CPAId` de los
+ * requests siguientes. Igual que `sessionSendOf`, solo para los scripts de prueba de Q-143.
+ */
+export function sessionSecurityOf(session) {
+  return Object.getOwnPropertySymbols(Object.getPrototypeOf(session)).find((s) => s.description === 'sabre-client.session.security');
+}

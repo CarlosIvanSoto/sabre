@@ -9,15 +9,20 @@ import {
   aaaScreenValues,
   anonymizeAaaScreen,
   compareSegmentIds,
+  contextChangePayload,
   createScrubber,
   describeError,
   errorMentions,
+  firstReadError,
+  formatReadError,
   getReservationPayload,
   isPcc,
+  parseContextChange,
   parseAaaScreen,
   previewUpdate,
   readAfterAaa,
   readStlReservation,
+  resolveSessionContext,
   resolveSessionPcc,
   receivedFromShape,
   resolvePlan,
@@ -528,5 +533,130 @@ describe('readAfterAaa', () => {
     expect(readAfterAaa(undefined, { code: '700102' })).toBe('700102');
     expect(readAfterAaa(undefined, undefined)).toBe('sin respuesta');
     expect(readAfterAaa(stl([]), undefined)).toBe('sin reserva');
+  });
+});
+
+describe('resolveSessionContext (SABRE_SESSION_CONTEXT)', () => {
+  it('por defecto es aaa, con o sin PCC destino', () => {
+    expect(resolveSessionContext({}, undefined)).toEqual({ context: 'aaa' });
+    expect(resolveSessionContext({ SABRE_SESSION_CONTEXT: '' }, 'P8AB')).toEqual({ context: 'aaa' });
+    expect(resolveSessionContext({ SABRE_SESSION_CONTEXT: 'aaa' }, undefined)).toEqual({ context: 'aaa' });
+  });
+
+  it('acepta las tres variantes con PCC destino', () => {
+    for (const context of ['aaa', 'context-change', 'context-change-cpaid']) {
+      expect(resolveSessionContext({ SABRE_SESSION_CONTEXT: context }, 'P8AB')).toEqual({ context });
+    }
+  });
+
+  it('un valor desconocido es un error, no un aaa por omisión', () => {
+    expect(resolveSessionContext({ SABRE_SESSION_CONTEXT: 'AAA' }, 'P8AB').error).toMatch(/aaa, context-change, context-change-cpaid/);
+    expect(resolveSessionContext({ SABRE_SESSION_CONTEXT: 'cpaid' }, 'P8AB').error).toMatch(/recibido: cpaid/);
+  });
+
+  it('context-change y context-change-cpaid piden SABRE_SESSION_PCC', () => {
+    for (const context of ['context-change', 'context-change-cpaid']) {
+      expect(resolveSessionContext({ SABRE_SESSION_CONTEXT: context }, undefined).error).toMatch(/pide SABRE_SESSION_PCC/);
+    }
+  });
+
+  it('resolvePlan lo deja en el plan de scan y read y corta si no es válido', () => {
+    const session = { ...base, SABRE_SESSION_PCC: 'P8AB', SABRE_SESSION_CONTEXT: 'context-change-cpaid' };
+    expect(resolvePlan({ ...session, SABRE_UPDATE_STEP: 'scan' })).toMatchObject({ step: 'scan', sessionPcc: 'P8AB', sessionContext: 'context-change-cpaid' });
+    expect(resolvePlan({ ...session, SABRE_UPDATE_STEP: 'read', SABRE_UPDATE_LOCATOR: 'ABC123' })).toMatchObject({ step: 'read', sessionPcc: 'P8AB', sessionContext: 'context-change-cpaid' });
+    // Sin la variable, la variante es aaa.
+    expect(resolvePlan({ ...base, SABRE_SESSION_PCC: 'P8AB' })).toMatchObject({ sessionContext: 'aaa' });
+    expect(resolvePlan({ ...base, SABRE_SESSION_CONTEXT: 'context-change' }).error).toMatch(/pide SABRE_SESSION_PCC/);
+    expect(resolvePlan({ ...base, SABRE_SESSION_PCC: 'P8AB', SABRE_SESSION_CONTEXT: 'otro' }).error).toMatch(/SABRE_SESSION_CONTEXT debe ser/);
+  });
+});
+
+describe('resolvePlan: SABRE_UPDATE_REST_CHECK', () => {
+  it('solo acepta 1 y solo con scan', () => {
+    expect(resolvePlan({ ...base, SABRE_UPDATE_STEP: 'scan', SABRE_UPDATE_REST_CHECK: '1' })).toMatchObject({ step: 'scan', restCheck: true, write: false });
+    expect(resolvePlan({ ...base, SABRE_UPDATE_STEP: 'scan' })).not.toHaveProperty('restCheck');
+    expect(resolvePlan({ ...base, SABRE_UPDATE_STEP: 'scan', SABRE_UPDATE_REST_CHECK: '' })).not.toHaveProperty('restCheck');
+    for (const bad of ['true', '0', 'yes', '2']) {
+      expect(resolvePlan({ ...base, SABRE_UPDATE_STEP: 'scan', SABRE_UPDATE_REST_CHECK: bad }).error, bad).toMatch(/solo acepta 1/);
+    }
+    expect(resolvePlan({ ...base, SABRE_UPDATE_REST_CHECK: '1' }).error).toMatch(/solo va con SABRE_UPDATE_STEP=scan/);
+  });
+});
+
+describe('contextChangePayload', () => {
+  it('arma ContextChangeLLSRQ 2.0.3 con ChangeAAA hacia el PCC', () => {
+    expect(contextChangePayload('P8AB')).toBe(
+      '<ContextChangeRQ ReturnHostCommand="true" Version="2.0.3" xmlns="http://webservices.sabre.com/sabreXML/2011/10"><ChangeAAA PseudoCityCode="P8AB"/></ContextChangeRQ>',
+    );
+    expect(contextChangePayload('P8A')).toContain('PseudoCityCode="P8A"');
+  });
+
+  it('rechaza lo que no es un PCC: nunca arma otra cosa', () => {
+    for (const bad of ['', 'p8ab', 'P8"/><x', 'P8ABC', 'P8 B', undefined]) {
+      expect(() => contextChangePayload(bad as string), String(bad)).toThrow(TypeError);
+    }
+  });
+});
+
+describe('parseContextChange', () => {
+  const token = 'Shared/IDL:IceSess\\/SessMgr:1\\.0.IDL/Common/!ICESMS\\/STSB!1769772916289!4392!517!2';
+  const ok = { ApplicationResults: { '@status': 'Complete' }, SecurityToken: { '@Updated': 'true', '#text': token }, Text: ['P8AB.H8GI*AWS.A', 'NO MESSAGE..30JAN'] };
+
+  it('confirma con Complete y un Text que empieza con el PCC', () => {
+    const result = parseContextChange(ok, 'P8AB');
+    expect(result).toMatchObject({ ok: true, status: 'Complete', tokenUpdated: true, screen: 'P8AB.H8GI*AWS.A\nNO MESSAGE..30JAN' });
+    expect(result.reason).toMatch(/confirma el cambio de contexto a P8AB/);
+  });
+
+  it('el token sale por result.token pero no es enumerable: no llega a JSON ni a un spread', () => {
+    const result = parseContextChange(ok, 'P8AB');
+    expect(result.token).toBe(token);
+    expect(Object.keys(result)).not.toContain('token');
+    expect(JSON.stringify(result)).not.toContain('IceSess');
+    expect(JSON.stringify({ ...result })).not.toContain('IceSess');
+  });
+
+  it('sin Updated="true" o con el token vacío no hay token nuevo', () => {
+    const none = parseContextChange({ ...ok, SecurityToken: undefined }, 'P8AB');
+    expect(none).toMatchObject({ ok: true, tokenUpdated: false });
+    expect(none.token).toBeUndefined();
+    expect(parseContextChange({ ...ok, SecurityToken: { '@Updated': 'false', '#text': token } }, 'P8AB').tokenUpdated).toBe(false);
+    expect(parseContextChange({ ...ok, SecurityToken: { '@Updated': 'true', '#text': '  ' } }, 'P8AB').tokenUpdated).toBe(false);
+  });
+
+  it('el Text puede ser un solo string', () => {
+    expect(parseContextChange({ ...ok, Text: 'P8AB.H8GI*AWS.A' }, 'P8AB')).toMatchObject({ ok: true, screen: 'P8AB.H8GI*AWS.A' });
+  });
+
+  it('no confirma si el status no es Complete, falta o es de otro PCC', () => {
+    expect(parseContextChange({ ...ok, ApplicationResults: { '@status': 'NotProcessed' } }, 'P8AB')).toMatchObject({ ok: false, status: 'NotProcessed' });
+    expect(parseContextChange({ ...ok, ApplicationResults: undefined }, 'P8AB').reason).toMatch(/sin status/);
+    expect(parseContextChange({ ...ok, Text: undefined }, 'P8AB').reason).toMatch(/no trae Text/);
+    expect(parseContextChange({ ...ok, Text: ['', '  '] }, 'P8AB').reason).toMatch(/no trae Text/);
+    expect(parseContextChange({ ...ok, Text: ['H8GI.H8GI*AWS.A'] }, 'P8AB').reason).toMatch(/no empieza con P8AB/);
+    expect(parseContextChange(undefined, 'P8AB')).toMatchObject({ ok: false, tokenUpdated: false, screen: '' });
+  });
+});
+
+describe('firstReadError y formatReadError', () => {
+  const err = { name: 'SabreBusinessError', code: '700102', reason: 'x', message: 'sin acceso', errors: [{ name: 'Inner', message: 'detalle' }] };
+  const results = [
+    { step: 'cola 5', ok: true },
+    { step: 'revisar 1', ok: true },
+    { step: 'revisar 2', ok: false, error: err },
+    { step: 'revisar 3', ok: false, error: { name: 'Otro', message: 'otro' } },
+  ];
+
+  it('devuelve el primer error de lectura, completo', () => {
+    expect(firstReadError(results)).toEqual({ step: 'revisar 2', ...err });
+    expect(firstReadError([{ step: 'cola 5', ok: false, error: { name: 'E' } }, { step: 'revisar 1', ok: true }])).toBeUndefined();
+    expect(firstReadError([])).toBeUndefined();
+  });
+
+  it('formatReadError muestra nombre, código, reason, mensaje y los anidados', () => {
+    const text = formatReadError(firstReadError(results));
+    expect(text).toContain('SabreBusinessError [código 700102] (reason x): sin acceso');
+    expect(text).toContain('↳ Inner: detalle');
+    expect(formatReadError({ thrown: 'boom' })).toBe('Error: boom');
   });
 });

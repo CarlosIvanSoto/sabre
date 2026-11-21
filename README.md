@@ -12,7 +12,7 @@ TypeScript SDK for the Sabre APIs.
 
 ## Status
 
-`0.8.0` is published under the `next` dist-tag while it is tested; `latest` stays on `0.7.0`.
+`0.9.0` is published under the `next` dist-tag while it is tested; `latest` stays on `0.8.0`.
 It covers Tier 1 and Tier 2 of the Air Booking flow over REST, Tier 3 (SOAP sessions and queues)
 and Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `list` and
 `onRawRequest`, plus the queue filters of `0.6.0`. `0.7.0` adds ticket issuance and void
@@ -21,11 +21,13 @@ and Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `
 `sabre-client/testing`. It has one breaking change, in the void (see
 [Upgrading from 0.6](#upgrading-from-06)). `0.8.0` adds the PNR search by update date
 ([Searching PNRs by update date](#searching-pnrs-by-update-date)) and its fake, with no breaking
-changes.
+changes. `0.9.0` adds `session.reservation.confirmAirSegments` and `removeAirSegments`
+([Confirming a schedule change](#confirming-a-schedule-change)) and their fake, also with no
+breaking changes.
 
 ```sh
-npm install sabre-client@next   # 0.8.0
-npm install sabre-client        # 0.7.0
+npm install sabre-client@next   # 0.9.0
+npm install sabre-client        # 0.8.0
 ```
 
 The package is still `0.x`: a minor version may include breaking changes, and the
@@ -629,6 +631,7 @@ const result = await legacy.withSession((session) =>
 // result.segments → [{ id: '8', sequence: 1, marketingCarrier: 'B6', flightNumber: '3309',
 //   from: 'JFK', to: 'FLL', departure: '2021-03-30T11:45:00', previousStatus: 'TK', status: 'HK' }, …]
 // result.changed → ['8', '9']; result.warnings → []
+// result.respondedAt → '2026-11-20T15:02:11Z' (Sabre's eb:Timestamp, ISO 8601 UTC)
 ```
 
 1. It reads the PNR again (`GetReservationRQ`, `Stateful`).
@@ -647,6 +650,16 @@ const result = await legacy.withSession((session) =>
   `segments` or from an STL read.
 - **The update is never retried**: exactly one `UpdateReservationRQ` is sent, not even
   `PREVIOUS ENTRY ACTIVE` is retried, and `retry.maxRetries` other than `0` throws a `TypeError`.
+  The read before it is retried by default (`USG_*_BUSY`, transient failures), and
+  `retry: { maxRetries: 0 }` turns that off too.
+- **Checks before the network:** a malformed request (a `locator` that is not six uppercase
+  alphanumeric characters, an empty `receivedFrom`, an empty list of ids or an empty id, and, in
+  `removeAirSegments` only, an empty `allowedStatuses`: `confirmAirSegments` has no such option)
+  throws a `TypeError` before any call to Sabre. Repeated ids count once.
+- **`signal`:** an abort before the update is sent rethrows the `AbortError` as it is; once the
+  update is out, it throws `SabreUncertainOutcomeError` with `reason: 'ABORTED'`.
+- `receivedFrom` goes in the update as `<ReceivedFrom><Name>…</Name></ReceivedFrom>`, as in
+  Sabre's example (Q-141, to be confirmed with the first real call).
 - An error from Sabre (`Errors/Error`, or `stl:ApplicationResults/Error`) sends
   `IgnoreTransaction` and throws `SabreReservationUpdateError` (`service: 'updateReservation'`,
   `reason: 'SABRE_ERROR'`, Sabre's `code`, text and `severity`): nothing was written. The same
@@ -699,7 +712,8 @@ const result = await legacy.withSession((session) =>
    no longer has it, so Sabre's two answers disagree; read the PNR again before trusting either.
 
 - **`allowedStatuses` defaults to `['UN', 'HX']`** (`DEFAULT_REMOVABLE_STATUSES`): an `HK`
-  segment is never deleted by default. Passing the list replaces the default.
+  segment is never deleted by default. Passing the list replaces the default (it is not added to
+  it), and the statuses are uppercased and deduplicated; an empty list throws a `TypeError`.
 - **Untested (Q-140):** Sabre's example of `op="D"` deletes an `HK` segment; that it deletes `UN`
   and `HX` the same way is an assumption until the first real call. The `Product@id` check of
   step 2 keeps a mismatch between the two ids from deleting another segment.
@@ -712,6 +726,32 @@ const result = await legacy.withSession((session) =>
   callbacks work exactly as in `confirmAirSegments`: the update is sent exactly once, `PREVIOUS
   ENTRY ACTIVE` included, and after an uncertain outcome you close the session and read the PNR
   again in a new one.
+
+#### Re-reading before retrying
+
+After a `SabreUncertainOutcomeError` of `confirmAirSegments` or `removeAirSegments` you do not
+know whether the change was saved. `legacy.withSession` already closes the session when the
+callback throws, so do not reuse it: **read the PNR again in a new session** before anything else.
+
+```ts
+try {
+  await legacy.withSession((session) => session.reservation.confirmAirSegments(request));
+} catch (error) {
+  if (!(error instanceof SabreUncertainOutcomeError)) throw error;
+  // error.operation → 'reservation.confirmAirSegments'; error.confirmationId → 'ABCDEF'; error.reason
+  const again = await legacy.withSession((session) => session.reservation.confirmAirSegments(request));
+  // again.status → 'noop' if the change was saved, 'confirmed' if it was not
+}
+```
+
+- **Calling the same method again in a new session is safe**, because it reads first and checks
+  locally. `confirmAirSegments` answers `status: 'noop'` when the PNR no longer has `TK` segments
+  (the change was saved) and writes again only if they are still there with the ids you expect.
+  `removeAirSegments` throws `SEGMENT_NOT_FOUND`, writing nothing, when the segments are already
+  gone, and deletes the ones that remain after a `PARTIALLY_APPLIED`.
+- To look without writing, read the PNR with `sabre.booking.get` (`flights[].flightStatusCode`
+  has each segment's status). How its `itemId` relates to the STL segment id is Q-140: do not
+  compare them until it is confirmed.
 
 ### Daily sales
 

@@ -186,7 +186,10 @@ export interface SabreUncertainTicket {
 }
 
 export interface SabreUncertainOutcomeErrorOptions extends Omit<SabreErrorOptions, 'retryable'> {
-  /** Método público sin `sabre.`: `'tickets.fulfill'` o `'booking.cancel'`. */
+  /**
+   * Método público sin `sabre.`: `'tickets.fulfill'`, `'booking.cancel'`,
+   * `'reservation.confirmAirSegments'` o `'reservation.removeAirSegments'`.
+   */
   operation: string;
   confirmationId: string;
   reason: SabreUncertainOutcomeReason;
@@ -195,9 +198,12 @@ export interface SabreUncertainOutcomeErrorOptions extends Omit<SabreErrorOption
 }
 
 /**
- * La emisión o el void pudieron haberse hecho, o no: el SDK no lo sabe (ADR-031). **No se
- * reintenta**, ni automáticamente ni a ciegas: primero se verifica con `sabre.tickets.verify` (o
- * Get Booking), pasando los `tickets` de este error como `expectedTickets`.
+ * La emisión, el void o el cambio de segmentos de un PNR (`reservation.confirmAirSegments`,
+ * `reservation.removeAirSegments`, ADR-034) pudieron haberse hecho, o no: el SDK no lo sabe
+ * (ADR-031). **No se reintenta**, ni automáticamente ni a ciegas: primero se verifica. En la
+ * emisión y el void, con `sabre.tickets.verify` (o Get Booking), pasando los `tickets` de este
+ * error como `expectedTickets`. En `reservation.*` no hay boletos que verificar: se cierra la
+ * sesión y se relee el PNR (`sabre.booking.get` o `GetReservationRQ`) en una sesión nueva.
  *
  * - Con `reason: 'NOT_COMMITTED'`, `tickets` trae siempre los boletos que Sabre devolvió con
  *   `isCommitted: false`: **esos boletos están emitidos**, aunque todavía no aparezcan en el PNR.

@@ -652,9 +652,9 @@ const result = await legacy.withSession((session) =>
   previa sí se reintenta por defecto (`USG_*_BUSY`, fallos transitorios), y
   `retry: { maxRetries: 0 }` también la apaga.
 - **Chequeos antes de la red:** un request mal formado (un `locator` que no son seis caracteres
-  alfanuméricos en mayúscula, un `receivedFrom` vacío, una lista de ids vacía o un id vacío, un
-  `allowedStatuses` vacío) lanza `TypeError` antes de cualquier llamada a Sabre. Los ids repetidos
-  cuentan una vez.
+  alfanuméricos en mayúscula, un `receivedFrom` vacío, una lista de ids vacía o un id vacío, y, solo
+  en `removeAirSegments`, un `allowedStatuses` vacío: `confirmAirSegments` no tiene esa opción)
+  lanza `TypeError` antes de cualquier llamada a Sabre. Los ids repetidos cuentan una vez.
 - **`signal`:** un abort antes de mandar el Update relanza el `AbortError` tal cual; con el
   Update ya mandado, lanza `SabreUncertainOutcomeError` con `reason: 'ABORTED'`.
 - `receivedFrom` va en el Update como `<ReceivedFrom><Name>…</Name></ReceivedFrom>`, igual que en

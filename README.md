@@ -653,8 +653,9 @@ const result = await legacy.withSession((session) =>
   The read before it is retried by default (`USG_*_BUSY`, transient failures), and
   `retry: { maxRetries: 0 }` turns that off too.
 - **Checks before the network:** a malformed request (a `locator` that is not six uppercase
-  alphanumeric characters, an empty `receivedFrom`, an empty list of ids or an empty id, an empty
-  `allowedStatuses`) throws a `TypeError` before any call to Sabre. Repeated ids count once.
+  alphanumeric characters, an empty `receivedFrom`, an empty list of ids or an empty id, and, in
+  `removeAirSegments` only, an empty `allowedStatuses`: `confirmAirSegments` has no such option)
+  throws a `TypeError` before any call to Sabre. Repeated ids count once.
 - **`signal`:** an abort before the update is sent rethrows the `AbortError` as it is; once the
   update is out, it throws `SabreUncertainOutcomeError` with `reason: 'ABORTED'`.
 - `receivedFrom` goes in the update as `<ReceivedFrom><Name>…</Name></ReceivedFrom>`, as in

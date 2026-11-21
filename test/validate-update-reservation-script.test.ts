@@ -270,6 +270,18 @@ describe('createScrubber: lo que no es texto de un elemento hoja (I-2)', () => {
     expect(scrub.leaks('ENGLISH LIMA XX XXXX')).toEqual([]);
   });
 
+  it('leakDetails dice el campo y la palabra que quedaron', () => {
+    const { scrub } = scrubberFor();
+    scrub.xml('<a><LastName>GUTIÉRREZ</LastName><Number>5512345678</Number></a>');
+    expect(scrub.leakDetails('nota: Gutiérrez, 5512345678')).toEqual(
+      expect.arrayContaining([
+        { field: 'LastName', value: 'GUTIÉRREZ' },
+        { field: 'Number', value: '5512345678' },
+      ]),
+    );
+    expect(scrub.leakDetails('XXXXXXXXX 9999999999')).toEqual([]);
+  });
+
   it('addNames también se puede llamar a mano', () => {
     const { scrub } = scrubberFor();
     scrub.addNames(['O\'BRIEN', undefined], 'pax');
@@ -323,7 +335,7 @@ describe('segmentos', () => {
     const pnr = readStlReservation(tkUn);
     expect(pnr).toMatchObject({ passengers: 1, numberInParty: '1', ticketing: { issued: false, children: ['FutureTicketing'] } });
     const row = scanRow(new Set([5, 6]), 'QWERTZ', pnr);
-    expect(row).toMatchObject({ cola: '5,6', localizador: 'QWERTZ', aerolíneas: 'B6', HK: 1, otros: '—', boleto: 'no se ve (FutureTicketing)', marriage: 'no', pax: 1, errores: '—' });
+    expect(row).toMatchObject({ cola: '5,6', localizador: 'QWERTZ', aerolíneas: 'B6', HK: 1, otros: '—', boleto: 'desconocido (FutureTicketing)', marriage: 'no', pax: 1, errores: '—' });
     expect(row.viejos).toMatch(/^8 UN B6\d+ \w{3}-\w{3} \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
     expect(row.nuevos).toMatch(/^10 TK B63309 JFK-FLL /);
   });
@@ -338,6 +350,6 @@ describe('segmentos', () => {
       errors: [{ code: 'WARN.X' }],
     };
     expect(scanRow([5], 'ABC123', pnr)).toMatchObject({ viejos: '1 HX AM1 MEX-CUN 2026-12-01 10:00', nuevos: '2 TK AM1 MEX-CUN 2026-12-01 10:00', otros: 'KK×2 TL×1', boleto: 'sí', marriage: 'sí (2)', pax: 3, errores: 'WARN.X' });
-    expect(scanRow([5], 'ABC123', { ...pnr, ticketing: undefined }).boleto).toBe('? (sin TicketingInfo)');
+    expect(scanRow([5], 'ABC123', { ...pnr, ticketing: undefined }).boleto).toBe('desconocido (sin TicketingInfo)');
   });
 });

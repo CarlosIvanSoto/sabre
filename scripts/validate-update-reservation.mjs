@@ -60,10 +60,11 @@ import { createAnonymizer } from '../dist/testing.js';
 import { fileTokenStore } from './file-token-store.mjs';
 import { legacyClient, legacyEnvironment, sessionSendOf } from './lib/legacy-recorder.mjs';
 import {
+  OTHER_CONFIRMABLE,
+  RECEIVED_FROM_EXAMPLE,
   REMOVABLE_STATUSES,
   compareSegmentIds,
   createScrubber,
-  RECEIVED_FROM_EXAMPLE,
   describeError,
   getReservationPayload,
   isLocator,
@@ -227,9 +228,13 @@ function writeFixture(name, meta, findings) {
   const text = `${JSON.stringify(fixture, null, 2)}\n`;
   for (const r of fixture.results) console.log(`${r.ok ? '✔' : '✘'} ${r.step} ${JSON.stringify({ ...r, step: undefined, ok: undefined })}`);
   console.log('\nhallazgos:', JSON.stringify(fixture.findings, null, 2));
-  const found = [...anonymizer.leaks(text), ...scrub.leaks(text)];
-  if (found.length > 0) {
-    console.error(`⚠️ la fixture todavía trae datos reales (${[...new Set(found)].join(', ')}): no se escribe.`);
+  const general = anonymizer.leaks(text);
+  const details = scrub.leakDetails(text);
+  if (general.length > 0 || details.length > 0) {
+    console.error(`⚠️ la fixture todavía trae datos reales: no se escribe.`);
+    // La consola ya muestra datos reales; la fixture no se escribe. Así se ve qué palabra lo disparó.
+    for (const { field, value } of details) console.error(`  campo ${field}: «${value}»`);
+    if (general.length > 0) console.error(`  createAnonymizer: ${[...new Set(general)].join(', ')} (no dice el valor)`);
     process.exit(1);
   }
   const file = new URL(`../test/fixtures/${name}.json`, import.meta.url);
@@ -347,6 +352,9 @@ async function readStep() {
       segments: stateful.segments.map(segmentRow),
       restFlights: flights.map(restFlightRow),
       stl: { payloadName: stateful.payloadName, errors: stateful.errors, applicationResults: stateful.applicationResults ?? null },
+      // Qué trae TicketingInfo (los nombres de sus hijos, p. ej. FutureTicketing): para saber cómo
+      // viene un boleto emitido en STL 1.19 (duda de diseño 1). `null` si no viene TicketingInfo.
+      ticketing: stateful.ticketing ?? null,
       // Q-139: qué estados conviven con el TK (KK/KL/TL los tocaría CONFIRM-ALL) y si
       // ScheduleChangeIndicator sirve de señal.
       q139: {

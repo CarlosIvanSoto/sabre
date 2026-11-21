@@ -262,7 +262,8 @@ export function scanRow(queues, locator, pnr) {
   const married = pnr.segments.filter((s) => s.marriage !== undefined && s.marriage.group !== undefined && s.marriage.group !== '0');
   const counts = statusCounts(pnr.segments);
   const others = OTHER_CONFIRMABLE.filter((status) => counts[status] !== undefined).map((status) => `${status}×${counts[status]}`);
-  const ticket = pnr.ticketing === undefined ? '? (sin TicketingInfo)' : pnr.ticketing.issued ? 'sí' : `no se ve (${pnr.ticketing.children.join(', ') || 'vacío'})`;
+  // Sin TicketDetails, ETicketNumber ni TicketNumber no se sabe si hay boleto (duda de diseño 1): no es un «no».
+  const ticket = pnr.ticketing === undefined ? 'desconocido (sin TicketingInfo)' : pnr.ticketing.issued ? 'sí' : `desconocido (${pnr.ticketing.children.join(', ') || 'vacío'})`;
   return {
     cola: [...queues].join(','),
     localizador: locator,
@@ -498,7 +499,8 @@ function tokenize(body) {
  * - `text(value)`: cualquier otro texto (mensajes de error, eventos del logger): solo alias y secretos.
  * - `addNames(names, field?)`: nombres de personas que `leaks` debe buscar palabra por palabra.
  *   `xml` y `json` ya agregan los de `LastName`, `FirstName`, `surname` y los demás de `NAME_TEXT`.
- * - `leaks(text)`: los valores de personas que siguen en el texto (con su campo), sin repetir.
+ * - `leaks(text)`: los campos cuyos valores de personas siguen en el texto, sin repetir.
+ * - `leakDetails(text)`: los mismos, como `{ field, value }` con el valor real (solo para la consola).
  *
  * @param {{ aliasOf: (locator: string) => string, secrets?: ReadonlyArray<string | undefined> }} options
  */
@@ -641,14 +643,16 @@ export function createScrubber({ aliasOf, secrets = [] }) {
   const json = (value) => JSON.parse(finish(JSON.stringify(walk(value, undefined))));
 
   const bounded = (value, flags) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(value)}(?![\\p{L}\\p{N}])`, flags);
-  function leaks(text) {
-    const found = new Set();
-    for (const [value, field] of watched) if (bounded(value, 'u').test(text)) found.add(field);
-    for (const [word, field] of names) if (bounded(word, 'iu').test(text)) found.add(field);
-    return [...found];
+  /** Cada valor real que siguió en el texto, con su campo: para la consola, nunca para la fixture. */
+  function leakDetails(text) {
+    const found = [];
+    for (const [value, field] of watched) if (bounded(value, 'u').test(text)) found.push({ field, value });
+    for (const [word, field] of names) if (bounded(word, 'iu').test(text)) found.push({ field, value: word });
+    return found;
   }
+  const leaks = (text) => [...new Set(leakDetails(text).map((leak) => leak.field))];
 
-  return { xml, json, text: finish, alias, addNames, leaks };
+  return { xml, json, text: finish, alias, addNames, leaks, leakDetails };
 }
 
 // ---------- Errores ----------

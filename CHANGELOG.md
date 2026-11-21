@@ -7,6 +7,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-20
+
+Confirming a schedule change, the entry point BX3 asked for (ADR-034). Everything is new and
+optional: there are no breaking changes. It is published under the `next` dist-tag first, and
+moves to `latest` after BX3 tries it against a real PNR (#272).
+
 ### Added
 
 - `session.reservation.confirmAirSegments` (ADR-034): confirms a schedule change by moving the
@@ -17,8 +23,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `previousStatus`, `changed` and `warnings` (`NOT_APPLIED`). The update is sent exactly once,
   with no retries at all, `PREVIOUS ENTRY ACTIVE` included (#268).
 - `SabreReservationUpdateError`, a `SabreBusinessError` (`service: 'updateReservation'`) with
-  `reason` (`SEGMENTS_CHANGED`, `SEGMENT_NOT_FOUND`, `SEGMENT_STATUS_NOT_ALLOWED` or
-  `SABRE_ERROR`), `severity`, `expectedSegments` and `actualSegments` (segment ids). An error from
+  `reason` (`SEGMENTS_CHANGED`, `SEGMENT_NOT_FOUND`, `SEGMENT_ID_MISMATCH`,
+  `SEGMENT_STATUS_NOT_ALLOWED` or `SABRE_ERROR`), `severity`, `expectedSegments` and `actualSegments` (segment ids). An error from
   Sabre in the update (`Errors/Error` or `stl:ApplicationResults/Error`) sends
   `IgnoreTransactionLLSRQ` 2.0.0 first. What may have reached Sabre without a clear answer throws
   `SabreUncertainOutcomeError` with `operation: 'reservation.confirmAirSegments'` and the locator
@@ -60,6 +66,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `removed` for a partial removal), or an uncertain outcome per `reason`, with `applied` to say
   whether the change was saved. A seeded segment's `productId` can differ from its `id` to force
   `SEGMENT_ID_MISMATCH` (#270).
+
+### Notes
+
+- The `SabreUncertainOutcomeReason` union grew (`PREVIOUS_ENTRY_ACTIVE`, `PARTIALLY_APPLIED`) and
+  so did `ReservationUpdateErrorReason`. It is not a breaking change at runtime, but an
+  exhaustive `switch` over `reason` must now cover the new values.
 
 ## [0.8.0] - 2026-11-16
 
@@ -527,7 +539,8 @@ and queues). Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 - The whole `0.2.4` API. There is no compatibility layer.
 
-[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.5.1...v0.6.0

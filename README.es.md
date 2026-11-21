@@ -12,7 +12,7 @@ SDK de TypeScript para las APIs de Sabre.
 
 ## Estado
 
-La `0.8.0` está publicada con el dist-tag `next` mientras se prueba; `latest` sigue en la `0.7.0`.
+La `0.9.0` está publicada con el dist-tag `next` mientras se prueba; `latest` sigue en la `0.8.0`.
 Cubre el Tier 1 y el Tier 2 del flujo de Air Booking por REST, el Tier 3 (sesiones SOAP y colas) y
 el Tier 4: actividad de colas, historial del PNR, la cola de mensajes `S`, `selection` en `list` y
 `onRawRequest`, además de los filtros de cola de la `0.6.0`. La `0.7.0` suma la emisión y el void
@@ -21,11 +21,13 @@ de boletos ([Emitir y anular boletos](#emitir-y-anular-boletos)), las ventas del
 `sabre-client/testing`. Trae un cambio incompatible, en el void (ver
 [Actualizar desde la 0.6](#actualizar-desde-la-06)). La `0.8.0` suma la búsqueda de PNR por fecha
 de modificación ([Buscar PNR por fecha de modificación](#buscar-pnr-por-fecha-de-modificación)) y
-su fake, sin cambios incompatibles.
+su fake, sin cambios incompatibles. La `0.9.0` suma `session.reservation.confirmAirSegments` y
+`removeAirSegments` ([Confirmar un cambio de horario](#confirmar-un-cambio-de-horario)) y su fake,
+también sin cambios incompatibles.
 
 ```sh
-npm install sabre-client@next   # 0.8.0
-npm install sabre-client        # 0.7.0
+npm install sabre-client@next   # 0.9.0
+npm install sabre-client        # 0.8.0
 ```
 
 El paquete sigue en `0.x`: una versión minor puede traer cambios incompatibles, y el
@@ -628,6 +630,7 @@ const result = await legacy.withSession((session) =>
 // result.segments → [{ id: '8', sequence: 1, marketingCarrier: 'B6', flightNumber: '3309',
 //   from: 'JFK', to: 'FLL', departure: '2021-03-30T11:45:00', previousStatus: 'TK', status: 'HK' }, …]
 // result.changed → ['8', '9']; result.warnings → []
+// result.respondedAt → '2026-11-20T15:02:11Z' (el eb:Timestamp de Sabre, ISO 8601 UTC)
 ```
 
 1. Relee el PNR (`GetReservationRQ`, `Stateful`).
@@ -645,7 +648,17 @@ const result = await legacy.withSession((session) =>
   relaciona el id de segmento de STL (`segments[].id`) con el `itemId` de `booking.get`. Los ids
   salen de `segments` o de una lectura STL.
 - **El Update nunca se reintenta**: sale un solo `UpdateReservationRQ`, tampoco se reintenta
-  `PREVIOUS ENTRY ACTIVE`, y un `retry.maxRetries` distinto de `0` lanza `TypeError`.
+  `PREVIOUS ENTRY ACTIVE`, y un `retry.maxRetries` distinto de `0` lanza `TypeError`. La lectura
+  previa sí se reintenta por defecto (`USG_*_BUSY`, fallos transitorios), y
+  `retry: { maxRetries: 0 }` también la apaga.
+- **Chequeos antes de la red:** un request mal formado (un `locator` que no son seis caracteres
+  alfanuméricos en mayúscula, un `receivedFrom` vacío, una lista de ids vacía o un id vacío, un
+  `allowedStatuses` vacío) lanza `TypeError` antes de cualquier llamada a Sabre. Los ids repetidos
+  cuentan una vez.
+- **`signal`:** un abort antes de mandar el Update relanza el `AbortError` tal cual; con el
+  Update ya mandado, lanza `SabreUncertainOutcomeError` con `reason: 'ABORTED'`.
+- `receivedFrom` va en el Update como `<ReceivedFrom><Name>…</Name></ReceivedFrom>`, igual que en
+  el ejemplo de Sabre (Q-141, por confirmar con la primera llamada real).
 - Un error de Sabre (`Errors/Error`, o `stl:ApplicationResults/Error`) manda `IgnoreTransaction`
   y lanza `SabreReservationUpdateError` (`service: 'updateReservation'`, `reason: 'SABRE_ERROR'`,
   con el `code`, el texto y la `severity` de Sabre): no se escribió nada. El mismo error en la
@@ -700,7 +713,8 @@ const result = await legacy.withSession((session) =>
    las dos respuestas de Sabre se contradicen; relee el PNR antes de fiarte de cualquiera.
 
 - **`allowedStatuses` vale `['UN', 'HX']` por defecto** (`DEFAULT_REMOVABLE_STATUSES`): un `HK`
-  nunca se borra con el default. Si pasas la lista, reemplaza el default.
+  nunca se borra con el default. Si pasas la lista, reemplaza el default (no se suma a él), y los
+  estados se pasan a mayúsculas y sin repetidos; una lista vacía lanza `TypeError`.
 - **Sin probar (Q-140):** el ejemplo de Sabre de `op="D"` borra un `HK`; que borre igual un `UN` o
   un `HX` es un supuesto hasta la primera llamada real. El chequeo de `Product@id` del paso 2
   evita que una diferencia entre los dos ids borre otro segmento.
@@ -713,6 +727,32 @@ const result = await legacy.withSession((session) =>
   callbacks crudos funcionan igual que en `confirmAirSegments`: el Update sale una sola vez,
   también con `PREVIOUS ENTRY ACTIVE`, y después de un incierto cierras la sesión y relees el PNR
   en una nueva.
+
+#### Releer antes de reintentar
+
+Tras un `SabreUncertainOutcomeError` de `confirmAirSegments` o `removeAirSegments` no sabes si el
+cambio se guardó. `legacy.withSession` ya cierra la sesión cuando el callback lanza, así que no la
+reutilices: **relee el PNR en una sesión nueva** antes que cualquier otra cosa.
+
+```ts
+try {
+  await legacy.withSession((session) => session.reservation.confirmAirSegments(request));
+} catch (error) {
+  if (!(error instanceof SabreUncertainOutcomeError)) throw error;
+  // error.operation → 'reservation.confirmAirSegments'; error.confirmationId → 'ABCDEF'; error.reason
+  const again = await legacy.withSession((session) => session.reservation.confirmAirSegments(request));
+  // again.status → 'noop' si el cambio se guardó, 'confirmed' si no
+}
+```
+
+- **Volver a llamar al mismo método en una sesión nueva es seguro**, porque lee primero y
+  comprueba en local. `confirmAirSegments` responde `status: 'noop'` cuando el PNR ya no tiene
+  segmentos `TK` (el cambio se guardó) y solo vuelve a escribir si siguen ahí con los ids que
+  esperas. `removeAirSegments` lanza `SEGMENT_NOT_FOUND`, sin escribir, cuando los segmentos ya no
+  están, y borra los que quedaron tras un `PARTIALLY_APPLIED`.
+- Para mirar sin escribir, lee el PNR con `sabre.booking.get` (`flights[].flightStatusCode` trae
+  el estado de cada segmento). Cómo se relaciona su `itemId` con el id de segmento de STL es la
+  Q-140: no los compares hasta que se confirme.
 
 ### Ventas del día
 

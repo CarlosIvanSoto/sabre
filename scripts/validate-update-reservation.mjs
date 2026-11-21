@@ -5,6 +5,22 @@
 //
 // Cuatro pasos, elegidos con SABRE_UPDATE_STEP. Una sola sesión SOAP por corrida, cerrada siempre.
 //
+// Contexto de la sesión (Q-143). La sesión SOAP vive en el PCC de las credenciales y no cambia de
+// AAA sola: `queue.list` lleva el PCC en el request, pero `GetReservationRQ` lee en el AAA de la
+// sesión, y un PNR de otro PCC da `700102` (Viewership is restricted). Con SABRE_SESSION_PCC (un PCC
+// de 3 o 4 letras o dígitos; `target` toma SABRE_TARGET_PCC, como SABRE_QUEUE_PCC), el script manda
+// `session.command('AAA<PCC>')` justo después de abrir la sesión y antes de cualquier lectura o
+// escritura, en los cuatro pasos. Si la pantalla no confirma el cambio (`<PCC>.<home>*<sine>.<duty>`),
+// o el comando falla, aborta sin leer ni escribir (código 4), cierra la sesión e imprime la pantalla.
+// Sin SABRE_SESSION_PCC no se manda ningún AAA. Producción, para un PNR de P8 desde las credenciales
+// de BX3:
+//
+//      SABRE_QUEUE_PCC=target SABRE_SESSION_PCC=target SABRE_ENVIRONMENT=production SABRE_UPDATE_STEP=scan \
+//        node --env-file=.env.production scripts/validate-update-reservation.mjs
+//
+// En `scan`, si sigue dando 700102 después del AAA, la consola lo dice. En `read`, la fixture trae
+// findings.q143 = { aaaSent, aaaOk, screen (anonimizada), readAfterAaa }.
+//
 // 0. `scan`, SOLO LECTURA, para que las agentes elijan un PNR. Lista las colas SABRE_UPDATE_QUEUES
 //    (5 y 6: ahí están los PNR con TK de cambio de horario, ver sabre-wiki/wiki/concepts/
 //    cambio-de-horario.md), lee hasta SABRE_UPDATE_SCAN PNR (de 1 a 20) con `GetReservationRQ`
@@ -12,7 +28,7 @@
 //    nuevos (id, estado, vuelo, ruta, salida), boleto, marriage, pasajeros y otros estados que
 //    tocaría CONFIRM-ALL. No llama a booking.get, no lee en Stateful y no graba fixture.
 //
-//      SABRE_ENVIRONMENT=production SABRE_UPDATE_STEP=scan node --env-file=.env.production scripts/validate-update-reservation.mjs
+//      SABRE_QUEUE_PCC=target SABRE_SESSION_PCC=target SABRE_ENVIRONMENT=production SABRE_UPDATE_STEP=scan node --env-file=.env.production scripts/validate-update-reservation.mjs
 //
 // A. `read` (default), SOLO LECTURA. Con SABRE_UPDATE_LOCATOR lee ese PNR; sin ella, revisa las
 //    colas como `scan` y elige el primero con un segmento en TK. Del elegido graba el
@@ -21,7 +37,7 @@
 //    cerrada, su `booking.get` (REST), para comparar los ids STL con `flights[].itemId` (Q-140).
 //    Nunca llama a confirmAirSegments ni a removeAirSegments.
 //
-//      SABRE_ENVIRONMENT=production SABRE_UPDATE_LOCATOR=ABC123 node --env-file=.env.production scripts/validate-update-reservation.mjs
+//      SABRE_QUEUE_PCC=target SABRE_SESSION_PCC=target SABRE_ENVIRONMENT=production SABRE_UPDATE_LOCATOR=ABC123 node --env-file=.env.production scripts/validate-update-reservation.mjs
 //
 // B. `confirm`, ESCRITURA: `confirmAirSegments` (CONFIRM-ALL) sobre SABRE_UPDATE_LOCATOR con
 //    SABRE_UPDATE_EXPECTED_IDS. C. `remove`, ESCRITURA: `removeAirSegments` (`op="D"`) de
@@ -34,14 +50,16 @@
 //    comando de lectura; SABRE_UPDATE_WRITE es un error. Un candado que no cuadra corta con código 2
 //    sin escribir. Después de escribir, y con la sesión ya cerrada, relee con `booking.get`.
 //
-//      SABRE_ENVIRONMENT=production SABRE_UPDATE_STEP=confirm SABRE_UPDATE_LOCATOR=ABC123 \
+//      SABRE_QUEUE_PCC=target SABRE_SESSION_PCC=target SABRE_ENVIRONMENT=production \
+//        SABRE_UPDATE_STEP=confirm SABRE_UPDATE_LOCATOR=ABC123 \
 //        SABRE_UPDATE_EXPECTED_IDS=8,10 SABRE_UPDATE_RECEIVED_FROM=BX3 \
 //        node --env-file=.env.production scripts/validate-update-reservation.mjs
 //      … y con --write=confirm:ABC123:8,10 al final para escribir de verdad.
 //
 // Variables: las credenciales (scripts/lib/env-credentials.mjs, siempre v3), SABRE_ENVIRONMENT
 // (`sandbox` por defecto), SABRE_QUEUE_PCC (el PCC de las colas y el `targetPcc` de `booking.get`;
-// `target` toma SABRE_TARGET_PCC; sin ella, el de la sesión), SABRE_UPDATE_RECEIVED_FROM
+// `target` toma SABRE_TARGET_PCC; sin ella, el de la sesión), SABRE_SESSION_PCC (el AAA de la sesión,
+// arriba), SABRE_UPDATE_RECEIVED_FROM
 // (obligatoria para escribir, sin default: el «recibido de» que verá la agencia en el historial,
 // p. ej. BX3; Q-141 y R3) y las de cada paso de arriba.
 //
@@ -63,13 +81,17 @@ import {
   OTHER_CONFIRMABLE,
   RECEIVED_FROM_EXAMPLE,
   REMOVABLE_STATUSES,
+  aaaCommand,
+  anonymizeAaaScreen,
   compareSegmentIds,
   createScrubber,
   describeError,
   getReservationPayload,
   isLocator,
   mask,
+  parseAaaScreen,
   previewUpdate,
+  readAfterAaa,
   readStlReservation,
   receivedFromShape,
   resolvePlan,
@@ -88,6 +110,7 @@ if ((plan.step === 'confirm' || plan.step === 'remove') && !plan.write) {
   const receivedFrom = plan.receivedFrom ?? RECEIVED_FROM_EXAMPLE;
   console.log(`EN SECO: no se llama a Sabre. Entorno ${plan.environment}, ${method} sobre ${plan.locator}`);
   console.log(`${plan.step === 'confirm' ? 'expectedSegmentIds' : 'segmentIds'}: ${plan.segmentIds.join(', ')} · receivedFrom: "${receivedFrom}" (${receivedFrom.length} caracteres)${plan.receivedFrom === undefined ? ' · EJEMPLO: falta SABRE_UPDATE_RECEIVED_FROM' : ''}\n`);
+  if (plan.sessionPcc !== undefined) console.log(`antes de leer o escribir se mandaría ${aaaCommand(plan.sessionPcc)} (SabreCommandLLSRQ, PCC de ${plan.sessionPccLabel}) y, si la pantalla no lo confirma, se abortaría\n`);
   console.log(previewUpdate(plan));
   const missing = [
     ...(plan.environment === 'production' ? [] : ['SABRE_ENVIRONMENT=production']),
@@ -99,8 +122,9 @@ if ((plan.step === 'confirm' || plan.step === 'remove') && !plan.write) {
 }
 
 const { environment, credentials, queuePcc, queuePccLabel, secrets } = legacyEnvironment();
-const anonymizer = createAnonymizer({ secrets: [...secrets, process.env.SABRE_TARGET_PCC] });
-const scrub = createScrubber({ aliasOf: anonymizer.aliasOf, secrets: [...secrets, process.env.SABRE_TARGET_PCC] });
+const allSecrets = [...secrets, process.env.SABRE_TARGET_PCC, plan.sessionPcc];
+const anonymizer = createAnonymizer({ secrets: allSecrets });
+const scrub = createScrubber({ aliasOf: anonymizer.aliasOf, secrets: allSecrets });
 
 // ---------- Captura ----------
 
@@ -141,6 +165,42 @@ async function openSession() {
   const session = await legacy.openSession();
   const send = sessionSendOf(session);
   return { session, send };
+}
+
+/** Lo que pasó con el AAA de esta corrida (Q-143); `sent` solo es `true` si se mandó el comando. */
+const aaa = { sent: false, ok: null, screen: undefined };
+const WITHOUT_READING = 'No se leyó ni se escribió nada en el PNR.';
+
+/**
+ * Cambia el AAA de la sesión (`session.command('AAA<PCC>')`, API pública del SDK) si hay
+ * SABRE_SESSION_PCC. Va justo después de abrir la sesión y antes de cualquier lectura o escritura.
+ * Devuelve `false` si la pantalla no confirma el cambio o el comando falla: el paso debe salir sin
+ * tocar el PNR (su `finally` cierra la sesión). Sin SABRE_SESSION_PCC no manda nada y devuelve `true`.
+ */
+async function enterContext(conn) {
+  if (plan.sessionPcc === undefined) return true;
+  const command = aaaCommand(plan.sessionPcc);
+  aaa.sent = true;
+  console.log(`AAA: mando ${command} (PCC de ${plan.sessionPccLabel}) antes de cualquier lectura o escritura`);
+  const sent = await step('AAA de la sesión', () => conn.session.command(command));
+  if (sent.error !== undefined) {
+    aaa.ok = false;
+    console.error(`\n✘ el AAA falló: ${describeError(sent.error).name ?? ''} ${sent.error?.message ?? sent.error}\n${WITHOUT_READING} Sesión cerrada.`);
+    process.exitCode = 4;
+    return false;
+  }
+  const screen = sent.value.text;
+  aaa.screen = anonymizeAaaScreen(screen, allSecrets);
+  const verdict = parseAaaScreen(screen, plan.sessionPcc);
+  aaa.ok = verdict.ok;
+  console.log(`pantalla del AAA:\n${screen}\n`);
+  if (!verdict.ok) {
+    console.error(`✘ la pantalla no confirma el cambio de AAA (${verdict.reason}).\n${WITHOUT_READING} Sesión cerrada.`);
+    process.exitCode = 4;
+    return false;
+  }
+  console.log(`✔ ${verdict.reason}`);
+  return true;
 }
 
 /** `GetReservationRQ` por el método interno de la sesión (un truco de los scripts, no API pública). */
@@ -291,11 +351,20 @@ async function scanStep() {
   const conn = await openSession();
   let found;
   try {
+    if (!(await enterContext(conn))) return;
     found = await scanQueues(conn);
   } finally {
     await step('close', () => conn.session.close());
   }
   for (const r of results.filter((r) => !r.ok)) console.log(`✘ ${r.step}: ${r.error?.name ?? ''} ${r.error?.message ?? ''}`);
+  const viewership = results.filter((r) => !r.ok && JSON.stringify(r.error).includes('700102')).length;
+  if (viewership > 0) {
+    console.log(
+      aaa.sent
+        ? `\n⚠️ ${viewership} lecturas dieron 700102 (Viewership is restricted) INCLUSO DESPUÉS del AAA ${plan.sessionPcc}: el cambio de AAA no basta (Q-143).`
+        : `\n⚠️ ${viewership} lecturas dieron 700102 (Viewership is restricted): la sesión sigue en el PCC de las credenciales. Con SABRE_SESSION_PCC=target se manda AAA<PCC> antes de leer (Q-143).`,
+    );
+  }
   console.log(`\n${found.listed} PNR en las colas, ${found.scanned.length} leídos (la consola muestra los localizadores reales):`);
   if (found.scanned.length > 0) console.table(found.scanned.map(({ locator, queues, pnr }) => scanRow(queues, locator, pnr)));
   console.log(`\npara leer uno y grabar su fixture: SABRE_ENVIRONMENT=${environment} SABRE_UPDATE_STEP=read SABRE_UPDATE_LOCATOR=<localizador>`);
@@ -307,8 +376,10 @@ async function readStep() {
   console.log(`entorno ${environment} · SOLO LECTURA · ${plan.locator === undefined ? `colas ${plan.queues.join(', ')}, hasta ${plan.scan} PNR` : `PNR ${plan.locator}`} · PCC de las colas: ${queuePccLabel}`);
   const candidates = [];
   let chosen = plan.locator;
+  let readResult;
   const conn = await openSession();
   try {
+    if (!(await enterContext(conn))) return;
     if (chosen === undefined) {
       const { scanned } = await scanQueues(conn);
       for (const { locator, queues, pnr } of scanned) candidates.push({ locator, queue: queues.join(','), statuses: statusCounts(pnr.segments), errors: pnr.errors.map((e) => e.code) });
@@ -316,7 +387,7 @@ async function readStep() {
     } else {
       scrub.alias(chosen);
     }
-    if (chosen !== undefined) await step('GetReservationRQ Stateful', () => rawGet(conn, chosen, 'Stateful', 'reservation.get'), () => ({}));
+    if (chosen !== undefined) readResult = await step('GetReservationRQ Stateful', () => rawGet(conn, chosen, 'Stateful', 'reservation.get'), () => ({}));
   } finally {
     await step('close', () => conn.session.close());
   }
@@ -326,6 +397,11 @@ async function readStep() {
     console.table(candidates.map((c) => ({ localizador: c.locator, alias: scrub.alias(c.locator), cola: c.queue, estados: JSON.stringify(c.statuses), errores: c.errors.join(' ') })));
   }
   const stateful = parsedResponses('reservation.get').at(-1);
+  // Q-143: lo que dio la lectura después del AAA (`ok` o el código, p. ej. 700102).
+  const q143 = aaa.sent
+    ? { aaaSent: true, aaaOk: aaa.ok, screen: aaa.screen ?? null, readAfterAaa: readAfterAaa(stateful, readResult?.error) }
+    : undefined;
+  if (q143 !== undefined) console.log(`\nQ-143: ${JSON.stringify(q143)}`);
   if (chosen === undefined || stateful === undefined) {
     console.log(chosen === undefined ? '\nningún PNR revisado tiene TK: no se graba fixture. Sube SABRE_UPDATE_SCAN o elige otra cola.' : '\nel GetReservationRQ Stateful falló: no se graba fixture.');
     return;
@@ -368,6 +444,9 @@ async function readStep() {
       q140: { ...comparison, airIdMissing, restListsRemovable: removable.length === 0 ? undefined : removable.every((id) => comparison.pairs.find((p) => p.airId === id)?.matched) },
       // Q-141: cómo guarda el PNR el ReceivedFrom (elementos y largos, sin el valor).
       q141: { receivedFromInPnr: receivedFromShape(stateful.raw) ?? null },
+      // Q-143: si se mandó el AAA, qué pantalla dio (anonimizada) y qué dio la lectura después. Sin
+      // SABRE_SESSION_PCC no hay q143.
+      q143,
     },
   );
 }
@@ -387,6 +466,7 @@ async function writeStep() {
   const conn = await openSession();
   let outcome;
   try {
+    if (!(await enterContext(conn))) return;
     outcome = await step(method, () => conn.session.reservation[method](request, hooks), (r) => ({
       status: r.status,
       locator: r.locator,

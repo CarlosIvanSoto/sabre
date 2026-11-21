@@ -5,11 +5,17 @@ import { describe, expect, it } from 'vitest';
 import { createAnonymizer } from '../src/testing/anonymize.js';
 import getFixture from './fixtures/get-reservation.synthetic-guide.json';
 import {
+  aaaCommand,
+  anonymizeAaaScreen,
   compareSegmentIds,
   createScrubber,
   getReservationPayload,
+  isPcc,
+  parseAaaScreen,
   previewUpdate,
+  readAfterAaa,
   readStlReservation,
+  resolveSessionPcc,
   receivedFromShape,
   resolvePlan,
   scanRow,
@@ -351,5 +357,133 @@ describe('segmentos', () => {
     };
     expect(scanRow([5], 'ABC123', pnr)).toMatchObject({ viejos: '1 HX AM1 MEX-CUN 2026-12-01 10:00', nuevos: '2 TK AM1 MEX-CUN 2026-12-01 10:00', otros: 'KK×2 TL×1', boleto: 'sí', marriage: 'sí (2)', pax: 3, errores: 'WARN.X' });
     expect(scanRow([5], 'ABC123', { ...pnr, ticketing: undefined }).boleto).toBe('desconocido (sin TicketingInfo)');
+  });
+});
+
+// Q-143: el AAA de la sesión antes de leer o escribir (SABRE_SESSION_PCC).
+describe('resolveSessionPcc', () => {
+  it('sin la variable no hay PCC: no se manda ningún AAA', () => {
+    expect(resolveSessionPcc({})).toEqual({});
+    expect(resolveSessionPcc({ SABRE_SESSION_PCC: '' })).toEqual({});
+    // SABRE_QUEUE_PCC y SABRE_TARGET_PCC solos no mandan un AAA.
+    expect(resolveSessionPcc({ SABRE_QUEUE_PCC: 'target', SABRE_TARGET_PCC: 'P8AB' })).toEqual({});
+    const plan = resolvePlan({ ...base, SABRE_QUEUE_PCC: 'target', SABRE_TARGET_PCC: 'P8AB' });
+    expect(plan).toEqual({ step: 'read', environment: 'production', write: false, queues: [5, 6], scan: 5 });
+    expect(plan).not.toHaveProperty('sessionPcc');
+  });
+
+  it('target toma SABRE_TARGET_PCC y cualquier otro valor es el PCC directo', () => {
+    expect(resolveSessionPcc({ SABRE_SESSION_PCC: 'target', SABRE_TARGET_PCC: 'P8AB' })).toEqual({ pcc: 'P8AB', label: 'SABRE_TARGET_PCC' });
+    expect(resolveSessionPcc({ SABRE_SESSION_PCC: 'P8A', SABRE_TARGET_PCC: 'ZZZZ' })).toEqual({ pcc: 'P8A', label: 'SABRE_SESSION_PCC' });
+    expect(resolveSessionPcc({ SABRE_SESSION_PCC: 'target' }).error).toMatch(/pide SABRE_TARGET_PCC/);
+    expect(resolveSessionPcc({ SABRE_SESSION_PCC: 'target', SABRE_TARGET_PCC: '' }).error).toMatch(/pide SABRE_TARGET_PCC/);
+  });
+
+  it('valida el PCC: alfanumérico, mayúsculas, 3 o 4 caracteres', () => {
+    for (const ok of ['P8A', 'P8AB', '8AYC', 'H8GI', '123']) expect(isPcc(ok), ok).toBe(true);
+    for (const bad of ['', 'P8', 'P8ABC', 'p8ab', 'P8 B', 'P8A¥', 'P8A\nI', 'P8A/B', 'AAAP8AB', 'P8AB ', undefined, 8]) {
+      expect(isPcc(bad), String(bad)).toBe(false);
+      if (typeof bad === 'string') expect(resolveSessionPcc({ SABRE_SESSION_PCC: bad === '' ? 'x' : bad }).error, bad).toMatch(/PCC de 3 o 4/);
+    }
+    expect(resolveSessionPcc({ SABRE_SESSION_PCC: 'target', SABRE_TARGET_PCC: 'P8+B' }).error).toMatch(/PCC de 3 o 4/);
+    // El mensaje no repite un TARGET_PCC inválido (podría ser otra cosa); el directo sí lo muestra.
+    expect(resolveSessionPcc({ SABRE_SESSION_PCC: 'target', SABRE_TARGET_PCC: 'P8+B' }).error).not.toContain('P8+B');
+  });
+
+  it('resolvePlan lo deja en el plan de los cuatro pasos y corta con un PCC inválido', () => {
+    const session = { SABRE_SESSION_PCC: 'target', SABRE_TARGET_PCC: 'P8AB' };
+    expect(resolvePlan({ ...base, ...session, SABRE_UPDATE_STEP: 'scan' })).toMatchObject({ sessionPcc: 'P8AB', sessionPccLabel: 'SABRE_TARGET_PCC' });
+    expect(resolvePlan({ ...base, ...session })).toMatchObject({ step: 'read', sessionPcc: 'P8AB' });
+    const confirm = { ...base, ...session, SABRE_UPDATE_STEP: 'confirm', SABRE_UPDATE_LOCATOR: 'ABC123', SABRE_UPDATE_EXPECTED_IDS: '8' };
+    expect(resolvePlan(confirm)).toMatchObject({ step: 'confirm', sessionPcc: 'P8AB', write: false });
+    expect(resolvePlan({ ...confirm, SABRE_UPDATE_RECEIVED_FROM: 'BX3' }, ['--write=confirm:ABC123:8'])).toMatchObject({ write: true, sessionPcc: 'P8AB' });
+    expect(resolvePlan({ ...confirm, SABRE_UPDATE_STEP: 'remove', SABRE_UPDATE_SEGMENT_IDS: '8' })).toMatchObject({ step: 'remove', sessionPcc: 'P8AB' });
+    expect(resolvePlan({ ...base, SABRE_SESSION_PCC: 'P8' }).error).toMatch(/SABRE_SESSION_PCC/);
+    // El AAA no cambia el candado de escritura.
+    expect(resolvePlan({ ...confirm, SABRE_UPDATE_RECEIVED_FROM: 'BX3' }, ['--write=confirm:ABC123:8,10']).error).toMatch(/candado no cuadra/);
+  });
+});
+
+describe('aaaCommand', () => {
+  it('arma AAA<PCC> y nada más', () => {
+    expect(aaaCommand('P8AB')).toBe('AAAP8AB');
+    expect(aaaCommand('8AYC')).toBe('AAA8AYC');
+    expect(aaaCommand('H8G')).toBe('AAAH8G');
+  });
+
+  it('no arma un comando con un PCC que no lo es', () => {
+    for (const bad of ['', 'P8', 'P8ABC', 'p8ab', 'P8AB¥SI9', 'P8AB\nI', 'P8 B', undefined, null, 1234]) {
+      expect(() => aaaCommand(bad as string), String(bad)).toThrow(/PCC del AAA/);
+    }
+  });
+});
+
+describe('parseAaaScreen: sin ella el script aborta antes de leer o escribir', () => {
+  it('confirma solo la línea <PCC>.<home>*<sine>.<duty> con el PCC pedido', () => {
+    expect(parseAaaScreen('8AYC.H8GI*AWS.A\nNO MESSAGE..12NOV', '8AYC')).toEqual({ ok: true, reason: 'el host confirma el AAA 8AYC', activePcc: '8AYC' });
+    expect(parseAaaScreen('  P8AB.BX3*AWS.A', 'P8AB').ok).toBe(true);
+    expect(parseAaaScreen('\r\n8AYC.H8GI*AWS.A\r\n', '8AYC').ok).toBe(true);
+  });
+
+  it('no confirma si el host quedó en otro PCC', () => {
+    const result = parseAaaScreen('H8GI.H8GI*AWS.A', 'P8AB');
+    expect(result).toMatchObject({ ok: false, activePcc: 'H8GI' });
+    expect(result.reason).toMatch(/quedó en H8GI, no en P8AB/);
+  });
+
+  it('no confirma una pantalla de error ni una vacía', () => {
+    expect(parseAaaScreen('NOT AUTHORIZED FOR PCC', 'P8AB')).toMatchObject({ ok: false, reason: 'el host respondió un error: NOT AUTHORIZED' });
+    expect(parseAaaScreen('INVALID PCC', 'P8AB').ok).toBe(false);
+    expect(parseAaaScreen('FORMAT', 'P8AB').reason).toMatch(/FORMAT/);
+    expect(parseAaaScreen('', 'P8AB')).toEqual({ ok: false, reason: 'la pantalla vino vacía' });
+    expect(parseAaaScreen(undefined, 'P8AB').ok).toBe(false);
+    expect(parseAaaScreen('   \n  ', 'P8AB').ok).toBe(false);
+  });
+
+  it('una pantalla que no se reconoce no cuenta como cambio, ni siquiera si menciona el PCC', () => {
+    const result = parseAaaScreen('CHANGED TO P8AB', 'P8AB');
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/primera línea/);
+    // El PCC pedido en una línea de error no es una confirmación.
+    expect(parseAaaScreen('INVALID P8AB.BX3*AWS.A', 'P8AB').ok).toBe(false);
+    // Solo vale la primera línea: una segunda línea con la forma correcta no confirma.
+    expect(parseAaaScreen('UNABLE\nP8AB.BX3*AWS.A', 'P8AB').ok).toBe(false);
+  });
+});
+
+describe('anonymizeAaaScreen', () => {
+  it('deja el PCC y el home en XXXX y la sine en AAA', () => {
+    expect(anonymizeAaaScreen('8AYC.H8GI*AWS.A\nNO MESSAGE..12NOV', ['8AYC', 'H8GI'])).toBe('XXXX.XXXX*AAA.A\nNO MESSAGE..12NOV');
+    // Un home que no está en los secretos también se tapa: sale de la forma de la línea.
+    expect(anonymizeAaaScreen('P8AB.BX3*JDOE.9', [])).toBe('XXXX.XXXX*AAA.9');
+  });
+
+  it('tapa los PCC conocidos en cualquier línea de una pantalla de error', () => {
+    expect(anonymizeAaaScreen('NOT AUTHORIZED FOR P8AB', ['P8AB'])).toBe('NOT AUTHORIZED FOR XXXX');
+    expect(anonymizeAaaScreen('INVALID PCC', ['P8AB', undefined as unknown as string])).toBe('INVALID PCC');
+  });
+
+  it('la pantalla anonimizada no deja un PCC real', () => {
+    const screen = anonymizeAaaScreen('P8AB.H8GI*AWS.A\nP8AB ACTIVE', ['P8AB', 'H8GI']);
+    expect(screen).not.toMatch(/P8AB|H8GI|AWS/);
+  });
+});
+
+describe('readAfterAaa', () => {
+  const stl = (errors: Array<{ code?: string }>, hasReservation = false) => ({ errors, hasReservation });
+
+  it('ok si la lectura trajo la reserva', () => {
+    expect(readAfterAaa(stl([], true), undefined)).toBe('ok');
+  });
+
+  it('el código de error de GetReservationRS, p. ej. 700102', () => {
+    expect(readAfterAaa(stl([{ code: '700102' }]), undefined)).toBe('700102');
+    expect(readAfterAaa(stl([{ code: '700102' }, { code: 'X1' }]), undefined)).toBe('700102 X1');
+  });
+
+  it('sin GetReservationRS usa el código del error del paso, o dice que no hubo respuesta', () => {
+    expect(readAfterAaa(undefined, { code: '700102' })).toBe('700102');
+    expect(readAfterAaa(undefined, undefined)).toBe('sin respuesta');
+    expect(readAfterAaa(stl([]), undefined)).toBe('sin reserva');
   });
 });

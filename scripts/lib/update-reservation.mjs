@@ -64,7 +64,7 @@ function queuesAndScan(env, maxScan) {
  *
  * @param {Record<string, string | undefined>} env
  * @param {ReadonlyArray<string>} [argv]
- * @returns {{ error?: string, step?: string, environment?: string, write?: boolean, locator?: string, segmentIds?: string[], receivedFrom?: string, lock?: string, queues?: number[], scan?: number }}
+ * @returns {{ error?: string, step?: string, environment?: string, sessionPcc?: string, sessionPccLabel?: string, write?: boolean, locator?: string, segmentIds?: string[], receivedFrom?: string, lock?: string, queues?: number[], scan?: number }}
  */
 export function resolvePlan(env, argv = []) {
   if (env.SABRE_UPDATE_WRITE !== undefined) return { error: 'SABRE_UPDATE_WRITE ya no se acepta: el candado va en la línea de comandos (--write=<paso>:<localizador>:<ids>); quítala del entorno y de .env.production. No se escribe nada' };
@@ -78,17 +78,20 @@ export function resolvePlan(env, argv = []) {
   const locatorText = env.SABRE_UPDATE_LOCATOR || undefined;
   const locator = locatorText?.trim().toUpperCase();
   if (locator !== undefined && !isLocator(locator)) return { error: `SABRE_UPDATE_LOCATOR debe tener 6 letras o dígitos (recibido: ${locatorText})` };
+  const session = resolveSessionPcc(env);
+  if (session.error !== undefined) return { error: session.error };
+  const sessionPart = session.pcc === undefined ? {} : { sessionPcc: session.pcc, sessionPccLabel: session.label };
 
   if (step === 'scan' || step === 'read') {
     if (lock !== undefined) return { error: `--write no va con SABRE_UPDATE_STEP=${step}: ${step} no escribe` };
     if (step === 'scan') {
       if (locator !== undefined) return { error: 'scan no usa SABRE_UPDATE_LOCATOR: para leer un PNR concreto, SABRE_UPDATE_STEP=read' };
       const found = queuesAndScan(env, 20);
-      return found.error === undefined ? { step, environment, write: false, ...found } : found;
+      return found.error === undefined ? { step, environment, write: false, ...sessionPart, ...found } : found;
     }
     const found = queuesAndScan(env, 20);
     if (found.error !== undefined) return found;
-    return { step, environment, write: false, ...(locator === undefined ? {} : { locator }), ...found };
+    return { step, environment, write: false, ...sessionPart, ...(locator === undefined ? {} : { locator }), ...found };
   }
 
   if (locator === undefined) return { error: `falta SABRE_UPDATE_LOCATOR: ${step} trabaja sobre un PNR elegido en el paso scan o read` };
@@ -101,7 +104,7 @@ export function resolvePlan(env, argv = []) {
   if (receivedFromText !== undefined && receivedFromText.trim() === '') return { error: 'SABRE_UPDATE_RECEIVED_FROM no puede ir vacío' };
   const receivedFrom = receivedFromText?.trim();
 
-  const plan = { step, environment, locator, segmentIds, ...(receivedFrom === undefined ? {} : { receivedFrom }), lock: `${step}:${locator}:${segmentIds.join(',')}` };
+  const plan = { step, environment, ...sessionPart, locator, segmentIds, ...(receivedFrom === undefined ? {} : { receivedFrom }), lock: `${step}:${locator}:${segmentIds.join(',')}` };
   if (lock === undefined) return { ...plan, write: false };
   if (lock !== plan.lock) return { error: `el candado no cuadra: debe ser exactamente --write=${plan.lock} (recibido: --write=${lock}); no se escribe nada` };
   if (environment !== 'production') return { error: 'las escrituras de ADR-034 solo se prueban en producción: en CERT no hay TK; no se escribe nada' };
@@ -126,6 +129,93 @@ export function previewUpdate(plan) {
     '  </ReservationUpdateList>',
     '</UpdateReservationRQ>',
   ].join('\n');
+}
+
+// ---------- Contexto de la sesión (Q-143) ----------
+
+/** Un PCC: 3 o 4 letras mayúsculas o dígitos. Es lo único que se deja entrar a `AAA<PCC>`. */
+const PCC = /^[A-Z0-9]{3,4}$/;
+export const isPcc = (value) => typeof value === 'string' && PCC.test(value);
+
+/**
+ * El PCC al que el script cambia el AAA de la sesión: `SABRE_SESSION_PCC`, o `SABRE_TARGET_PCC` si
+ * vale `target` (igual que SABRE_QUEUE_PCC). Sin la variable no hay `pcc` y el script no manda
+ * ningún `AAA`. Un valor que no es un PCC es un error: nunca llega al comando.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ pcc?: string, label?: string, error?: string }}
+ */
+export function resolveSessionPcc(env) {
+  const raw = env.SABRE_SESSION_PCC;
+  if (raw === undefined || raw === '') return {};
+  const viaTarget = raw === 'target';
+  const value = viaTarget ? env.SABRE_TARGET_PCC : raw;
+  const variable = viaTarget ? 'SABRE_TARGET_PCC (por SABRE_SESSION_PCC=target)' : 'SABRE_SESSION_PCC';
+  if (value === undefined || value === '') return { error: 'SABRE_SESSION_PCC=target pide SABRE_TARGET_PCC, y no está definida' };
+  if (!isPcc(value)) return { error: `${variable} debe ser un PCC de 3 o 4 letras mayúsculas o dígitos (recibido: ${viaTarget ? 'un valor que no lo es' : value})` };
+  return { pcc: value, label: viaTarget ? 'SABRE_TARGET_PCC' : 'SABRE_SESSION_PCC' };
+}
+
+/** El comando de host que cambia el AAA de la sesión. Lanza si `pcc` no es un PCC: nunca arma otra cosa. */
+export function aaaCommand(pcc) {
+  if (!isPcc(pcc)) throw new TypeError('el PCC del AAA debe ser de 3 o 4 letras mayúsculas o dígitos');
+  return `AAA${pcc}`;
+}
+
+/** Palabras con las que el host rechaza un `AAA` (pantallas de error, no de cambio). */
+const AAA_ERROR = /\b(NOT AUTHORIZED|INVALID|UNABLE|RESTRICTED|FORMAT|ERROR|NO ACCESS|NOT ALLOWED|REJECT|DENIED|UNKNOWN|NOT FOUND)\b|\bNO\s+(?:AUTH|ACCESS)/i;
+
+/**
+ * Lee la pantalla de `AAA<PCC>`. El host contesta, en la primera línea, `<PCC nuevo>.<home>*<sine>.<duty>`
+ * (`8AYC.H8GI*AWS.A` al pasar a 8AYC, comandos-de-host y emision-de-boletos). Solo cuenta como cambio
+ * esa línea con el PCC pedido: cualquier otra pantalla (un error, una línea con otro PCC, una
+ * pantalla vacía) no lo confirma. Pura: no llama a nada.
+ *
+ * @param {string | undefined} screen
+ * @param {string} pcc el PCC pedido
+ * @returns {{ ok: boolean, reason: string, activePcc?: string }}
+ */
+export function parseAaaScreen(screen, pcc) {
+  const lines = String(screen ?? '').split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '');
+  if (lines.length === 0) return { ok: false, reason: 'la pantalla vino vacía' };
+  const first = /^([A-Z0-9]{3,4})\.([A-Z0-9]{3,4})\*([A-Z0-9]{2,4})\.([A-Z0-9])/.exec(lines[0]);
+  if (first !== null) {
+    return first[1] === pcc
+      ? { ok: true, reason: `el host confirma el AAA ${pcc}`, activePcc: first[1] }
+      : { ok: false, reason: `el host quedó en ${first[1]}, no en ${pcc}`, activePcc: first[1] };
+  }
+  const error = AAA_ERROR.exec(lines.join(' '));
+  return { ok: false, reason: error === null ? 'la primera línea no tiene la forma <PCC>.<home>*<sine>.<duty>' : `el host respondió un error: ${error[0].toUpperCase()}` };
+}
+
+/**
+ * La pantalla del AAA para la fixture: la primera línea con el PCC y el home a XXXX y la sine a
+ * AAA (`XXXX.XXXX*AAA.A`); en las demás, los `secrets` (PCC conocidos) a XXXX. Lo que no se reconoce no se adivina: la fixture la vuelve a revisar `leaks`.
+ */
+export function anonymizeAaaScreen(screen, secrets = []) {
+  const known = secrets.filter((s) => typeof s === 'string' && s.length >= 3).sort((a, b) => b.length - a.length);
+  const hide = (line) => known.reduce((acc, secret) => acc.split(secret).join('XXXX'), line);
+  return String(screen ?? '')
+    .split(/\r?\n/)
+    .map((line, index) => {
+      if (index === 0) {
+        const structured = line.replace(/^(\s*)[A-Z0-9]{3,4}\.[A-Z0-9]{3,4}\*[A-Z0-9]{2,4}\.([A-Z0-9])/, '$1XXXX.XXXX*AAA.$2');
+        if (structured !== line) return hide(structured);
+      }
+      return hide(line);
+    })
+    .join('\n');
+}
+
+/**
+ * Qué dio la lectura después del AAA: `ok`, o los códigos de error de `GetReservationRS`
+ * (`700102`), o `sin respuesta` si Sabre no contestó con un `GetReservationRS` que se pueda leer.
+ */
+export function readAfterAaa(stateful, stepError) {
+  if (stateful === undefined) return stepError?.code === undefined ? 'sin respuesta' : String(stepError.code);
+  const codes = stateful.errors.map((e) => e.code).filter((c) => c !== undefined);
+  if (codes.length > 0) return codes.join(' ');
+  return stateful.hasReservation ? 'ok' : 'sin reserva';
 }
 
 // ---------- Requests de lectura ----------

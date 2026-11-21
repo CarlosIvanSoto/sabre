@@ -62,7 +62,7 @@ const step = async (_name: string, run: () => Promise<unknown>) => {
   }
 };
 
-function setup(plan: { sessionPcc?: string; sessionContext?: string }, extra: { watch?: (values: string[]) => void; watchToken?: (token: string) => void } = {}) {
+function setup(plan: { sessionPcc?: string; sessionContext?: string }, extra: { watch?: (values: string[]) => void; watchToken?: (token: string) => void; show?: (text: string) => string } = {}) {
   const logged: string[] = [];
   const errors: string[] = [];
   let failed = 0;
@@ -437,5 +437,31 @@ describe('createSessionContext: el token nuevo es un secreto y la evidencia de q
     const text = JSON.stringify({ findings: { q143: context.evidence('ok') } });
     expect(scrub.leakDetails(text)).toEqual([]);
     expect(anonymizer.leaks(text)).toEqual([]);
+  });
+});
+
+// Revisión del PR #282, hallazgo 2: el mensaje de un error de Sabre puede traer el PCC real.
+describe('createSessionContext: los mensajes de error pasan por show', () => {
+  const show = (text: string) => text.replaceAll(PCC, 'P8');
+  const leaky = new Error(`Viewership is restricted (PNR not created by ${PCC})`);
+
+  it('el AAA que falla', async () => {
+    const order: string[] = [];
+    const conn = fakeConn(order, { commandError: leaky });
+    const { context, errors } = setup({ sessionPcc: PCC }, { show });
+    await context.runInContext(conn, async () => {});
+    expect(errors.join('\n')).toMatch(/el AAA falló: .*not created by P8\)/);
+    expect(errors.join('\n')).not.toContain(PCC);
+  });
+
+  it('el cambio de contexto que falla', async () => {
+    for (const variant of VARIANTS) {
+      const order: string[] = [];
+      const conn = changeConn(order, { sendError: leaky });
+      const { context, errors } = setup(planOf(variant), { show });
+      await context.runInContext(conn, async () => {});
+      expect(errors.join('\n'), variant).toMatch(/el cambio de contexto falló: .*not created by P8\)/);
+      expect(errors.join('\n'), variant).not.toContain(PCC);
+    }
   });
 });

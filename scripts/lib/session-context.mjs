@@ -32,8 +32,10 @@ export const WITHOUT_READING = 'No se leyó ni se escribió nada en el PNR.';
  *   no lo traiga nunca (no se imprime)
  * @param {() => void} [options.fail] se llama cuando el cambio no se confirma (el script sale con código 4)
  * @param {{ log: Function, error: Function }} [options.log] la consola
+ * @param {(text: string) => string} [options.show] cómo se anonimiza un mensaje de error antes de ir
+ *   a la consola (en el script, los alias de PCC y el scrubber); por defecto, tal cual
  */
-export function createSessionContext({ plan, step, secrets = [], watch = () => {}, watchToken = () => {}, fail = () => {}, log = console }) {
+export function createSessionContext({ plan, step, secrets = [], watch = () => {}, watchToken = () => {}, fail = () => {}, log = console, show = (text) => String(text) }) {
   const context = plan.sessionContext ?? 'aaa';
   /**
    * Lo que pasó con el cambio de contexto de esta corrida (Q-143); `sent` solo es `true` si se mandó.
@@ -74,7 +76,7 @@ export function createSessionContext({ plan, step, secrets = [], watch = () => {
     const sent = await step('AAA de la sesión', () => conn.session.command(command));
     if (sent.error !== undefined) {
       aaa.ok = false;
-      log.error(`\n✘ el AAA falló: ${describeError(sent.error).name ?? ''} ${sent.error?.message ?? sent.error}\n${WITHOUT_READING} Sesión cerrada.`);
+      log.error(`\n✘ el AAA falló: ${describeError(sent.error).name ?? ''} ${show(sent.error?.message ?? sent.error)}\n${WITHOUT_READING} Sesión cerrada.`);
       fail();
       return false;
     }
@@ -105,7 +107,7 @@ export function createSessionContext({ plan, step, secrets = [], watch = () => {
     });
     if (sent.error !== undefined) {
       aaa.ok = false;
-      log.error(`\n✘ el cambio de contexto falló: ${describeError(sent.error).name ?? ''} ${sent.error?.message ?? sent.error}\n${WITHOUT_READING} Sesión cerrada.`);
+      log.error(`\n✘ el cambio de contexto falló: ${describeError(sent.error).name ?? ''} ${show(sent.error?.message ?? sent.error)}\n${WITHOUT_READING} Sesión cerrada.`);
       fail();
       return false;
     }

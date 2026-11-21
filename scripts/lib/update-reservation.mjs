@@ -64,7 +64,10 @@ function queuesAndScan(env, maxScan) {
  *
  * @param {Record<string, string | undefined>} env
  * @param {ReadonlyArray<string>} [argv]
- * @returns {{ error?: string, step?: string, environment?: string, sessionPcc?: string, sessionPccLabel?: string, sessionContext?: string, restCheck?: boolean, write?: boolean, locator?: string, segmentIds?: string[], receivedFrom?: string, lock?: string, queues?: number[], scan?: number }}
+ * `SABRE_SCAN_REQUEST_TYPE` (`scanRequestType`, solo `scan` y `read`): `Trip` por defecto o
+ * `Stateful`; `stateless` es un error (`resolveScanRequestType`).
+ *
+ * @returns {{ error?: string, step?: string, environment?: string, scanRequestType?: string, sessionPcc?: string, sessionPccLabel?: string, sessionContext?: string, restCheck?: boolean, write?: boolean, locator?: string, segmentIds?: string[], receivedFrom?: string, lock?: string, queues?: number[], scan?: number }}
  */
 export function resolvePlan(env, argv = []) {
   if (env.SABRE_UPDATE_WRITE !== undefined) return { error: 'SABRE_UPDATE_WRITE ya no se acepta: el candado va en la línea de comandos (--write=<paso>:<localizador>:<ids>); quítala del entorno y de .env.production. No se escribe nada' };
@@ -85,17 +88,19 @@ export function resolvePlan(env, argv = []) {
   const sessionPart = session.pcc === undefined ? {} : { sessionPcc: session.pcc, sessionPccLabel: session.label, sessionContext: context.context };
   const restCheck = resolveRestCheck(env, step);
   if (restCheck.error !== undefined) return { error: restCheck.error };
+  const scanType = resolveScanRequestType(env, step);
+  if (scanType.error !== undefined) return { error: scanType.error };
 
   if (step === 'scan' || step === 'read') {
     if (lock !== undefined) return { error: `--write no va con SABRE_UPDATE_STEP=${step}: ${step} no escribe` };
     if (step === 'scan') {
       if (locator !== undefined) return { error: 'scan no usa SABRE_UPDATE_LOCATOR: para leer un PNR concreto, SABRE_UPDATE_STEP=read' };
       const found = queuesAndScan(env, 20);
-      return found.error === undefined ? { step, environment, write: false, ...sessionPart, ...restCheck.plan, ...found } : found;
+      return found.error === undefined ? { step, environment, write: false, scanRequestType: scanType.requestType, ...sessionPart, ...restCheck.plan, ...found } : found;
     }
     const found = queuesAndScan(env, 20);
     if (found.error !== undefined) return found;
-    return { step, environment, write: false, ...sessionPart, ...(locator === undefined ? {} : { locator }), ...found };
+    return { step, environment, write: false, scanRequestType: scanType.requestType, ...sessionPart, ...(locator === undefined ? {} : { locator }), ...found };
   }
 
   if (locator === undefined) return { error: `falta SABRE_UPDATE_LOCATOR: ${step} trabaja sobre un PNR elegido en el paso scan o read` };
@@ -324,18 +329,170 @@ export function readAfterAaa(stateful, stepError) {
 const PNRBUILDER_NAMESPACE = 'http://webservices.sabre.com/pnrbuilder/v1_19';
 
 /**
- * `GetReservationRQ` 1.19 `FULL`. Con `Stateful` es el mismo que manda el SDK antes de escribir
- * (`getReservationPayload` de src/reservation/stl-reservation.ts); con `Stateless` lee el PNR sin
- * dejarlo en el AAA, para revisar candidatos.
+ * Cómo lee el `scan` (y el `read` sin localizador) cada PNR de las colas: `SABRE_SCAN_REQUEST_TYPE`.
+ * La guía de Retrieve Itinerary 1.19.22 (sabre-wiki/wiki/sources/retrieve-itinerary.md): `Trip` para
+ * solo leer (no pasa por el AAA) y `Stateful` para modificar (desempaca el PNR en el AAA). `Stateless`
+ * es «airlines only»: no se ofrece.
+ */
+export const SCAN_REQUEST_TYPES = { trip: 'Trip', stateful: 'Stateful' };
+
+/**
+ * `SABRE_SCAN_REQUEST_TYPE`: `trip` (default) o `stateful`, solo con `scan` o `read`. `stateless` es
+ * un error con su razón, antes de abrir sesión; cualquier otro valor también.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {string} step
+ * @returns {{ requestType?: string, error?: string }}
+ */
+export function resolveScanRequestType(env, step) {
+  const raw = env.SABRE_SCAN_REQUEST_TYPE;
+  if (raw === undefined || raw === '') return step === 'scan' || step === 'read' ? { requestType: 'Trip' } : {};
+  const value = raw.trim().toLowerCase();
+  if (value === 'stateless') {
+    return { error: 'SABRE_SCAN_REQUEST_TYPE=stateless no se acepta: la guía de Retrieve Itinerary 1.19.22 dice «Stateless requests can be used by airlines only». Usa trip (solo lectura, default) o stateful (con IgnoreTransaction después de cada PNR). No se abrió sesión' };
+  }
+  if (!(value in SCAN_REQUEST_TYPES)) return { error: `SABRE_SCAN_REQUEST_TYPE debe ser ${Object.keys(SCAN_REQUEST_TYPES).join(' o ')} (recibido: ${raw})` };
+  if (step !== 'scan' && step !== 'read') return { error: `SABRE_SCAN_REQUEST_TYPE solo va con SABRE_UPDATE_STEP=scan o read (paso: ${step}): ${step} lee siempre Stateful, como el SDK` };
+  return { requestType: SCAN_REQUEST_TYPES[value] };
+}
+
+/**
+ * `GetReservationRQ` 1.19 (`Version="1.19.0"`, namespace `pnrbuilder/v1_19`), conforme al XSD
+ * `GetReservationSTLRQ_v1.19.22.xsd` (`Locator`, `RequestType`, `ReturnOptions` en ese orden):
+ * - `Stateful` (default): el mismo que manda el SDK antes de escribir (`getReservationPayload` de
+ *   src/reservation/stl-reservation.ts). Desempaca el PNR en el AAA.
+ * - `Trip`: solo lectura, sin AAA. `ViewName` `Full` y `ResponseFormat` `STL`, como el ejemplo
+ *   oficial de la guía (*GetReservation Request and Response Structure*).
+ * Cualquier otro tipo (`Stateless` incluido) o un localizador sin forma de PNR lanzan: nunca se arma.
  */
 export function getReservationPayload(locator, requestType = 'Stateful') {
+  if (!isLocator(locator)) throw new TypeError('el localizador debe tener 6 letras mayúsculas o dígitos');
+  const returnOptions = {
+    Stateful: '<ReturnOptions><SubjectAreas><SubjectArea>FULL</SubjectArea></SubjectAreas></ReturnOptions>',
+    Trip: '<ReturnOptions><ViewName>Full</ViewName><ResponseFormat>STL</ResponseFormat></ReturnOptions>',
+  }[requestType];
+  if (returnOptions === undefined) throw new TypeError(`RequestType ${requestType} no se arma: solo Trip o Stateful (Stateless es solo para aerolíneas)`);
   return [
     `<GetReservationRQ Version="1.19.0" xmlns="${PNRBUILDER_NAMESPACE}">`,
     `<Locator>${locator}</Locator>`,
     `<RequestType>${requestType}</RequestType>`,
-    '<ReturnOptions><SubjectAreas><SubjectArea>FULL</SubjectArea></SubjectAreas></ReturnOptions>',
+    returnOptions,
     '</GetReservationRQ>',
   ].join('');
+}
+
+/** El `SessionRequest` de `GetReservationRQ` para el método interno de la sesión. */
+export function getReservationRequest(locator, requestType, operation) {
+  return { service: 'updateReservation', action: 'GetReservationRQ', payload: getReservationPayload(locator, requestType), idempotent: true, operation };
+}
+
+const SABRE_XML_NAMESPACE = 'http://webservices.sabre.com/sabreXML/2011/10';
+
+/**
+ * `IgnoreTransactionLLSRQ` 2.0.0 (el `I` del host), el mismo request que `ignoreTransactionRequest`
+ * de src/reservation/stl-reservation.ts: descarta lo que no se commiteó en el AAA. Nunca hay ET.
+ */
+export function ignoreTransactionRequest(operation) {
+  return {
+    service: 'ignoreTransaction',
+    action: 'IgnoreTransactionLLSRQ',
+    payload: `<IgnoreTransactionRQ Version="2.0.0" xmlns="${SABRE_XML_NAMESPACE}"/>`,
+    idempotent: true,
+    operation,
+  };
+}
+
+/**
+ * Códigos de `GetReservationRS` que dicen que el AAA tiene algo pendiente (Retrieve Itinerary,
+ * *Error Codes*): `700411` (*The PNR in the AAA has been modified*) y `700412` (*Agent is active on
+ * a PNR queue*). Con `Stateful`, si aparecen, el scan no lee el PNR siguiente.
+ */
+export const STATEFUL_BLOCKING_CODES = ['700411', '700412'];
+
+/** Lo que se sabe de una lectura que lanzó: los `Errors/Error` de su sobre, o el código y mensaje del error. */
+export function reservationOfError(error) {
+  const raw = error?.raw;
+  const parsed = typeof raw === 'string' && raw.trimStart().startsWith('<') ? readStlReservation(raw) : undefined;
+  if (parsed !== undefined && parsed.errors.length > 0) return parsed;
+  const fallback = error instanceof Error ? { code: error.code, message: error.message } : { message: String(error) };
+  return { ...(parsed ?? { passengers: 0, segments: [], hasReservation: false, updateResults: [] }), errors: [fallback] };
+}
+
+/**
+ * Una lectura `Stateful` seguida siempre de `IgnoreTransaction` (el del SDK), haya fallado o no la
+ * lectura: el PNR no se queda en el AAA aunque el cierre de la sesión falle. Nunca manda un ET.
+ * `hooks` (la grabación de la fixture) van solo con el `GetReservationRQ`; el `IgnoreTransaction`
+ * sale con la operación `<operation>.ignore`.
+ *
+ * @param {object} options
+ * @param {string} options.locator
+ * @param {(request: any) => Promise<any>} options.send el método interno de la sesión
+ * @param {(name: string, run: () => Promise<unknown>) => Promise<{ value?: any, error?: unknown }>} options.step
+ * @param {(locator: string) => string} [options.label]
+ * @param {string} [options.operation]
+ * @param {object} [options.hooks]
+ * @param {string} [options.name] el nombre del paso de la lectura
+ * @returns {Promise<{ read: { value?: any, error?: unknown }, ignored: { value?: any, error?: unknown } }>}
+ */
+export async function readStateful({ locator, send, step, label = (l) => l, operation = 'reservation.get', hooks = {}, name = `revisar ${label(locator)} (Stateful)` }) {
+  const read = await step(name, () => send({ ...getReservationRequest(locator, 'Stateful', operation), ...hooks }));
+  const ignored = await step(`IgnoreTransaction después de ${label(locator)}`, () => send(ignoreTransactionRequest(`${operation}.ignore`)));
+  return { read, ignored };
+}
+
+/**
+ * Lee cada candidato con `GetReservationRQ` de `requestType` (`Trip` o `Stateful`). Con `Stateful`,
+ * después de cada lectura (también si falló) manda `IgnoreTransaction` para no dejar el PNR en el
+ * AAA antes del siguiente, y no sigue si el `IgnoreTransaction` falla o la lectura trae un código de
+ * `STATEFUL_BLOCKING_CODES`. Nunca manda un ET. Los efectos entran por parámetro (los tests pasan
+ * una sesión falsa).
+ *
+ * @param {object} options
+ * @param {ReadonlyArray<{ locator: string, queues: number[] }>} options.candidates
+ * @param {string} options.requestType `Trip` o `Stateful`
+ * @param {(request: any) => Promise<any>} options.send el método interno de la sesión
+ * @param {(name: string, run: () => Promise<unknown>) => Promise<{ value?: any, error?: unknown }>} options.step
+ * @param {(locator: string) => string} [options.label] cómo se nombra el PNR en los pasos (su alias)
+ * @param {string} [options.operation]
+ * @returns {Promise<{ reads: Array<{ locator: string, queues: number[], ok: boolean, pnr: any }>, stopped?: string }>}
+ */
+export async function readCandidates({ candidates, requestType, send, step, label = (l) => l, operation = 'reservation.scan' }) {
+  if (!Object.values(SCAN_REQUEST_TYPES).includes(requestType)) throw new TypeError(`el scan lee con Trip o Stateful, no con ${requestType}`);
+  const reads = [];
+  for (const { locator, queues } of candidates) {
+    const stateful = requestType === 'Stateful' ? await readStateful({ locator, send, step, label, operation }) : undefined;
+    const read = stateful?.read ?? (await step(`revisar ${label(locator)} (${requestType})`, () => send(getReservationRequest(locator, requestType, operation))));
+    const pnr = read.error === undefined ? readStlReservation(read.value?.raw) : reservationOfError(read.error);
+    reads.push({ locator, queues, ok: read.error === undefined, pnr });
+    if (stateful === undefined) continue;
+    if (stateful.ignored.error !== undefined) return { reads, stopped: `el IgnoreTransaction después de ${label(locator)} falló: no se lee otro PNR sobre un AAA que pudo quedar ocupado (el cierre de la sesión lo descarta)` };
+    const blocking = pnr.errors.find((e) => STATEFUL_BLOCKING_CODES.includes(String(e.code)));
+    if (blocking !== undefined) return { reads, stopped: `${label(locator)} dio ${blocking.code}: el AAA tenía algo pendiente; no se lee otro PNR` };
+  }
+  return { reads };
+}
+
+// ---------- Errores de GetReservationRS en la consola ----------
+
+/**
+ * Cambia cada PCC real por su alias (`[['8AYC', 'P8'], ['XY12', 'home']]`), como palabra completa: un
+ * `Message` de Sabre puede traer el PCC («PNR not created by …»). Los valores vacíos o cortos se
+ * ignoran. Si un PCC tiene dos alias, gana el último.
+ */
+export function pccAliasText(aliases) {
+  const known = new Map(aliases.filter(([pcc, alias]) => typeof pcc === 'string' && pcc.length >= 3 && typeof alias === 'string'));
+  const pattern = known.size === 0 ? undefined : new RegExp(`(?<![\\p{L}\\p{N}])(${[...known.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp).join('|')})(?![\\p{L}\\p{N}])`, 'gu');
+  return (text) => (pattern === undefined ? String(text) : String(text).replace(pattern, (pcc) => known.get(pcc)));
+}
+
+/**
+ * Cada `Errors/Error` de `GetReservationRS` como `<Code>: <Message>` (y la `Severity`), completos y
+ * pasados por `show` (el scrubber de la consola: alias de PCC y de localizadores). `—` si no hay.
+ */
+export function formatStlErrors(errors, show) {
+  if (typeof show !== 'function') throw new TypeError('formatStlErrors pide la función que anonimiza');
+  if (errors.length === 0) return '—';
+  return errors.map((e) => `${e.code ?? 'sin código'}: ${show(e.message ?? 'sin mensaje')}${e.severity === undefined ? '' : ` (${e.severity})`}`).join(' · ');
 }
 
 // ---------- Lectura de segmentos ----------
@@ -447,26 +604,29 @@ const segmentLabel = (s) => `${s.airId ?? '?'} ${s.status ?? '?'} ${s.carrier ??
  * Una fila de la tabla del paso `scan`, para que las agentes elijan un PNR: sus colas, las
  * aerolíneas, los segmentos viejos (UN, HX y cualquier otro que no sea TK, HK, KK, KL, TL ni TN) y
  * los nuevos (TK), cada uno con id, estado, vuelo, ruta y salida; si trae boleto emitido, si hay
- * `MarriageGrp` con grupo, los pasajeros y los otros estados que tocaría CONFIRM-ALL.
+ * `MarriageGrp` con grupo, los pasajeros, los otros estados que tocaría CONFIRM-ALL y cada
+ * `Errors/Error` con su `Code` y su `Message` completos, pasados por `show` (`formatStlErrors`). Sirve
+ * también con una lectura que falló (`reservationOfError`): sin reserva, boleto y pax son `—`.
  */
-export function scanRow(queues, locator, pnr) {
+export function scanRow(queues, locator, pnr, show) {
   const married = pnr.segments.filter((s) => s.marriage !== undefined && s.marriage.group !== undefined && s.marriage.group !== '0');
   const counts = statusCounts(pnr.segments);
   const others = OTHER_CONFIRMABLE.filter((status) => counts[status] !== undefined).map((status) => `${status}×${counts[status]}`);
   // Sin TicketDetails, ETicketNumber ni TicketNumber no se sabe si hay boleto (duda de diseño 1): no es un «no».
-  const ticket = pnr.ticketing === undefined ? 'desconocido (sin TicketingInfo)' : pnr.ticketing.issued ? 'sí' : `desconocido (${pnr.ticketing.children.join(', ') || 'vacío'})`;
+  const unread = pnr.hasReservation === false;
+  const ticket = unread ? '—' : pnr.ticketing === undefined ? 'desconocido (sin TicketingInfo)' : pnr.ticketing.issued ? 'sí' : `desconocido (${pnr.ticketing.children.join(', ') || 'vacío'})`;
   return {
     cola: [...queues].join(','),
     localizador: locator,
     aerolíneas: [...new Set(pnr.segments.map((s) => s.carrier).filter(Boolean))].join(',') || '—',
     viejos: pnr.segments.filter((s) => !CURRENT_STATUSES.has(s.status)).map(segmentLabel).join(' · ') || '—',
     nuevos: pnr.segments.filter((s) => s.status === 'TK').map(segmentLabel).join(' · ') || '—',
-    HK: counts.HK ?? 0,
+    HK: unread ? '—' : (counts.HK ?? 0),
     otros: others.join(' ') || '—',
     boleto: ticket,
     marriage: married.length === 0 ? 'no' : `sí (${[...new Set(married.map((s) => s.marriage.group))].join(',')})`,
-    pax: pnr.passengers || Number(pnr.numberInParty ?? 0),
-    errores: pnr.errors.map((e) => e.code).join(' ') || '—',
+    pax: unread ? '—' : pnr.passengers || Number(pnr.numberInParty ?? 0),
+    errores: formatStlErrors(pnr.errors, show),
   };
 }
 

@@ -29,7 +29,9 @@
 //        node --env-file=.env.production scripts/validate-update-reservation.mjs
 //
 // En `scan`, si sigue dando 700102 después del cambio, la consola lo dice, e imprime completo el primer
-// error de lectura (nombre, código, mensaje y errores anidados; la consola puede mostrar el PCC). Con
+// error de lectura que lanzó (nombre, código, mensaje y errores anidados). Los `Message` de Sabre
+// (los de `GetReservationRS/Errors`, en la tabla y en `read`) pasan por el scrubber con los PCC en su
+// alias: el destino es `P8` en producción (`destino` en CERT) y el de las credenciales, `home`. Con
 // SABRE_UPDATE_REST_CHECK=1, ya con la sesión cerrada, hace un `booking.get` con `targetPcc` sobre el
 // primer PNR que intentó leer y dice solo ok o el código (sin grabar nada). En `read`, la fixture trae
 // findings.q143 = { context, aaaSent, aaaOk, screen (anonimizada), newToken (sí/no, sin el valor),
@@ -38,19 +40,30 @@
 //
 // 0. `scan`, SOLO LECTURA, para que las agentes elijan un PNR. Lista las colas SABRE_UPDATE_QUEUES
 //    (5 y 6: ahí están los PNR con TK de cambio de horario, ver sabre-wiki/wiki/concepts/
-//    cambio-de-horario.md), lee hasta SABRE_UPDATE_SCAN PNR (de 1 a 20) con `GetReservationRQ`
-//    `Stateless` (no deja nada en el AAA) e imprime una tabla: colas, aerolíneas, segmentos viejos y
-//    nuevos (id, estado, vuelo, ruta, salida), boleto, marriage, pasajeros y otros estados que
-//    tocaría CONFIRM-ALL. No llama a booking.get, no lee en Stateful y no graba fixture.
+//    cambio-de-horario.md), lee hasta SABRE_UPDATE_SCAN PNR (de 1 a 20) con `GetReservationRQ` 1.19
+//    del tipo SABRE_SCAN_REQUEST_TYPE e imprime una tabla: colas, aerolíneas, segmentos viejos y
+//    nuevos (id, estado, vuelo, ruta, salida), boleto, marriage, pasajeros, otros estados que
+//    tocaría CONFIRM-ALL y cada `Errors/Error` con su código y su mensaje completos (también de las
+//    lecturas que fallaron). No llama a booking.get y no graba fixture. SABRE_SCAN_REQUEST_TYPE:
+//      - `trip` (default): `RequestType` `Trip` con `ViewName` `Full` y `ResponseFormat` `STL`. Lee
+//        del almacén de PNR sin pasar por el AAA: solo lectura.
+//      - `stateful`: el request del SDK; desempaca el PNR en el AAA, así que después de cada lectura
+//        manda `IgnoreTransaction` (el del SDK) antes del PNR siguiente. Nunca un ET. Si el
+//        `IgnoreTransaction` falla o la lectura da 700411/700412 (algo pendiente en el AAA), no lee
+//        más PNR. Cerrar la sesión descarta el AAA de todos modos.
+//    `stateless` es un error antes de abrir sesión (código 2): la guía de Retrieve Itinerary 1.19.22
+//    dice «Stateless requests can be used by airlines only», y una agencia recibe 700102.
 //
 //      SABRE_QUEUE_PCC=target SABRE_SESSION_PCC=target SABRE_ENVIRONMENT=production SABRE_UPDATE_STEP=scan node --env-file=.env.production scripts/validate-update-reservation.mjs
-//      … con SABRE_SESSION_CONTEXT=context-change o context-change-cpaid, y SABRE_UPDATE_REST_CHECK=1 al principio.
+//      … con SABRE_SCAN_REQUEST_TYPE=stateful, SABRE_SESSION_CONTEXT=context-change o
+//      context-change-cpaid, y SABRE_UPDATE_REST_CHECK=1 al principio.
 //
 // A. `read` (default), SOLO LECTURA. Con SABRE_UPDATE_LOCATOR lee ese PNR; sin ella, revisa las
-//    colas como `scan` y elige el primero con un segmento en TK. Del elegido graba el
+//    colas como `scan` (con SABRE_SCAN_REQUEST_TYPE) y elige el primero con un segmento en TK. Del elegido graba el
 //    `GetReservationRQ` `Stateful` (el mismo request que manda el SDK antes de escribir, por el
-//    método interno de la sesión: el SDK no tiene una lectura pública de STL) y, ya con la sesión
-//    cerrada, su `booking.get` (REST), para comparar los ids STL con `flights[].itemId` (Q-140).
+//    método interno de la sesión: el SDK no tiene una lectura pública de STL), seguido siempre de
+//    `IgnoreTransaction` (con o sin error, nunca un ET), y, ya con la sesión cerrada, su
+//    `booking.get` (REST), para comparar los ids STL con `flights[].itemId` (Q-140).
 //    Nunca llama a confirmAirSegments ni a removeAirSegments.
 //
 //      SABRE_QUEUE_PCC=target SABRE_SESSION_PCC=target SABRE_ENVIRONMENT=production SABRE_UPDATE_LOCATOR=ABC123 node --env-file=.env.production scripts/validate-update-reservation.mjs
@@ -75,7 +88,9 @@
 // Variables: las credenciales (scripts/lib/env-credentials.mjs, siempre v3), SABRE_ENVIRONMENT
 // (`sandbox` por defecto), SABRE_QUEUE_PCC (el PCC de las colas y el `targetPcc` de `booking.get`;
 // `target` toma SABRE_TARGET_PCC; sin ella, el de la sesión), SABRE_SESSION_PCC (el PCC de la sesión,
-// arriba), SABRE_SESSION_CONTEXT (cómo se cambia: aaa, context-change o context-change-cpaid), SABRE_UPDATE_REST_CHECK (1, solo scan), SABRE_UPDATE_RECEIVED_FROM
+// arriba), SABRE_SESSION_CONTEXT (cómo se cambia: aaa, context-change o context-change-cpaid),
+// SABRE_SCAN_REQUEST_TYPE (trip o stateful, solo scan y read; confirm y remove leen siempre Stateful,
+// como el SDK), SABRE_UPDATE_REST_CHECK (1, solo scan), SABRE_UPDATE_RECEIVED_FROM
 // (obligatoria para escribir, sin default: el «recibido de» que verá la agencia en el historial,
 // p. ej. BX3; Q-141 y R3) y las de cada paso de arriba.
 //
@@ -103,13 +118,17 @@ import {
   describeError,
   firstReadError,
   formatReadError,
-  getReservationPayload,
   errorMentions,
+  formatStlErrors,
   isLocator,
   mask,
+  pccAliasText,
   previewUpdate,
   readAfterAaa,
+  readCandidates,
+  readStateful,
   readStlReservation,
+  reservationOfError,
   receivedFromShape,
   resolvePlan,
   scanRow,
@@ -149,6 +168,21 @@ const { environment, credentials, queuePcc, queuePccLabel, secrets } = legacyEnv
 const allSecrets = [...secrets, process.env.SABRE_TARGET_PCC, plan.sessionPcc];
 const anonymizer = createAnonymizer({ secrets: allSecrets });
 const scrub = createScrubber({ aliasOf: anonymizer.aliasOf, secrets: allSecrets });
+/**
+ * Los `Message` de `GetReservationRS/Errors` en la consola: cada PCC conocido pasa a su alias (el
+ * destino, `P8` en producción y `destino` en CERT; el de las credenciales, `home`), y después el
+ * scrubber (localizadores a su alias, los demás secretos a XXXX). La fixture no los trae reales.
+ */
+const destinationAlias = environment === 'production' ? 'P8' : 'destino';
+const show = (() => {
+  const aliasPccs = pccAliasText([
+    [queuePcc, destinationAlias],
+    [process.env.SABRE_TARGET_PCC, destinationAlias],
+    [plan.sessionPcc, destinationAlias],
+    [process.env.SABRE_PCC, 'home'],
+  ]);
+  return (text) => scrub.text(aliasPccs(text));
+})();
 
 // ---------- Captura ----------
 
@@ -206,19 +240,13 @@ const { aaa, evidence, runInContext } = createSessionContext({
   fail: () => {
     process.exitCode = 4;
   },
+  show,
 });
 
-/** `GetReservationRQ` por el método interno de la sesión (un truco de los scripts, no API pública). */
-const rawGet = ({ session, send }, locator, requestType, operation) => {
+/** Un request por el método interno de la sesión (un truco de los scripts, no API pública). */
+const rawSend = ({ session, send }, request) => {
   if (send === undefined) throw new Error('no se encontró sessionSend en el prototipo de la sesión');
-  return session[send]({
-    service: 'updateReservation',
-    action: 'GetReservationRQ',
-    payload: getReservationPayload(locator, requestType),
-    idempotent: true,
-    operation,
-    ...hooks,
-  });
+  return session[send](request);
 };
 
 const bookingGet = (name, locator) =>
@@ -326,10 +354,13 @@ const restFlights = () => {
 // ---------- Colas (0 y A) ----------
 
 /**
- * Lista las colas y lee hasta `plan.scan` PNR con `GetReservationRQ` `Stateless`, que no deja nada
- * en el AAA y no se graba (`reservation.scan` no está en RECORDED). Solo se leen los localizadores
- * con forma de PNR (N-1). Devuelve cada PNR leído, con sus colas y lo que dio `readStlReservation`, y
- * `attempted`: los localizadores que intentó leer, también los que fallaron.
+ * Lista las colas y lee hasta `plan.scan` PNR con `GetReservationRQ` de `plan.scanRequestType`
+ * (`readCandidates`): `Trip` por defecto (no pasa por el AAA) o `Stateful` (desempaca el PNR en el
+ * AAA; después de cada lectura, `IgnoreTransaction`, y nunca un ET). No se graba
+ * (`reservation.scan` no está en RECORDED). Solo se leen los localizadores con forma de PNR (N-1).
+ * Devuelve cada lectura (también las que fallaron, con sus `Errors/Error`), `readable` (cuántas
+ * trajeron reserva sin `Errors`; un `GetReservationRS` con `Errors` no lanza), `attempted` (los
+ * localizadores que intentó leer) y `stopped` si el `Stateful` cortó antes.
  */
 async function scanQueues(conn) {
   const pccRequest = queuePcc === undefined ? {} : { pcc: queuePcc };
@@ -347,38 +378,41 @@ async function scanQueues(conn) {
     }
   }
   if (discarded > 0) console.log(`se descartaron ${discarded} localizadores de la cola sin forma de PNR`);
-  const scanned = [];
-  const attempted = [...queuesOf.keys()].slice(0, plan.scan);
-  for (const [locator, queues] of [...queuesOf].slice(0, plan.scan)) {
-    const read = await step(`revisar ${scrub.alias(locator)} (Stateless)`, () => rawGet(conn, locator, 'Stateless', 'reservation.scan'), () => ({}));
-    if (read.value === undefined) continue;
-    scanned.push({ locator, queues: [...queues], pnr: readStlReservation(read.value.raw) });
-  }
-  return { listed: queuesOf.size, scanned, attempted };
+  const candidates = [...queuesOf].slice(0, plan.scan).map(([locator, queues]) => ({ locator, queues: [...queues] }));
+  const { reads, stopped } = await readCandidates({
+    candidates,
+    requestType: plan.scanRequestType,
+    send: (request) => rawSend(conn, request),
+    step,
+    label: (locator) => scrub.alias(locator),
+  });
+  if (stopped !== undefined) console.error(`\n✘ ${stopped}`);
+  return { listed: queuesOf.size, reads, readable: reads.filter((r) => r.ok && r.pnr.hasReservation && r.pnr.errors.length === 0).length, attempted: candidates.map((c) => c.locator), stopped };
 }
 
 // ---------- 0. Escaneo ----------
 
 async function scanStep() {
-  console.log(`entorno ${environment} · SOLO LECTURA, sin fixture · colas ${plan.queues.join(', ')}, hasta ${plan.scan} PNR · PCC de las colas: ${queuePccLabel}`);
+  console.log(`entorno ${environment} · SOLO LECTURA, sin fixture · colas ${plan.queues.join(', ')}, hasta ${plan.scan} PNR · GetReservationRQ ${plan.scanRequestType}${plan.scanRequestType === 'Stateful' ? ' (IgnoreTransaction después de cada PNR, sin ET)' : ''} · PCC de las colas: ${queuePccLabel}`);
   const conn = await openSession();
   const { entered, value: found } = await runInContext(conn, () => scanQueues(conn));
   if (!entered) return;
-  for (const r of results.filter((r) => !r.ok)) console.log(`✘ ${r.step}: ${r.error?.name ?? ''} ${r.error?.message ?? ''}`);
-  // El primer error de lectura, completo y con su código: la consola puede mostrar el PCC (la fixture no).
+  for (const r of results.filter((r) => !r.ok)) console.log(`✘ ${r.step}: ${r.error?.name ?? ''} ${show(r.error?.message ?? '')}`);
+  // El primer error de lectura que lanzó, completo y con su código, con los PCC en su alias.
   const firstError = firstReadError(results);
-  if (firstError !== undefined) console.log(`\nprimer error de lectura (${firstError.step}):\n${formatReadError(firstError, '  ')}`);
-  // 700102 por `code`, `message` o los errores anidados, no por JSON.stringify (M-3).
-  const viewership = results.filter((r) => !r.ok && errorMentions(r.error, '700102')).length;
+  if (firstError !== undefined) console.log(`\nprimer error de lectura (${firstError.step}):\n${show(formatReadError(firstError, '  '))}`);
+  // 700102 en los `Errors/Error` de la respuesta o en el error que lanzó (`code`, `message` o los
+  // anidados, no por JSON.stringify: M-3).
+  const viewership = found.reads.filter((r) => r.pnr.errors.some((e) => String(e.code) === '700102' || errorMentions(e, '700102'))).length;
   if (viewership > 0) {
     console.log(
       aaa.sent
-        ? `\n⚠️ ${viewership} lecturas dieron 700102 (Viewership is restricted) INCLUSO DESPUÉS del cambio de contexto (${plan.sessionContext}) a ${plan.sessionPcc}: no basta (Q-143).`
-        : `\n⚠️ ${viewership} lecturas dieron 700102 (Viewership is restricted): la sesión sigue en el PCC de las credenciales. Con SABRE_SESSION_PCC=target se cambia el contexto antes de leer (Q-143).`,
+        ? `\n⚠️ ${viewership} lecturas ${plan.scanRequestType} dieron 700102 (Viewership is restricted) INCLUSO DESPUÉS del cambio de contexto (${plan.sessionContext}) a ${plan.sessionPccLabel}: no basta (Q-143).`
+        : `\n⚠️ ${viewership} lecturas ${plan.scanRequestType} dieron 700102 (Viewership is restricted): la sesión sigue en el PCC de las credenciales. Con SABRE_SESSION_PCC=target se cambia el contexto antes de leer (Q-143).`,
     );
   }
-  console.log(`\n${found.listed} PNR en las colas, ${found.scanned.length} leídos (la consola muestra los localizadores reales):`);
-  if (found.scanned.length > 0) console.table(found.scanned.map(({ locator, queues, pnr }) => scanRow(queues, locator, pnr)));
+  console.log(`\n${found.listed} PNR en las colas, ${found.reads.length} lecturas ${plan.scanRequestType}, ${found.readable} con reserva y sin Errors (la consola muestra los localizadores reales; los errores, con alias):`);
+  if (found.reads.length > 0) console.table(found.reads.map(({ locator, queues, pnr }) => scanRow(queues, locator, pnr, show)));
   console.log(`\npara leer uno y grabar su fixture: SABRE_ENVIRONMENT=${environment} SABRE_UPDATE_STEP=read SABRE_UPDATE_LOCATOR=<localizador>`);
   if (plan.restCheck) await restCheck(found.attempted[0]);
 }
@@ -412,13 +446,17 @@ async function readStep() {
   const conn = await openSession();
   const { entered } = await runInContext(conn, async () => {
     if (chosen === undefined) {
-      const { scanned } = await scanQueues(conn);
-      for (const { locator, queues, pnr } of scanned) candidates.push({ locator, queue: queues.join(','), statuses: statusCounts(pnr.segments), errors: pnr.errors.map((e) => e.code) });
+      const { reads } = await scanQueues(conn);
+      for (const { locator, queues, pnr } of reads) candidates.push({ locator, queue: queues.join(','), statuses: statusCounts(pnr.segments), errors: pnr.errors.map((e) => ({ code: e.code, message: show(e.message ?? '') })) });
       chosen = candidates.find((c) => (c.statuses.TK ?? 0) > 0)?.locator;
     } else {
       scrub.alias(chosen);
     }
-    if (chosen !== undefined) readResult = await step('GetReservationRQ Stateful', () => rawGet(conn, chosen, 'Stateful', 'reservation.get'), () => ({}));
+    if (chosen === undefined) return;
+    // Stateful y después IgnoreTransaction, con o sin error, como el scan: nunca un ET.
+    const { read, ignored } = await readStateful({ locator: chosen, send: (request) => rawSend(conn, request), step, label: (locator) => scrub.alias(locator), hooks, name: 'GetReservationRQ Stateful' });
+    readResult = read;
+    if (ignored.error !== undefined) console.error(`\n⚠️ el IgnoreTransaction después de ${scrub.alias(chosen)} falló (${show(ignored.error?.message ?? ignored.error)}): el cierre de la sesión descarta el AAA.`);
   });
   if (!entered) {
     // M-2: sin AAA no hubo lecturas, pero la evidencia de Q-143 (la pantalla) se guarda, en su propia
@@ -431,9 +469,12 @@ async function readStep() {
 
   if (candidates.length > 0) {
     console.log('\ncandidatos (la consola muestra el localizador real; la fixture, el alias):');
-    console.table(candidates.map((c) => ({ localizador: c.locator, alias: scrub.alias(c.locator), cola: c.queue, estados: JSON.stringify(c.statuses), errores: c.errors.join(' ') })));
+    console.table(candidates.map((c) => ({ localizador: c.locator, alias: scrub.alias(c.locator), cola: c.queue, estados: JSON.stringify(c.statuses), errores: formatStlErrors(c.errors, (t) => t) })));
   }
   const stateful = parsedResponses('reservation.get').at(-1);
+  // Los `Errors/Error` del GetReservationRS Stateful, completos (de la respuesta o del error que lanzó).
+  const statefulErrors = stateful?.errors ?? (readResult?.error === undefined ? [] : reservationOfError(readResult.error).errors);
+  if (statefulErrors.length > 0) console.log(`\nerrores del GetReservationRQ Stateful: ${formatStlErrors(statefulErrors, show)}`);
   // Q-143: lo que dio la lectura después del AAA (`ok` o el código, p. ej. 700102).
   const q143 = aaa.sent ? evidence(readAfterAaa(stateful, readResult?.error)) : undefined;
   if (q143 !== undefined) console.log(`\nQ-143: ${JSON.stringify(q143)}`);
@@ -462,7 +503,7 @@ async function readStep() {
       candidates: candidates.map((c) => ({ locator: c.locator, queue: c.queue, statuses: c.statuses, errors: c.errors })),
       segments: stateful.segments.map(segmentRow),
       restFlights: flights.map(restFlightRow),
-      stl: { payloadName: stateful.payloadName, errors: stateful.errors, applicationResults: stateful.applicationResults ?? null },
+      stl: { payloadName: stateful.payloadName, errors: stateful.errors.map((e) => ({ ...e, message: e.message === undefined ? undefined : show(e.message) })), applicationResults: stateful.applicationResults ?? null },
       // Qué trae TicketingInfo (los nombres de sus hijos, p. ej. FutureTicketing): para saber cómo
       // viene un boleto emitido en STL 1.19 (duda de diseño 1). `null` si no viene TicketingInfo.
       ticketing: stateful.ticketing ?? null,
@@ -516,9 +557,9 @@ async function writeStep() {
     console.error(`\n⚠️ INCIERTO (${outcome.error.reason}): Sabre pudo haber aplicado el cambio. No repitas la escritura: el booking.get de abajo, o el paso read con SABRE_UPDATE_LOCATOR=${plan.locator}, dice cómo quedó.`);
     process.exitCode = 3;
   } else if (outcome.error instanceof SabreReservationUpdateError) {
-    console.error(`\nno se escribió (${outcome.error.reason}${outcome.error.code === outcome.error.reason ? '' : ` ${outcome.error.code}`}): ${outcome.error.message}`);
+    console.error(`\nno se escribió (${outcome.error.reason}${outcome.error.code === outcome.error.reason ? '' : ` ${outcome.error.code}`}): ${show(outcome.error.message)}`);
   } else if (outcome.error !== undefined) {
-    console.error(`\nfalló: ${outcome.error.name}: ${outcome.error.message}`);
+    console.error(`\nfalló: ${outcome.error.name}: ${show(outcome.error.message ?? outcome.error)}`);
   }
 
   await bookingGet('booking.get después', plan.locator);

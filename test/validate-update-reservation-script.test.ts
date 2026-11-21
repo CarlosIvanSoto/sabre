@@ -2,6 +2,7 @@
 // probar sin Sabre. Los sobres son las fixtures sintéticas de U.1 con datos "reales" inventados
 // encima (nombre, localizadores, PCC, teléfono, correo, ReceivedFrom).
 import { describe, expect, it } from 'vitest';
+import { getReservationPayload as sdkGetReservationPayload, ignoreTransactionRequest as sdkIgnoreTransactionRequest } from '../src/reservation/stl-reservation.js';
 import { createAnonymizer } from '../src/testing/anonymize.js';
 import getFixture from './fixtures/get-reservation.synthetic-guide.json';
 import {
@@ -15,13 +16,21 @@ import {
   errorMentions,
   firstReadError,
   formatReadError,
+  formatStlErrors,
   getReservationPayload,
+  getReservationRequest,
+  ignoreTransactionRequest,
   isPcc,
   parseContextChange,
   parseAaaScreen,
+  pccAliasText,
   previewUpdate,
   readAfterAaa,
+  readCandidates,
+  readStateful,
   readStlReservation,
+  reservationOfError,
+  resolveScanRequestType,
   resolveSessionContext,
   resolveSessionPcc,
   receivedFromShape,
@@ -34,7 +43,7 @@ const base = { SABRE_ENVIRONMENT: 'production' };
 
 describe('resolvePlan', () => {
   it('lee por defecto: colas 5 y 6, hasta 5 PNR, sin escribir', () => {
-    expect(resolvePlan({})).toEqual({ step: 'read', environment: 'sandbox', write: false, queues: [5, 6], scan: 5 });
+    expect(resolvePlan({})).toEqual({ step: 'read', environment: 'sandbox', write: false, scanRequestType: 'Trip', queues: [5, 6], scan: 5 });
     expect(resolvePlan({ ...base, SABRE_UPDATE_LOCATOR: 'abc123', SABRE_UPDATE_QUEUES: '5', SABRE_UPDATE_SCAN: '10' })).toMatchObject({
       step: 'read',
       locator: 'ABC123',
@@ -58,6 +67,7 @@ describe('resolvePlan', () => {
       step: 'scan',
       environment: 'production',
       write: false,
+      scanRequestType: 'Trip',
       queues: [5],
       scan: 20,
     });
@@ -129,11 +139,74 @@ describe('resolvePlan', () => {
   });
 });
 
-it('getReservationPayload es el del SDK con Stateful, y Stateless para revisar', () => {
-  expect(getReservationPayload('ABC123')).toBe(
-    '<GetReservationRQ Version="1.19.0" xmlns="http://webservices.sabre.com/pnrbuilder/v1_19"><Locator>ABC123</Locator><RequestType>Stateful</RequestType><ReturnOptions><SubjectAreas><SubjectArea>FULL</SubjectArea></SubjectAreas></ReturnOptions></GetReservationRQ>',
-  );
-  expect(getReservationPayload('ABC123', 'Stateless')).toContain('<RequestType>Stateless</RequestType>');
+describe('getReservationPayload (Retrieve Itinerary 1.19.22: Stateless es solo para aerolíneas)', () => {
+  it('Stateful es el del SDK, byte a byte', () => {
+    expect(getReservationPayload('ABC123')).toBe(sdkGetReservationPayload('ABC123'));
+    expect(getReservationPayload('ABC123', 'Stateful')).toBe(
+      '<GetReservationRQ Version="1.19.0" xmlns="http://webservices.sabre.com/pnrbuilder/v1_19"><Locator>ABC123</Locator><RequestType>Stateful</RequestType><ReturnOptions><SubjectAreas><SubjectArea>FULL</SubjectArea></SubjectAreas></ReturnOptions></GetReservationRQ>',
+    );
+  });
+
+  it('Trip: Locator, RequestType y ReturnOptions (ViewName Full, ResponseFormat STL), en el orden del XSD', () => {
+    const trip = getReservationPayload('ABC123', 'Trip');
+    expect(trip).toBe(
+      '<GetReservationRQ Version="1.19.0" xmlns="http://webservices.sabre.com/pnrbuilder/v1_19"><Locator>ABC123</Locator><RequestType>Trip</RequestType><ReturnOptions><ViewName>Full</ViewName><ResponseFormat>STL</ResponseFormat></ReturnOptions></GetReservationRQ>',
+    );
+    // GetReservationSTLRQ_v1.19.22.xsd: la secuencia es Locator, SnapshotID, RequestType, CreateDate,
+    // ReturnOptions…; ReturnOptions es SubjectAreas?, ViewName?, ResponseFormat?, PriceQuote?.
+    const order = (xml: string, names: string[]) => names.map((n) => xml.indexOf(`<${n}>`));
+    const top = order(trip, ['Locator', 'RequestType', 'ReturnOptions']);
+    expect(top.every((i) => i > 0)).toBe(true);
+    expect([...top].sort((a, b) => a - b)).toEqual(top);
+    const options = order(trip, ['ViewName', 'ResponseFormat']);
+    expect(options[0]).toBeLessThan(options[1]!);
+  });
+
+  it('nunca arma Stateless, otro tipo ni un localizador sin forma de PNR', () => {
+    for (const bad of ['Stateless', 'stateless', 'trip', 'StatefulX', '']) expect(() => getReservationPayload('ABC123', bad), bad).toThrow(TypeError);
+    expect(() => getReservationPayload('ABC123', 'Stateless')).toThrow(/solo para aerolíneas/);
+    for (const bad of ['ABC12', 'abc123', 'ABC123</Locator>', '']) expect(() => getReservationPayload(bad, 'Trip'), bad).toThrow(/6 letras/);
+  });
+
+  it('getReservationRequest: idempotente, por updateReservation', () => {
+    expect(getReservationRequest('ABC123', 'Trip', 'reservation.scan')).toEqual({
+      service: 'updateReservation',
+      action: 'GetReservationRQ',
+      payload: getReservationPayload('ABC123', 'Trip'),
+      idempotent: true,
+      operation: 'reservation.scan',
+    });
+  });
+
+  it('ignoreTransactionRequest es el del SDK', () => {
+    expect(ignoreTransactionRequest('reservation.scan.ignore')).toEqual(sdkIgnoreTransactionRequest('reservation.scan.ignore'));
+  });
+});
+
+describe('resolveScanRequestType (SABRE_SCAN_REQUEST_TYPE)', () => {
+  it('trip por defecto en scan y read; stateful si se pide', () => {
+    expect(resolvePlan({ ...base, SABRE_UPDATE_STEP: 'scan' })).toMatchObject({ scanRequestType: 'Trip' });
+    expect(resolvePlan({ ...base, SABRE_UPDATE_STEP: 'scan', SABRE_SCAN_REQUEST_TYPE: 'trip' })).toMatchObject({ scanRequestType: 'Trip' });
+    expect(resolvePlan({ ...base, SABRE_UPDATE_STEP: 'scan', SABRE_SCAN_REQUEST_TYPE: 'Stateful' })).toMatchObject({ scanRequestType: 'Stateful' });
+    expect(resolvePlan({ ...base, SABRE_SCAN_REQUEST_TYPE: 'stateful' })).toMatchObject({ step: 'read', scanRequestType: 'Stateful' });
+    expect(resolveScanRequestType({ SABRE_SCAN_REQUEST_TYPE: '' }, 'scan')).toEqual({ requestType: 'Trip' });
+  });
+
+  it('stateless es un error con su razón, también en mayúsculas', () => {
+    for (const value of ['stateless', 'Stateless', 'STATELESS', ' stateless ']) {
+      expect(resolvePlan({ ...base, SABRE_UPDATE_STEP: 'scan', SABRE_SCAN_REQUEST_TYPE: value }).error, value).toMatch(/airlines only/);
+    }
+    expect(resolvePlan({ ...base, SABRE_SCAN_REQUEST_TYPE: 'stateless' }).error).toMatch(/No se abrió sesión/);
+  });
+
+  it('rechaza otros valores y la variable en confirm o remove (leen Stateful, como el SDK)', () => {
+    expect(resolvePlan({ ...base, SABRE_UPDATE_STEP: 'scan', SABRE_SCAN_REQUEST_TYPE: 'full' }).error).toMatch(/trip o stateful/);
+    const confirm = { ...base, SABRE_UPDATE_STEP: 'confirm', SABRE_UPDATE_LOCATOR: 'ABC123', SABRE_UPDATE_EXPECTED_IDS: '8' };
+    expect(resolvePlan(confirm)).not.toHaveProperty('scanRequestType');
+    expect(resolvePlan({ ...confirm, SABRE_SCAN_REQUEST_TYPE: 'trip' }).error).toMatch(/solo va con SABRE_UPDATE_STEP=scan o read/);
+    expect(resolveScanRequestType({ SABRE_SCAN_REQUEST_TYPE: 'trip' }, 'remove').error).toMatch(/remove lee siempre Stateful/);
+    expect(resolveScanRequestType({}, 'confirm')).toEqual({});
+  });
 });
 
 const tkUn = getFixture.responses.find((r) => r.label === 'tk-un')!.body;
@@ -348,7 +421,7 @@ describe('segmentos', () => {
   it('scanRow arma la fila de la tabla del paso scan', () => {
     const pnr = readStlReservation(tkUn);
     expect(pnr).toMatchObject({ passengers: 1, numberInParty: '1', ticketing: { issued: false, children: ['FutureTicketing'] } });
-    const row = scanRow(new Set([5, 6]), 'QWERTZ', pnr);
+    const row = scanRow(new Set([5, 6]), 'QWERTZ', pnr, (t: string) => t);
     expect(row).toMatchObject({ cola: '5,6', localizador: 'QWERTZ', aerolíneas: 'B6', HK: 1, otros: '—', boleto: 'desconocido (FutureTicketing)', marriage: 'no', pax: 1, errores: '—' });
     expect(row.viejos).toMatch(/^8 UN B6\d+ \w{3}-\w{3} \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
     expect(row.nuevos).toMatch(/^10 TK B63309 JFK-FLL /);
@@ -363,8 +436,8 @@ describe('segmentos', () => {
       ticketing: { issued: true, children: ['TicketDetails'] },
       errors: [{ code: 'WARN.X' }],
     };
-    expect(scanRow([5], 'ABC123', pnr)).toMatchObject({ viejos: '1 HX AM1 MEX-CUN 2026-12-01 10:00', nuevos: '2 TK AM1 MEX-CUN 2026-12-01 10:00', otros: 'KK×2 TL×1', boleto: 'sí', marriage: 'sí (2)', pax: 3, errores: 'WARN.X' });
-    expect(scanRow([5], 'ABC123', { ...pnr, ticketing: undefined }).boleto).toBe('desconocido (sin TicketingInfo)');
+    expect(scanRow([5], 'ABC123', pnr, (t: string) => t)).toMatchObject({ viejos: '1 HX AM1 MEX-CUN 2026-12-01 10:00', nuevos: '2 TK AM1 MEX-CUN 2026-12-01 10:00', otros: 'KK×2 TL×1', boleto: 'sí', marriage: 'sí (2)', pax: 3, errores: 'WARN.X: sin mensaje' });
+    expect(scanRow([5], 'ABC123', { ...pnr, ticketing: undefined }, (t: string) => t).boleto).toBe('desconocido (sin TicketingInfo)');
   });
 });
 
@@ -376,7 +449,7 @@ describe('resolveSessionPcc', () => {
     // SABRE_QUEUE_PCC y SABRE_TARGET_PCC solos no mandan un AAA.
     expect(resolveSessionPcc({ SABRE_QUEUE_PCC: 'target', SABRE_TARGET_PCC: 'P8AB' })).toEqual({});
     const plan = resolvePlan({ ...base, SABRE_QUEUE_PCC: 'target', SABRE_TARGET_PCC: 'P8AB' });
-    expect(plan).toEqual({ step: 'read', environment: 'production', write: false, queues: [5, 6], scan: 5 });
+    expect(plan).toEqual({ step: 'read', environment: 'production', write: false, scanRequestType: 'Trip', queues: [5, 6], scan: 5 });
     expect(plan).not.toHaveProperty('sessionPcc');
   });
 
@@ -658,5 +731,152 @@ describe('firstReadError y formatReadError', () => {
     expect(text).toContain('SabreBusinessError [código 700102] (reason x): sin acceso');
     expect(text).toContain('↳ Inner: detalle');
     expect(formatReadError({ thrown: 'boom' })).toBe('Error: boom');
+  });
+});
+
+/** Un `GetReservationRS` con un `Errors/Error`, como el de la guía (Sample Error Responses). */
+const errorRs = (code: string, message: string) =>
+  `<soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/"><soap-env:Body><stl19:GetReservationRS xmlns:stl19="http://webservices.sabre.com/pnrbuilder/v1_19" Version="1.19.0"><stl19:Errors><stl19:Error><stl19:Code>${code}</stl19:Code><stl19:Message>${message}</stl19:Message><stl19:Severity>MODERATE</stl19:Severity></stl19:Error></stl19:Errors></stl19:GetReservationRS></soap-env:Body></soap-env:Envelope>`;
+
+describe('readCandidates: Trip o Stateful con IgnoreTransaction, nunca un ET', () => {
+  const candidates = [
+    { locator: 'AAAAAA', queues: [5] },
+    { locator: 'BBBBBB', queues: [6] },
+    { locator: 'CCCCCC', queues: [5, 6] },
+  ];
+  /** Una sesión falsa: responde cada request con `answer` y los anota. */
+  function fakeSession(answer: (request: { action: string, payload: string }) => unknown) {
+    const sent: Array<{ action: string, payload: string, operation: string }> = [];
+    const send = async (request: { action: string, payload: string, operation: string }) => {
+      sent.push(request);
+      const result = answer(request);
+      if (result instanceof Error) throw result;
+      return result;
+    };
+    const step = async (_name: string, run: () => Promise<unknown>) => {
+      try {
+        return { value: await run() };
+      } catch (error) {
+        return { error };
+      }
+    };
+    return { sent, send, step };
+  }
+  const ok = { raw: tkUn };
+  const noEndTransaction = (sent: Array<{ action: string, payload: string }>) => {
+    for (const request of sent) {
+      expect(request.action).not.toMatch(/EndTransaction/);
+      expect(request.payload).not.toMatch(/EndTransaction/);
+    }
+  };
+
+  it('Trip lee cada candidato y no manda IgnoreTransaction', async () => {
+    const { sent, send, step } = fakeSession(() => ok);
+    const { reads, stopped } = await readCandidates({ candidates, requestType: 'Trip', send, step });
+    expect(stopped).toBeUndefined();
+    expect(sent.map((r) => r.action)).toEqual(['GetReservationRQ', 'GetReservationRQ', 'GetReservationRQ']);
+    expect(sent.every((r) => r.payload.includes('<RequestType>Trip</RequestType>'))).toBe(true);
+    expect(reads.map((r) => [r.locator, r.ok, r.pnr.hasReservation])).toEqual([['AAAAAA', true, true], ['BBBBBB', true, true], ['CCCCCC', true, true]]);
+    noEndTransaction(sent);
+  });
+
+  it('Stateful manda IgnoreTransaction después de cada lectura, también si falló', async () => {
+    const { sent, send, step } = fakeSession((r) => (r.action === 'IgnoreTransactionLLSRQ' ? {} : r.payload.includes('BBBBBB') ? Object.assign(new Error('Viewership'), { raw: errorRs('700102', 'Viewership is restricted for the PNR (PNR not created by P8QA)') }) : ok));
+    const { reads, stopped } = await readCandidates({ candidates, requestType: 'Stateful', send, step });
+    expect(stopped).toBeUndefined();
+    expect(sent.map((r) => r.action)).toEqual(['GetReservationRQ', 'IgnoreTransactionLLSRQ', 'GetReservationRQ', 'IgnoreTransactionLLSRQ', 'GetReservationRQ', 'IgnoreTransactionLLSRQ']);
+    expect(sent.filter((r) => r.action === 'GetReservationRQ').every((r) => r.payload === getReservationPayload(r.payload.match(/<Locator>(\w+)</)![1]!, 'Stateful'))).toBe(true);
+    expect(sent.find((r) => r.action === 'IgnoreTransactionLLSRQ')).toMatchObject({ ...ignoreTransactionRequest('reservation.scan.ignore') });
+    expect(reads[1]).toMatchObject({ locator: 'BBBBBB', ok: false, pnr: { hasReservation: false, errors: [{ code: '700102', message: 'Viewership is restricted for the PNR (PNR not created by P8QA)' }] } });
+    noEndTransaction(sent);
+  });
+
+  it('Stateful no sigue si el IgnoreTransaction falla', async () => {
+    const { sent, send, step } = fakeSession((r) => (r.action === 'IgnoreTransactionLLSRQ' ? new Error('timeout') : ok));
+    const { reads, stopped } = await readCandidates({ candidates, requestType: 'Stateful', send, step, label: () => 'PNR-1' });
+    expect(sent.map((r) => r.action)).toEqual(['GetReservationRQ', 'IgnoreTransactionLLSRQ']);
+    expect(reads).toHaveLength(1);
+    expect(stopped).toMatch(/IgnoreTransaction después de PNR-1 falló/);
+  });
+
+  it('Stateful no sigue si el AAA tenía algo pendiente (700411, 700412)', async () => {
+    for (const code of ['700411', '700412']) {
+      const { sent, send, step } = fakeSession((r) => (r.action === 'IgnoreTransactionLLSRQ' ? {} : { raw: errorRs(code, 'pendiente') }));
+      const { reads, stopped } = await readCandidates({ candidates, requestType: 'Stateful', send, step });
+      expect(sent.map((r) => r.action), code).toEqual(['GetReservationRQ', 'IgnoreTransactionLLSRQ']);
+      expect(reads, code).toHaveLength(1);
+      expect(stopped, code).toMatch(new RegExp(`dio ${code}`));
+      noEndTransaction(sent);
+    }
+  });
+
+  // Revisión del PR #282, hallazgo 1: el paso read también manda IgnoreTransaction.
+  it('readStateful: GetReservationRQ Stateful con los hooks y después IgnoreTransaction, con o sin error', async () => {
+    const hooks = { onRawRequest: () => {} };
+    for (const fails of [false, true]) {
+      const { sent, send, step } = fakeSession((r) => (r.action === 'GetReservationRQ' && fails ? new Error('700102') : ok));
+      const { read, ignored } = await readStateful({ locator: 'AAAAAA', send, step, hooks, name: 'GetReservationRQ Stateful' });
+      expect(sent.map((r) => r.action), String(fails)).toEqual(['GetReservationRQ', 'IgnoreTransactionLLSRQ']);
+      expect(sent[0], String(fails)).toMatchObject({ ...getReservationRequest('AAAAAA', 'Stateful', 'reservation.get'), ...hooks });
+      expect(sent[1], String(fails)).toEqual(ignoreTransactionRequest('reservation.get.ignore'));
+      expect(read.error !== undefined, String(fails)).toBe(fails);
+      expect(ignored.error, String(fails)).toBeUndefined();
+      noEndTransaction(sent);
+    }
+  });
+
+  it('readStateful: un IgnoreTransaction que falla se devuelve, no lanza', async () => {
+    const { sent, send, step } = fakeSession((r) => (r.action === 'IgnoreTransactionLLSRQ' ? new Error('timeout') : ok));
+    const { read, ignored } = await readStateful({ locator: 'AAAAAA', send, step });
+    expect(sent.map((r) => r.action)).toEqual(['GetReservationRQ', 'IgnoreTransactionLLSRQ']);
+    expect(read.error).toBeUndefined();
+    expect(ignored.error).toBeInstanceOf(Error);
+  });
+
+  it('no lee con Stateless ni otro tipo', async () => {
+    const { sent, send, step } = fakeSession(() => ok);
+    await expect(readCandidates({ candidates, requestType: 'Stateless', send, step })).rejects.toThrow(TypeError);
+    expect(sent).toEqual([]);
+  });
+
+  it('reservationOfError: los Errors del sobre, o el código y mensaje del error', () => {
+    expect(reservationOfError(Object.assign(new Error('x'), { raw: errorRs('700102', 'Viewership') })).errors).toEqual([{ code: '700102', message: 'Viewership', severity: 'MODERATE' }]);
+    expect(reservationOfError(Object.assign(new Error('se cortó'), { code: 'TIMEOUT' }))).toMatchObject({ hasReservation: false, errors: [{ code: 'TIMEOUT', message: 'se cortó' }] });
+    expect(reservationOfError(Object.assign(new Error('raro'), { raw: '{"no":"xml"}' })).errors).toEqual([{ code: undefined, message: 'raro' }]);
+  });
+});
+
+describe('los Errors de GetReservationRS en la consola: completos y con alias', () => {
+  const message = 'Viewership is restricted for the PNR (PNR not created by P8QA, home XY12) QWERTZ';
+  function show() {
+    const { scrub } = scrubberFor();
+    scrub.alias('QWERTZ');
+    const alias = pccAliasText([['P8QA', 'P8'], ['XY12', 'home'], [undefined, 'P8'], ['', 'x']]);
+    return { scrub, show: (text: string) => scrub.text(alias(text)) };
+  }
+
+  it('pccAliasText cambia cada PCC como palabra completa', () => {
+    const alias = pccAliasText([['P8QA', 'P8'], ['XY12', 'home']]);
+    expect(alias('by P8QA, XY12.')).toBe('by P8, home.');
+    expect(alias('P8QAX XXY12 P8QA')).toBe('P8QAX XXY12 P8');
+    expect(pccAliasText([])('sin cambios')).toBe('sin cambios');
+  });
+
+  it('formatStlErrors: código, mensaje completo y severidad, sin PCC ni localizador reales', () => {
+    const { scrub, show: s } = show();
+    const text = formatStlErrors([{ code: '700102', message, severity: 'MODERATE' }, { code: '700226', message: 'PNR not found' }], s);
+    expect(text).toBe(`700102: Viewership is restricted for the PNR (PNR not created by P8, home home) ${scrub.alias('QWERTZ')} (MODERATE) · 700226: PNR not found`);
+    expect(text).not.toMatch(/P8QA|XY12|QWERTZ/);
+    expect(formatStlErrors([], s)).toBe('—');
+    expect(() => formatStlErrors([], undefined as never)).toThrow(TypeError);
+  });
+
+  it('scanRow con una lectura que falló: los errores completos, boleto y pax en —', () => {
+    const { show: s } = show();
+    const pnr = reservationOfError(Object.assign(new Error('x'), { raw: errorRs('700102', message) }));
+    const row = scanRow([5], 'QWERTZ', pnr, s);
+    expect(row).toMatchObject({ cola: '5', HK: '—', boleto: '—', pax: '—', otros: '—' });
+    expect(row.errores).toMatch(/^700102: Viewership is restricted for the PNR \(PNR not created by P8, home home\)/);
+    expect(row.errores).not.toMatch(/P8QA|XY12|QWERTZ/);
   });
 });

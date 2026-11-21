@@ -5,6 +5,7 @@ import {
   installAsyncDispose,
   KEEP_ALIVE_IDLE_MS,
   sessionCreatePayload,
+  sessionSecurity,
   sessionSend,
   toSessionError,
 } from '../src/session/session.js';
@@ -248,6 +249,60 @@ describe('SabreSession', () => {
     const target = {};
     installAsyncDispose(target, undefined);
     expect(Object.getOwnPropertySymbols(target)).toEqual([]);
+  });
+});
+
+describe('sessionSecurity (interno, Q-143)', () => {
+  const NEW_TOKEN = 'Shared/IDL:IceSess\\/SessMgr:1\\.0.IDL/Common/!ICESMS\\/STSB!NUEVO!1769772916289!4392!517!2';
+
+  it('el token nuevo va en el siguiente request y en close; el CPAId no cambia', async () => {
+    const fetch = mockFetch(opened(), pinged(), closed());
+    const session = await legacy(fetch).client.openSession();
+    session[sessionSecurity]({ token: NEW_TOKEN });
+    await ping(session);
+    await session.close();
+
+    for (const call of [1, 2]) {
+      expect(body(fetch, call)).toContain(`>${NEW_TOKEN}</wsse:BinarySecurityToken>`);
+      expect(body(fetch, call)).not.toContain(SESSION_TOKEN);
+      expect(tag(body(fetch, call), 'eb:CPAId')).toBe('H8GI');
+    }
+  });
+
+  it('el cpaId cambia solo si se pasa, y el token no cambia', async () => {
+    const fetch = mockFetch(opened(), pinged(), closed());
+    const session = await legacy(fetch).client.openSession();
+    session[sessionSecurity]({ cpaId: '7TZA' });
+    await ping(session);
+    await session.close();
+
+    for (const call of [1, 2]) {
+      expect(tag(body(fetch, call), 'eb:CPAId')).toBe('7TZA');
+      expect(body(fetch, call)).toContain(`>${SESSION_TOKEN}</wsse:BinarySecurityToken>`);
+    }
+  });
+
+  it('con los dos campos cambia los dos; sin campos no cambia nada', async () => {
+    const fetch = mockFetch(opened(), pinged(), pinged());
+    const session = await legacy(fetch).client.openSession();
+    session[sessionSecurity]({});
+    await ping(session);
+    session[sessionSecurity]({ token: NEW_TOKEN, cpaId: '7TZA' });
+    await ping(session);
+
+    expect(tag(body(fetch, 1), 'eb:CPAId')).toBe('H8GI');
+    expect(body(fetch, 1)).toContain(`>${SESSION_TOKEN}</wsse:BinarySecurityToken>`);
+    expect(tag(body(fetch, 2), 'eb:CPAId')).toBe('7TZA');
+    expect(body(fetch, 2)).toContain(`>${NEW_TOKEN}</wsse:BinarySecurityToken>`);
+  });
+
+  it('no toca la red ni el PCC de las colas, y rechaza un valor vacío', async () => {
+    const fetch = mockFetch(opened());
+    const session = await legacy(fetch).client.openSession();
+    session[sessionSecurity]({ token: NEW_TOKEN, cpaId: '7TZA' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(() => session[sessionSecurity]({ token: ' ' })).toThrow(TypeError);
+    expect(() => session[sessionSecurity]({ cpaId: '' })).toThrow(TypeError);
   });
 });
 

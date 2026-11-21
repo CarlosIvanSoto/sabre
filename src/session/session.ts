@@ -36,6 +36,21 @@ export type SessionRequest = Omit<SoapRequest, 'cpaId' | 'conversationId' | 'sec
  */
 export const sessionSend: unique symbol = Symbol('sabre-client.session.send');
 
+/**
+ * Cambio interno del sobre de la sesión: el token y el `CPAId`. Interno, solo para scripts de
+ * prueba de Q-143; se reemplaza o se quita cuando se decida el diseño de ADR-034. Va con un
+ * símbolo que no se exporta del paquete (igual que `sessionSend`): no suma superficie pública.
+ */
+export const sessionSecurity: unique symbol = Symbol('sabre-client.session.security');
+
+/** Lo que `sessionSecurity` puede cambiar; lo que no se pasa queda como está. */
+export interface SessionSecurityChange {
+  /** Token nuevo (`ContextChangeRS` con `SecurityToken Updated="true"`): el anterior queda inválido. */
+  token?: string;
+  /** `eb:CPAId` de los requests siguientes, en vez del PCC de las credenciales. */
+  cpaId?: string;
+}
+
 function fail(message: string): never {
   throw new TypeError(`sabre-client: ${message}`);
 }
@@ -105,7 +120,8 @@ export class SabreSession {
   readonly #transport: SoapTransport;
   readonly #pcc: string;
   readonly #conversationId: string;
-  readonly #security: SoapSecurity;
+  #security: SoapSecurity;
+  #cpaId: string;
   #busy = false;
   #closing: Promise<void> | undefined;
   /** El `SabreSessionError` que dejó la sesión inutilizable. */
@@ -134,6 +150,7 @@ export class SabreSession {
     this.#pcc = internal.pcc;
     this.#conversationId = internal.conversationId;
     this.#security = { binarySecurityToken: internal.token };
+    this.#cpaId = internal.pcc;
     this.queue = new QueueManagement({
       send: (request) => this[sessionSend](request),
       pcc: internal.pcc,
@@ -202,6 +219,23 @@ export class SabreSession {
     return this.#send(request);
   }
 
+  /**
+   * @internal Interno, solo para scripts de prueba de Q-143; se reemplaza o se quita cuando se
+   * decida el diseño de ADR-034. Cambia el token y/o el `CPAId` de todos los requests siguientes,
+   * `close` incluido. Sin campos no cambia nada. No toca la red.
+   */
+  [sessionSecurity](change: SessionSecurityChange): void {
+    const { token, cpaId } = change;
+    if (token !== undefined) {
+      if (typeof token !== 'string' || token.trim() === '') fail('token debe ser un string no vacío');
+      this.#security = { binarySecurityToken: token };
+    }
+    if (cpaId !== undefined) {
+      if (typeof cpaId !== 'string' || cpaId.trim() === '') fail('cpaId debe ser un string no vacío');
+      this.#cpaId = cpaId;
+    }
+  }
+
   async #send(request: SessionRequest): Promise<SoapResponse> {
     if (this.#closing !== undefined) fail('session closed');
     if (this.#unusable !== undefined) {
@@ -260,7 +294,7 @@ export class SabreSession {
   }
 
   #envelopeFields(): Pick<SoapRequest, 'cpaId' | 'conversationId' | 'security'> {
-    return { cpaId: this.#pcc, conversationId: this.#conversationId, security: this.#security };
+    return { cpaId: this.#cpaId, conversationId: this.#conversationId, security: this.#security };
   }
 
   /**

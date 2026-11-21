@@ -165,6 +165,9 @@ export function aaaCommand(pcc) {
 /** Palabras con las que el host rechaza un `AAA` (pantallas de error, no de cambio). */
 const AAA_ERROR = /\b(NOT AUTHORIZED|INVALID|UNABLE|RESTRICTED|FORMAT|ERROR|NO ACCESS|NOT ALLOWED|REJECT|DENIED|UNKNOWN|NOT FOUND)\b|\bNO\s+(?:AUTH|ACCESS)/i;
 
+/** La forma de una línea de cambio de AAA: `<PCC>.<home>*<sine>.<duty>` (`8AYC.H8GI*AWS.A`). */
+const AAA_SHAPE = '(?<![A-Z0-9])([A-Z0-9]{3,4})\\.([A-Z0-9]{3,4})\\*([A-Z0-9]{2,4})\\.([A-Z0-9])';
+
 /**
  * Lee la pantalla de `AAA<PCC>`. El host contesta, en la primera línea, `<PCC nuevo>.<home>*<sine>.<duty>`
  * (`8AYC.H8GI*AWS.A` al pasar a 8AYC, comandos-de-host y emision-de-boletos). Solo cuenta como cambio
@@ -173,37 +176,45 @@ const AAA_ERROR = /\b(NOT AUTHORIZED|INVALID|UNABLE|RESTRICTED|FORMAT|ERROR|NO A
  *
  * @param {string | undefined} screen
  * @param {string} pcc el PCC pedido
- * @returns {{ ok: boolean, reason: string, activePcc?: string }}
+ * @returns {{ ok: boolean, reason: string, activePcc?: string, home?: string, sine?: string }}
  */
 export function parseAaaScreen(screen, pcc) {
   const lines = String(screen ?? '').split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '');
   if (lines.length === 0) return { ok: false, reason: 'la pantalla vino vacía' };
-  const first = /^([A-Z0-9]{3,4})\.([A-Z0-9]{3,4})\*([A-Z0-9]{2,4})\.([A-Z0-9])/.exec(lines[0]);
+  const first = new RegExp(`^${AAA_SHAPE}`).exec(lines[0]);
   if (first !== null) {
+    const found = { activePcc: first[1], home: first[2], sine: first[3] };
     return first[1] === pcc
-      ? { ok: true, reason: `el host confirma el AAA ${pcc}`, activePcc: first[1] }
-      : { ok: false, reason: `el host quedó en ${first[1]}, no en ${pcc}`, activePcc: first[1] };
+      ? { ok: true, reason: `el host confirma el AAA ${pcc}`, ...found }
+      : { ok: false, reason: `el host quedó en ${first[1]}, no en ${pcc}`, ...found };
   }
   const error = AAA_ERROR.exec(lines.join(' '));
   return { ok: false, reason: error === null ? 'la primera línea no tiene la forma <PCC>.<home>*<sine>.<duty>' : `el host respondió un error: ${error[0].toUpperCase()}` };
 }
 
 /**
- * La pantalla del AAA para la fixture: la primera línea con el PCC y el home a XXXX y la sine a
- * AAA (`XXXX.XXXX*AAA.A`); en las demás, los `secrets` (PCC conocidos) a XXXX. Lo que no se reconoce no se adivina: la fixture la vuelve a revisar `leaks`.
+ * El PCC, el home y la sine de cada línea de la pantalla con la forma `<PCC>.<home>*<sine>.<duty>`, no
+ * solo la primera: son los valores reales que la fixture no debe traer (el chequeo de fugas los vigila).
+ */
+export function aaaScreenValues(screen) {
+  const values = new Set();
+  for (const line of String(screen ?? '').split(/\r?\n/)) {
+    for (const m of line.matchAll(new RegExp(AAA_SHAPE, 'g'))) for (const value of [m[1], m[2], m[3]]) values.add(value);
+  }
+  return [...values];
+}
+
+/**
+ * La pantalla del AAA para la fixture: toda línea con la forma `<PCC>.<home>*<sine>.<duty>` pasa a
+ * `XXXX.XXXX*AAA.<duty>`, y en todo el texto los `secrets` (PCC conocidos) pasan a XXXX. Lo que no
+ * se reconoce no se adivina: la fixture la vuelve a revisar el chequeo de fugas.
  */
 export function anonymizeAaaScreen(screen, secrets = []) {
   const known = secrets.filter((s) => typeof s === 'string' && s.length >= 3).sort((a, b) => b.length - a.length);
   const hide = (line) => known.reduce((acc, secret) => acc.split(secret).join('XXXX'), line);
   return String(screen ?? '')
     .split(/\r?\n/)
-    .map((line, index) => {
-      if (index === 0) {
-        const structured = line.replace(/^(\s*)[A-Z0-9]{3,4}\.[A-Z0-9]{3,4}\*[A-Z0-9]{2,4}\.([A-Z0-9])/, '$1XXXX.XXXX*AAA.$2');
-        if (structured !== line) return hide(structured);
-      }
-      return hide(line);
-    })
+    .map((line) => hide(line.replace(new RegExp(AAA_SHAPE, 'g'), 'XXXX.XXXX*AAA.$4')))
     .join('\n');
 }
 
@@ -756,4 +767,19 @@ export function describeError(error) {
   for (const field of ['expectedSegments', 'actualSegments']) if (Array.isArray(error[field]) && error[field].length > 0) described[field] = [...error[field]];
   if (Array.isArray(error.errors) && error.errors.length > 0) described.errors = error.errors.map(describeError);
   return described;
+}
+
+/**
+ * Si el error trae `code` en el código, el mensaje o alguno de sus errores anidados. Lee los campos
+ * explícitos (`code`, `message`, `thrown`, `errors`), sirve con un `Error` o con lo que devuelve
+ * `describeError`, y no depende de que los campos sean enumerables (a diferencia de `JSON.stringify`).
+ */
+export function errorMentions(error, code) {
+  if (error === undefined || error === null) return false;
+  if (typeof error !== 'object') return String(error).includes(code);
+  const { code: own, message, thrown, errors } = error;
+  if (own !== undefined && String(own) === code) return true;
+  if (typeof message === 'string' && message.includes(code)) return true;
+  if (typeof thrown === 'string' && thrown.includes(code)) return true;
+  return Array.isArray(errors) && errors.some((nested) => errorMentions(nested, code));
 }

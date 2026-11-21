@@ -6,9 +6,12 @@ import { createAnonymizer } from '../src/testing/anonymize.js';
 import getFixture from './fixtures/get-reservation.synthetic-guide.json';
 import {
   aaaCommand,
+  aaaScreenValues,
   anonymizeAaaScreen,
   compareSegmentIds,
   createScrubber,
+  describeError,
+  errorMentions,
   getReservationPayload,
   isPcc,
   parseAaaScreen,
@@ -420,14 +423,14 @@ describe('aaaCommand', () => {
 
 describe('parseAaaScreen: sin ella el script aborta antes de leer o escribir', () => {
   it('confirma solo la línea <PCC>.<home>*<sine>.<duty> con el PCC pedido', () => {
-    expect(parseAaaScreen('8AYC.H8GI*AWS.A\nNO MESSAGE..12NOV', '8AYC')).toEqual({ ok: true, reason: 'el host confirma el AAA 8AYC', activePcc: '8AYC' });
+    expect(parseAaaScreen('8AYC.H8GI*AWS.A\nNO MESSAGE..12NOV', '8AYC')).toEqual({ ok: true, reason: 'el host confirma el AAA 8AYC', activePcc: '8AYC', home: 'H8GI', sine: 'AWS' });
     expect(parseAaaScreen('  P8AB.BX3*AWS.A', 'P8AB').ok).toBe(true);
     expect(parseAaaScreen('\r\n8AYC.H8GI*AWS.A\r\n', '8AYC').ok).toBe(true);
   });
 
   it('no confirma si el host quedó en otro PCC', () => {
     const result = parseAaaScreen('H8GI.H8GI*AWS.A', 'P8AB');
-    expect(result).toMatchObject({ ok: false, activePcc: 'H8GI' });
+    expect(result).toMatchObject({ ok: false, activePcc: 'H8GI', home: 'H8GI', sine: 'AWS' });
     expect(result.reason).toMatch(/quedó en H8GI, no en P8AB/);
   });
 
@@ -463,9 +466,49 @@ describe('anonymizeAaaScreen', () => {
     expect(anonymizeAaaScreen('INVALID PCC', ['P8AB', undefined as unknown as string])).toBe('INVALID PCC');
   });
 
+  it('tapa por forma toda línea <PCC>.<home>*<sine>.<duty>, no solo la primera (M-1)', () => {
+    const screen = 'P8AB.H8GI*AWS.A\nNO MESSAGE..12NOV\nANTES H7QZ.K2LM*JDOE.B\nOTRA  Z9Y8.Q1W2*XY.C';
+    // Ninguno de esos valores está en los secretos conocidos: salen de la forma.
+    expect(anonymizeAaaScreen(screen, [])).toBe('XXXX.XXXX*AAA.A\nNO MESSAGE..12NOV\nANTES XXXX.XXXX*AAA.B\nOTRA  XXXX.XXXX*AAA.C');
+    // Una pantalla de error que cita la forma tampoco deja el home ni la sine.
+    expect(anonymizeAaaScreen('INVALID P8AB.BX3*AWS.A', [])).toBe('INVALID XXXX.XXXX*AAA.A');
+  });
+
   it('la pantalla anonimizada no deja un PCC real', () => {
     const screen = anonymizeAaaScreen('P8AB.H8GI*AWS.A\nP8AB ACTIVE', ['P8AB', 'H8GI']);
     expect(screen).not.toMatch(/P8AB|H8GI|AWS/);
+  });
+});
+
+describe('aaaScreenValues', () => {
+  it('saca el PCC, el home y la sine de cada línea con la forma, no solo de la primera', () => {
+    expect(aaaScreenValues('P8AB.H8GI*AWS.A\nNO MESSAGE..12NOV\nANTES H7QZ.K2LM*JDOE.B')).toEqual(['P8AB', 'H8GI', 'AWS', 'H7QZ', 'K2LM', 'JDOE']);
+    expect(aaaScreenValues('NOT AUTHORIZED')).toEqual([]);
+    expect(aaaScreenValues(undefined)).toEqual([]);
+  });
+});
+
+describe('errorMentions (M-3)', () => {
+  it('encuentra el código en code, message, thrown o los errores anidados', () => {
+    expect(errorMentions({ name: 'SabreError', code: '700102' }, '700102')).toBe(true);
+    expect(errorMentions({ message: 'ERR.700102 Viewership is restricted' }, '700102')).toBe(true);
+    expect(errorMentions({ thrown: 'boom 700102' }, '700102')).toBe(true);
+    expect(errorMentions({ message: 'otro', errors: [{ message: 'x', errors: [{ code: 700102 }] }] }, '700102')).toBe(true);
+  });
+
+  it('no lo da por visto donde no está', () => {
+    expect(errorMentions(undefined, '700102')).toBe(false);
+    expect(errorMentions({ code: '700101', message: 'otro' }, '700102')).toBe(false);
+    expect(errorMentions({ message: 'x', errors: [] }, '700102')).toBe(false);
+  });
+
+  it('funciona con un Error cuyo message no es enumerable, donde JSON.stringify da {}', () => {
+    const error = new Error('Viewership is restricted (700102)');
+    Object.defineProperty(error, 'message', { value: 'Viewership is restricted (700102)', enumerable: false });
+    expect(JSON.stringify(error)).toBe('{}');
+    expect(errorMentions(error, '700102')).toBe(true);
+    // Lo que el script guarda en `results`.
+    expect(errorMentions(describeError(error), '700102')).toBe(true);
   });
 });
 

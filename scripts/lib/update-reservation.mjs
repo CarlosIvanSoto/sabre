@@ -419,6 +419,28 @@ export function reservationOfError(error) {
 }
 
 /**
+ * Una lectura `Stateful` seguida siempre de `IgnoreTransaction` (el del SDK), haya fallado o no la
+ * lectura: el PNR no se queda en el AAA aunque el cierre de la sesión falle. Nunca manda un ET.
+ * `hooks` (la grabación de la fixture) van solo con el `GetReservationRQ`; el `IgnoreTransaction`
+ * sale con la operación `<operation>.ignore`.
+ *
+ * @param {object} options
+ * @param {string} options.locator
+ * @param {(request: any) => Promise<any>} options.send el método interno de la sesión
+ * @param {(name: string, run: () => Promise<unknown>) => Promise<{ value?: any, error?: unknown }>} options.step
+ * @param {(locator: string) => string} [options.label]
+ * @param {string} [options.operation]
+ * @param {object} [options.hooks]
+ * @param {string} [options.name] el nombre del paso de la lectura
+ * @returns {Promise<{ read: { value?: any, error?: unknown }, ignored: { value?: any, error?: unknown } }>}
+ */
+export async function readStateful({ locator, send, step, label = (l) => l, operation = 'reservation.get', hooks = {}, name = `revisar ${label(locator)} (Stateful)` }) {
+  const read = await step(name, () => send({ ...getReservationRequest(locator, 'Stateful', operation), ...hooks }));
+  const ignored = await step(`IgnoreTransaction después de ${label(locator)}`, () => send(ignoreTransactionRequest(`${operation}.ignore`)));
+  return { read, ignored };
+}
+
+/**
  * Lee cada candidato con `GetReservationRQ` de `requestType` (`Trip` o `Stateful`). Con `Stateful`,
  * después de cada lectura (también si falló) manda `IgnoreTransaction` para no dejar el PNR en el
  * AAA antes del siguiente, y no sigue si el `IgnoreTransaction` falla o la lectura trae un código de
@@ -438,12 +460,12 @@ export async function readCandidates({ candidates, requestType, send, step, labe
   if (!Object.values(SCAN_REQUEST_TYPES).includes(requestType)) throw new TypeError(`el scan lee con Trip o Stateful, no con ${requestType}`);
   const reads = [];
   for (const { locator, queues } of candidates) {
-    const read = await step(`revisar ${label(locator)} (${requestType})`, () => send(getReservationRequest(locator, requestType, operation)));
+    const stateful = requestType === 'Stateful' ? await readStateful({ locator, send, step, label, operation }) : undefined;
+    const read = stateful?.read ?? (await step(`revisar ${label(locator)} (${requestType})`, () => send(getReservationRequest(locator, requestType, operation))));
     const pnr = read.error === undefined ? readStlReservation(read.value?.raw) : reservationOfError(read.error);
     reads.push({ locator, queues, ok: read.error === undefined, pnr });
-    if (requestType !== 'Stateful') continue;
-    const ignored = await step(`IgnoreTransaction después de ${label(locator)}`, () => send(ignoreTransactionRequest(`${operation}.ignore`)));
-    if (ignored.error !== undefined) return { reads, stopped: `el IgnoreTransaction después de ${label(locator)} falló: no se lee otro PNR sobre un AAA que pudo quedar ocupado (el cierre de la sesión lo descarta)` };
+    if (stateful === undefined) continue;
+    if (stateful.ignored.error !== undefined) return { reads, stopped: `el IgnoreTransaction después de ${label(locator)} falló: no se lee otro PNR sobre un AAA que pudo quedar ocupado (el cierre de la sesión lo descarta)` };
     const blocking = pnr.errors.find((e) => STATEFUL_BLOCKING_CODES.includes(String(e.code)));
     if (blocking !== undefined) return { reads, stopped: `${label(locator)} dio ${blocking.code}: el AAA tenía algo pendiente; no se lee otro PNR` };
   }

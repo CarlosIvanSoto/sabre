@@ -27,6 +27,7 @@ import {
   previewUpdate,
   readAfterAaa,
   readCandidates,
+  readStateful,
   readStlReservation,
   reservationOfError,
   resolveScanRequestType,
@@ -807,6 +808,29 @@ describe('readCandidates: Trip o Stateful con IgnoreTransaction, nunca un ET', (
       expect(stopped, code).toMatch(new RegExp(`dio ${code}`));
       noEndTransaction(sent);
     }
+  });
+
+  // Revisión del PR #282, hallazgo 1: el paso read también manda IgnoreTransaction.
+  it('readStateful: GetReservationRQ Stateful con los hooks y después IgnoreTransaction, con o sin error', async () => {
+    const hooks = { onRawRequest: () => {} };
+    for (const fails of [false, true]) {
+      const { sent, send, step } = fakeSession((r) => (r.action === 'GetReservationRQ' && fails ? new Error('700102') : ok));
+      const { read, ignored } = await readStateful({ locator: 'AAAAAA', send, step, hooks, name: 'GetReservationRQ Stateful' });
+      expect(sent.map((r) => r.action), String(fails)).toEqual(['GetReservationRQ', 'IgnoreTransactionLLSRQ']);
+      expect(sent[0], String(fails)).toMatchObject({ ...getReservationRequest('AAAAAA', 'Stateful', 'reservation.get'), ...hooks });
+      expect(sent[1], String(fails)).toEqual(ignoreTransactionRequest('reservation.get.ignore'));
+      expect(read.error !== undefined, String(fails)).toBe(fails);
+      expect(ignored.error, String(fails)).toBeUndefined();
+      noEndTransaction(sent);
+    }
+  });
+
+  it('readStateful: un IgnoreTransaction que falla se devuelve, no lanza', async () => {
+    const { sent, send, step } = fakeSession((r) => (r.action === 'IgnoreTransactionLLSRQ' ? new Error('timeout') : ok));
+    const { read, ignored } = await readStateful({ locator: 'AAAAAA', send, step });
+    expect(sent.map((r) => r.action)).toEqual(['GetReservationRQ', 'IgnoreTransactionLLSRQ']);
+    expect(read.error).toBeUndefined();
+    expect(ignored.error).toBeInstanceOf(Error);
   });
 
   it('no lee con Stateless ni otro tipo', async () => {

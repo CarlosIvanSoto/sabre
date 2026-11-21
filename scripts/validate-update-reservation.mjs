@@ -61,8 +61,9 @@
 // A. `read` (default), SOLO LECTURA. Con SABRE_UPDATE_LOCATOR lee ese PNR; sin ella, revisa las
 //    colas como `scan` (con SABRE_SCAN_REQUEST_TYPE) y elige el primero con un segmento en TK. Del elegido graba el
 //    `GetReservationRQ` `Stateful` (el mismo request que manda el SDK antes de escribir, por el
-//    método interno de la sesión: el SDK no tiene una lectura pública de STL) y, ya con la sesión
-//    cerrada, su `booking.get` (REST), para comparar los ids STL con `flights[].itemId` (Q-140).
+//    método interno de la sesión: el SDK no tiene una lectura pública de STL), seguido siempre de
+//    `IgnoreTransaction` (con o sin error, nunca un ET), y, ya con la sesión cerrada, su
+//    `booking.get` (REST), para comparar los ids STL con `flights[].itemId` (Q-140).
 //    Nunca llama a confirmAirSegments ni a removeAirSegments.
 //
 //      SABRE_QUEUE_PCC=target SABRE_SESSION_PCC=target SABRE_ENVIRONMENT=production SABRE_UPDATE_LOCATOR=ABC123 node --env-file=.env.production scripts/validate-update-reservation.mjs
@@ -119,13 +120,13 @@ import {
   formatReadError,
   errorMentions,
   formatStlErrors,
-  getReservationRequest,
   isLocator,
   mask,
   pccAliasText,
   previewUpdate,
   readAfterAaa,
   readCandidates,
+  readStateful,
   readStlReservation,
   reservationOfError,
   receivedFromShape,
@@ -239,6 +240,7 @@ const { aaa, evidence, runInContext } = createSessionContext({
   fail: () => {
     process.exitCode = 4;
   },
+  show,
 });
 
 /** Un request por el método interno de la sesión (un truco de los scripts, no API pública). */
@@ -246,8 +248,6 @@ const rawSend = ({ session, send }, request) => {
   if (send === undefined) throw new Error('no se encontró sessionSend en el prototipo de la sesión');
   return session[send](request);
 };
-/** `GetReservationRQ` por el método interno, con los hooks de grabación. */
-const rawGet = (conn, locator, requestType, operation) => rawSend(conn, { ...getReservationRequest(locator, requestType, operation), ...hooks });
 
 const bookingGet = (name, locator) =>
   step(name, () => sabre.booking.get({ confirmationId: locator, ...targetPcc }, hooks), (r) => ({
@@ -452,7 +452,11 @@ async function readStep() {
     } else {
       scrub.alias(chosen);
     }
-    if (chosen !== undefined) readResult = await step('GetReservationRQ Stateful', () => rawGet(conn, chosen, 'Stateful', 'reservation.get'), () => ({}));
+    if (chosen === undefined) return;
+    // Stateful y después IgnoreTransaction, con o sin error, como el scan: nunca un ET.
+    const { read, ignored } = await readStateful({ locator: chosen, send: (request) => rawSend(conn, request), step, label: (locator) => scrub.alias(locator), hooks, name: 'GetReservationRQ Stateful' });
+    readResult = read;
+    if (ignored.error !== undefined) console.error(`\n⚠️ el IgnoreTransaction después de ${scrub.alias(chosen)} falló (${show(ignored.error?.message ?? ignored.error)}): el cierre de la sesión descarta el AAA.`);
   });
   if (!entered) {
     // M-2: sin AAA no hubo lecturas, pero la evidencia de Q-143 (la pantalla) se guarda, en su propia
@@ -553,9 +557,9 @@ async function writeStep() {
     console.error(`\n⚠️ INCIERTO (${outcome.error.reason}): Sabre pudo haber aplicado el cambio. No repitas la escritura: el booking.get de abajo, o el paso read con SABRE_UPDATE_LOCATOR=${plan.locator}, dice cómo quedó.`);
     process.exitCode = 3;
   } else if (outcome.error instanceof SabreReservationUpdateError) {
-    console.error(`\nno se escribió (${outcome.error.reason}${outcome.error.code === outcome.error.reason ? '' : ` ${outcome.error.code}`}): ${outcome.error.message}`);
+    console.error(`\nno se escribió (${outcome.error.reason}${outcome.error.code === outcome.error.reason ? '' : ` ${outcome.error.code}`}): ${show(outcome.error.message)}`);
   } else if (outcome.error !== undefined) {
-    console.error(`\nfalló: ${outcome.error.name}: ${outcome.error.message}`);
+    console.error(`\nfalló: ${outcome.error.name}: ${show(outcome.error.message ?? outcome.error)}`);
   }
 
   await bookingGet('booking.get después', plan.locator);

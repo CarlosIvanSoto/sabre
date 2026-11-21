@@ -1,6 +1,7 @@
 // scripts/validate-update-reservation.mjs como proceso (#272): lo que corta antes de abrir sesión.
 // Sin credenciales en el entorno, así que si el script intentara abrir una sesión fallaría distinto.
-// Requiere `npm run build` antes (el script importa dist/); sin dist/ se salta, como test/dist.test.ts.
+// Requiere `npm run build` antes (el script importa dist/), como en la CI: sin dist/ el test falla
+// con ese aviso en vez de saltarse en silencio (revisión del PR #282, hallazgo 3).
 import { describe, expect, it } from 'vitest';
 
 // Rutas en variable y tipos a mano: el typecheck no tiene @types/node.
@@ -13,6 +14,7 @@ const dist: unknown = await import(/* @vite-ignore */ distPath).catch(() => unde
 const nodeProcess = (globalThis as { process?: { execPath: string, env: Record<string, string | undefined> } }).process;
 
 function run(env: Record<string, string>): SpawnResult {
+  if (dist === undefined || childProcess === undefined || nodeProcess === undefined) throw new Error('falta dist/: corre npm run build antes de npm test');
   // Solo PATH y las variables del caso: ni credenciales ni .env.
   return childProcess!.spawnSync(nodeProcess!.execPath, ['scripts/validate-update-reservation.mjs'], {
     env: { PATH: nodeProcess!.env.PATH ?? '', ...env },
@@ -21,7 +23,13 @@ function run(env: Record<string, string>): SpawnResult {
   });
 }
 
-describe.skipIf(childProcess === undefined || dist === undefined || nodeProcess === undefined)('validate-update-reservation como proceso', () => {
+describe('validate-update-reservation como proceso', () => {
+  it('tiene dist/ y Node para correr el script', () => {
+    expect(dist, 'falta dist/: corre npm run build antes de npm test (la CI lo hace)').toBeDefined();
+    expect(childProcess, 'sin node:child_process').toBeDefined();
+    expect(nodeProcess, 'sin process').toBeDefined();
+  });
+
   it('SABRE_SCAN_REQUEST_TYPE=stateless corta con código 2 antes de abrir sesión', () => {
     for (const step of ['scan', 'read']) {
       const result = run({ SABRE_UPDATE_STEP: step, SABRE_SCAN_REQUEST_TYPE: 'stateless' });

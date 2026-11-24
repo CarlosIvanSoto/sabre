@@ -121,7 +121,7 @@ import {
   errorMentions,
   formatStlErrors,
   isLocator,
-  mask,
+  isXml,
   pccAliasText,
   previewUpdate,
   readAfterAaa,
@@ -132,6 +132,7 @@ import {
   receivedFromShape,
   resolvePlan,
   scanRow,
+  scrubFixture,
   statusCounts,
 } from './lib/update-reservation.mjs';
 import { createSessionContext } from './lib/session-context.mjs';
@@ -291,33 +292,10 @@ function printSegments(title, segments, comparison) {
 
 // ---------- Fixture ----------
 
-const isXml = (body) => typeof body === 'string' && body.trimStart().startsWith('<');
-function scrubBody(body) {
-  if (body === undefined || body === '') return body;
-  if (isXml(body)) return scrub.xml(body);
-  try {
-    return JSON.stringify(scrub.json(JSON.parse(body)));
-  } catch {
-    return mask(body);
-  }
-}
-
 /** Anonimiza todo, revisa que no quede un dato real y escribe; si queda uno, corta con código 1. */
 function writeFixture(name, meta, findings) {
-  // Primero los sobres: ahí se registran los localizadores de la aerolínea.
-  const recordedRequests = requests.map((r) => ({ ...r, url: scrub.text(r.url), body: scrubBody(r.body) }));
-  const recordedResponses = responses.map((r) => ({ ...r, body: scrubBody(r.body) }));
-  const clean = (value) => JSON.parse(scrub.text(JSON.stringify(value)));
-  const fixture = {
-    recordedAt: new Date().toISOString().slice(0, 10),
-    environment,
-    ...clean(meta),
-    results: clean(results),
-    findings: clean(findings),
-    events: clean(events),
-    requests: recordedRequests,
-    responses: recordedResponses,
-  };
+  // Primero los sobres (ahí se registran los localizadores de la aerolínea y los MessageId): scrubFixture.
+  const fixture = scrubFixture(scrub, { recordedAt: new Date().toISOString().slice(0, 10), environment, meta, results, findings, events, requests, responses });
   const text = `${JSON.stringify(fixture, null, 2)}\n`;
   for (const r of fixture.results) console.log(`${r.ok ? '✔' : '✘'} ${r.step} ${JSON.stringify({ ...r, step: undefined, ok: undefined })}`);
   console.log('\nhallazgos:', JSON.stringify(fixture.findings, null, 2));

@@ -725,6 +725,16 @@ const LOCATOR_TEXT = new Set(['RecordLocator', 'Locator']);
 const PCC_TEXT = new Set(['CPAId', 'PseudoCityCode', 'HomePseudoCityCode', 'AAAPseudoCityCode', 'PrimeHostID', 'BookingSource', 'CreationPCC', 'OwnerPCC']);
 /** Texto que es una firma de agente: pasa a `AAA`. */
 const SINE_TEXT = new Set(['CreationAgentID', 'UpdateAgentID', 'AgentSine', 'AgentID', 'CreationAgent']);
+/**
+ * El identificador de cada mensaje del encabezado ebXML (`MessageHeader/MessageData`): `mid:` y un
+ * UUID en el request, un número de 18 o 19 dígitos en la respuesta. No es un dato de persona, pero
+ * tampoco se graba tal cual: se tapa y se reemplaza igual en todo el texto (eventos del logger).
+ */
+const MESSAGE_ID_TEXT = new Set(['MessageId', 'RefToMessageId']);
+/** La forma de un `MessageId`: el número de la respuesta o `mid:` y el UUID del request. Lo demás no se registra. */
+const MESSAGE_ID = /^(?:\d{15,20}|mid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+/** Un número de vuelo: hasta cuatro dígitos y, a veces, un sufijo operativo. */
+const FLIGHT_NUMBER = /^\d{1,4}[A-Z]?$/;
 /** Elementos con datos de personas: además de enmascararse, se vigila que su valor no quede (`leaks`). */
 const PERSON_TEXT = new Set([
   'LastName', 'FirstName', 'MiddleName', 'Surname', 'GivenName', 'PassengerName', 'FullName', 'Name', 'AgentName',
@@ -772,6 +782,8 @@ const encode = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').repla
 /** Letras a `X`, dígitos a `9`: conserva la forma. */
 export const mask = (text) => String(text).replace(/\p{L}/gu, 'X').replace(/\p{N}/gu, '9');
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** `value` como valor entero: sin una letra o un dígito pegados a los lados. */
+const bounded = (value, flags) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(value)}(?![\\p{L}\\p{N}])`, flags);
 const localName = (name) => name.slice(name.indexOf(':') + 1);
 
 const TAG_NAME = /[A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?/y;
@@ -850,8 +862,17 @@ function tokenize(body) {
  * - `text(value)`: cualquier otro texto (mensajes de error, eventos del logger): solo alias y secretos.
  * - `addNames(names, field?)`: nombres de personas que `leaks` debe buscar palabra por palabra.
  *   `xml` y `json` ya agregan los de `LastName`, `FirstName`, `surname` y los demás de `NAME_TEXT`.
+ * - `messageId(value)`: registra un `MessageId` del encabezado ebXML que llegó por otro lado (el
+ *   `context.messageId` de los eventos `sabre.request.*` del transporte) y devuelve su reemplazo.
+ *   `xml` ya registra los de `MessageHeader/MessageData/MessageId` y `RefToMessageId`. Un `MessageId`
+ *   registrado se tapa en el sobre y `text` lo reemplaza donde aparezca como valor entero, sin vigilarlo.
+ *   Solo se registra lo que tiene forma de `MessageId` (`MESSAGE_ID`); lo demás se enmascara y se
+ *   vigila como dato de persona, así que corta si sigue en el texto.
  * - `leaks(text)`: los campos cuyos valores de personas siguen en el texto, sin repetir.
  * - `leakDetails(text)`: los mismos, como `{ field, value }` con el valor real (solo para la consola).
+ *   También un `MessageId` real que siga en el texto y, aunque ya no esté, uno contenido como valor
+ *   entero en un valor de persona vigilado o en una palabra de un nombre (o igual a uno de ellos):
+ *   `text` lo habría tapado y escondido el resto de ese valor. Ante la duda, se corta.
  *
  * @param {{ aliasOf: (locator: string) => string, secrets?: ReadonlyArray<string | undefined> }} options
  */
@@ -860,6 +881,8 @@ export function createScrubber({ aliasOf, secrets = [] }) {
   const locators = new Set();
   const watched = new Map();
   const names = new Map();
+  /** Cada `MessageId` real del encabezado ebXML, con su reemplazo. */
+  const messageIds = new Map();
 
   const alias = (value) => {
     const trimmed = value.trim();
@@ -887,8 +910,20 @@ export function createScrubber({ aliasOf, secrets = [] }) {
     const star = value.lastIndexOf('*');
     return star === -1 ? alias(value) : `${value.slice(0, star + 1)}${alias(value.slice(star + 1))}`;
   };
+  const messageId = (value) => {
+    const trimmed = String(value).trim();
+    if (trimmed === '') return value;
+    if (!MESSAGE_ID.test(trimmed)) {
+      watch('MessageId', trimmed, true);
+      return mask(value);
+    }
+    if (!messageIds.has(trimmed)) messageIds.set(trimmed, mask(trimmed));
+    return messageIds.get(trimmed);
+  };
   const finish = (text) => {
     let result = text;
+    // Un MessageId solo como valor entero: dentro de otro número (un boleto) no se toca y sigue vigilado.
+    for (const [id, placeholder] of [...messageIds].sort(([a], [b]) => b.length - a.length)) result = result.replace(bounded(id, 'gu'), placeholder);
     for (const locator of [...locators].sort((a, b) => b.length - a.length)) result = result.split(locator).join(aliasOf(locator));
     for (const secret of realSecrets) result = result.split(secret).join('XXXX');
     return result;
@@ -922,9 +957,10 @@ export function createScrubber({ aliasOf, secrets = [] }) {
     return rewritten + (rest.trim() === '' ? rest : mask(rest));
   }
 
-  function leafText(element, raw) {
+  function leafText(element, raw, path) {
     const value = decode(raw);
     if (value.trim() === '' || value === '[REDACTED]' || SAFE_TEXT.has(element)) return raw;
+    if (MESSAGE_ID_TEXT.has(element) && path.at(-2) === 'MessageData' && path.at(-3) === 'MessageHeader') return encode(messageId(value));
     if (CODE_TEXT.has(element) && SHORT_CODE.test(value.trim())) return raw;
     if (NUMERIC_TEXT.has(element) && /^\s*\d+\s*$/.test(value)) return raw;
     if (LOCATOR_TEXT.has(element)) return encode(alias(value));
@@ -959,7 +995,7 @@ export function createScrubber({ aliasOf, secrets = [] }) {
           const before = tokens[index - 1];
           const after = tokens[index + 1];
           const leaf = before?.type === 'open' && !before.selfClosing && after?.type === 'close' && after.name === before.name;
-          if (leaf) return leafText(localName(before.name), token.raw);
+          if (leaf) return leafText(localName(before.name), token.raw, open);
           return token.raw.trim() === '' ? token.raw : encode(looseText(parent, decode(token.raw)));
         }
         case 'cdata':
@@ -975,9 +1011,14 @@ export function createScrubber({ aliasOf, secrets = [] }) {
     return finish(out.join(''));
   }
 
-  function walk(value, key) {
-    if (Array.isArray(value)) return value.map((item) => walk(item, key));
-    if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, walk(v, k)]));
+  /** `allSegments[].text` de un segmento `FLIGHT` es su número de vuelo (Booking Management, `SegmentBasicAttributes`). */
+  const isFlightNumberOf = (key, holder, holderKey, value) =>
+    key === 'text' && holderKey === 'allSegments' && holder?.type === 'FLIGHT' && typeof value === 'string' && FLIGHT_NUMBER.test(value);
+
+  function walk(value, key, holderKey) {
+    if (Array.isArray(value)) return value.map((item) => walk(item, key, key));
+    if (value !== null && typeof value === 'object')
+      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, isFlightNumberOf(k, value, holderKey, v) ? v : walk(v, k, undefined)]));
     if (typeof value === 'number') {
       if (key !== undefined && SAFE_JSON_KEYS.has(key)) return value;
       watch(key ?? '(json)', String(value), key !== undefined && PERSON_JSON_KEYS.has(key));
@@ -993,17 +1034,63 @@ export function createScrubber({ aliasOf, secrets = [] }) {
   }
   const json = (value) => JSON.parse(finish(JSON.stringify(walk(value, undefined))));
 
-  const bounded = (value, flags) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(value)}(?![\\p{L}\\p{N}])`, flags);
   /** Cada valor real que siguió en el texto, con su campo: para la consola, nunca para la fixture. */
   function leakDetails(text) {
     const found = [];
     for (const [value, field] of watched) if (bounded(value, 'u').test(text)) found.push({ field, value });
     for (const [word, field] of names) if (bounded(word, 'iu').test(text)) found.push({ field, value: word });
+    for (const id of messageIds.keys()) {
+      // finish ya lo reemplazó: dentro de un dato de persona (o igual a uno) habría escondido el resto.
+      const inside = bounded(id, 'iu');
+      for (const [value, field] of watched) if (inside.test(value)) found.push({ field, value });
+      for (const [word, field] of names) if (inside.test(word)) found.push({ field, value: word });
+      if (bounded(id, 'u').test(text)) found.push({ field: 'MessageId', value: id });
+    }
     return found;
   }
   const leaks = (text) => [...new Set(leakDetails(text).map((leak) => leak.field))];
 
-  return { xml, json, text: finish, alias, addNames, leaks, leakDetails };
+  return { xml, json, text: finish, alias, addNames, messageId, leaks, leakDetails };
+}
+
+// ---------- Fixture ----------
+
+/** Un body capturado que es un sobre XML (SOAP), no JSON de REST. */
+export const isXml = (body) => typeof body === 'string' && body.trimStart().startsWith('<');
+
+/** Un body capturado (SOAP, JSON de REST u otra cosa) por el scrubber; lo que no se reconoce, enmascarado. */
+export function scrubBody(scrub, body) {
+  if (body === undefined || body === '') return body;
+  if (isXml(body)) return scrub.xml(body);
+  try {
+    return JSON.stringify(scrub.json(JSON.parse(body)));
+  } catch {
+    return mask(body);
+  }
+}
+
+/**
+ * La fixture de `writeFixture` (scripts/validate-update-reservation.mjs), ya anonimizada. Primero los
+ * sobres, porque ahí se registran los localizadores de la aerolínea (y los `MessageId`); después el
+ * resto (`meta`, `results`, `findings`, `events`) pasa por `scrub.text`. No revisa fugas: eso lo hace
+ * quien la escribe, con `scrub.leakDetails` sobre el texto final.
+ */
+export function scrubFixture(scrub, { recordedAt, environment, meta, results, findings, events, requests, responses }) {
+  const recordedRequests = requests.map((r) => ({ ...r, url: scrub.text(r.url), body: scrubBody(scrub, r.body) }));
+  const recordedResponses = responses.map((r) => ({ ...r, body: scrubBody(scrub, r.body) }));
+  // El transporte SOAP pone en context.messageId el MessageId de cada respuesta, también de las que no se graban.
+  for (const event of events) if (typeof event?.context?.messageId === 'string') scrub.messageId(event.context.messageId);
+  const clean = (value) => JSON.parse(scrub.text(JSON.stringify(value)));
+  return {
+    recordedAt,
+    environment,
+    ...clean(meta),
+    results: clean(results),
+    findings: clean(findings),
+    events: clean(events),
+    requests: recordedRequests,
+    responses: recordedResponses,
+  };
 }
 
 // ---------- Errores ----------

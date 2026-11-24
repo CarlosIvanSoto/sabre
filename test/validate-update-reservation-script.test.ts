@@ -36,6 +36,7 @@ import {
   receivedFromShape,
   resolvePlan,
   scanRow,
+  scrubFixture,
   statusCounts,
 } from '../scripts/lib/update-reservation.mjs';
 
@@ -380,6 +381,256 @@ describe('createScrubber: lo que no es texto de un elemento hoja (I-2)', () => {
     const out = scrub.xml(realistic);
     expect(scrub.leaks(out)).toEqual([]);
     expect(scrub.leaks(`${out} JOSÉ`)).toEqual(['FirstName']);
+  });
+});
+
+/**
+ * El paso `read` en producción (2026-11-21, ADR-034, «Hallazgo de la primera corrida») no grabó la
+ * fixture por dos falsos positivos: el `MessageId` del encabezado SOAP, que el sobre tapa pero el
+ * evento `sabre.request.end` del logger traía tal cual, y los números de vuelo de
+ * `allSegments[].text` de Get Booking, que caían en la clave de persona `text`. Todo es inventado.
+ */
+describe('scrubFixture: los falsos positivos del paso read (#272)', () => {
+  /** El `MessageId` de Sabre y el `RefToMessageId` que trae `realistic` (fixture sintética de U.1). */
+  const messageId = '1669686781576790940';
+  const requestMid = 'mid:8b06a5d6-8324-45d6-a77b-9e36e29b3caa';
+  /** El sobre que manda el SDK (soap-transport.ts): su `MessageId` es `mid:` y un UUID. */
+  const request = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:eb="http://www.ebxml.org/namespaces/messageHeader">',
+    '<soap-env:Header><eb:MessageHeader soap-env:mustUnderstand="1" eb:version="1.0"><eb:From><eb:PartyId/></eb:From><eb:To><eb:PartyId/></eb:To>',
+    '<eb:CPAId>P8QA</eb:CPAId><eb:ConversationId>4513c160-2668-4da7-8f52-acb508137b02</eb:ConversationId><eb:Service>GetReservationRQ</eb:Service><eb:Action>GetReservationRQ</eb:Action>',
+    `<eb:MessageData><eb:MessageId>${requestMid}</eb:MessageId><eb:Timestamp>2026-11-21T17:27:44Z</eb:Timestamp></eb:MessageData></eb:MessageHeader></soap-env:Header>`,
+    `<soap-env:Body>${getReservationPayload('QWERTZ')}</soap-env:Body></soap-env:Envelope>`,
+  ].join('');
+  /** El evento que emite el transporte SOAP al terminar cada request, con el `MessageId` de la respuesta. */
+  const endEvent = (id: string, extra: Record<string, unknown> = {}) => ({
+    level: 'info',
+    message: 'sabre.request.end',
+    context: { protocol: 'soap', service: 'updateReservation', action: 'GetReservationRQ', attempt: 1, status: 200, durationMs: 12, messageId: id, warnings: 0, ...extra },
+  });
+  /** Get Booking del mismo PNR: los vuelos de `realistic` (B6 3309 y 1908) también en `allSegments[].text`. */
+  const booking = (extra: Record<string, unknown> = {}) => ({
+    bookingId: 'QWERTZ',
+    flights: [
+      { itemId: '8', flightNumber: 3309, airlineCode: 'B6', fromAirportCode: 'JFK', toAirportCode: 'FLL', departureDate: '2021-03-30', flightStatusCode: 'UN' },
+      { itemId: '9', flightNumber: 1908, airlineCode: 'B6', fromAirportCode: 'FLL', toAirportCode: 'JFK', departureDate: '2021-04-02', flightStatusCode: 'HK' },
+    ],
+    allSegments: [
+      { id: '8', type: 'FLIGHT', text: '3309', vendorCode: 'B6', startDate: '2021-03-30', startLocationCode: 'JFK', endLocationCode: 'FLL' },
+      { id: '9', type: 'FLIGHT', text: '1908', vendorCode: 'B6', startDate: '2021-04-02', startLocationCode: 'FLL', endLocationCode: 'JFK' },
+    ],
+    ...extra,
+  });
+
+  function fixtureFor({
+    response = realistic,
+    events = [endEvent(messageId)],
+    rest = booking(),
+    results = [{ step: 'GetReservationRQ Stateful', ok: true }],
+  }: { response?: string; events?: unknown[]; rest?: unknown; results?: unknown[] } = {}) {
+    const { anonymizer, scrub } = scrubberFor();
+    const fixture = scrubFixture(scrub, {
+      recordedAt: '2026-11-21',
+      environment: 'production',
+      meta: { step: 'read', locator: 'QWERTZ' },
+      results,
+      findings: {},
+      events,
+      requests: [
+        { operation: 'reservation.get', protocol: 'soap', method: 'POST', url: 'https://example.test/websvc', body: request },
+        { operation: 'booking.get', protocol: 'rest', method: 'POST', url: 'https://example.test/v1/trip/orders/getBooking', body: JSON.stringify({ confirmationId: 'QWERTZ' }) },
+      ],
+      responses: [
+        { operation: 'reservation.get', status: 200, attempts: 1, body: response },
+        { operation: 'booking.get', status: 200, attempts: 1, body: JSON.stringify(rest) },
+      ],
+    });
+    // Lo mismo que revisa writeFixture antes de escribir.
+    const text = `${JSON.stringify(fixture, null, 2)}\n`;
+    return { fixture, text, scrub, details: scrub.leakDetails(text), general: anonymizer.leaks(text) };
+  }
+  const restBody = (fixture: any) => JSON.parse(fixture.responses[1].body);
+
+  it('reproduce la corrida: con MessageId y allSegments la fixture sale limpia', () => {
+    const { details, general, text } = fixtureFor();
+    expect(details).toEqual([]);
+    expect(general).toEqual([]);
+    for (const real of ['QWERTZ', 'JKLMNP', 'P8QA', 'ZQ7', 'GUTIÉRREZ', 'MARÍA', 'LUPITA', '5512345678', 'maria.g', '0012345678901']) expect(text, real).not.toContain(real);
+  });
+
+  it('el MessageId se tapa en el sobre, en el request y en el evento del logger', () => {
+    const { fixture, details, text } = fixtureFor({ rest: { bookingId: 'QWERTZ' } });
+    expect(details).toEqual([]);
+    expect(text).not.toContain(messageId);
+    expect(text).not.toContain(requestMid);
+    expect(text).not.toContain('8b06a5d6');
+    expect(fixture.events[0].context.messageId).toBe('9999999999999999999');
+    expect(fixture.responses[0].body).toContain('<eb:MessageId>9999999999999999999</eb:MessageId>');
+    expect(fixture.requests[0].body).toMatch(/<eb:MessageId>XXX:[X9]{8}-[X9]{4}-[X9]{4}-[X9]{4}-[X9]{12}<\/eb:MessageId>/);
+    expect(fixture.responses[0].body).not.toContain('<eb:RefToMessageId>mid:');
+  });
+
+  it('el MessageId de un request que no se graba (sesión, AAA, IgnoreTransaction) también se tapa en su evento', () => {
+    const { fixture, details, text } = fixtureFor({ events: [endEvent(messageId), endEvent('1669693781580050940', { action: 'SabreCommandLLSRQ' })] });
+    expect(details).toEqual([]);
+    expect(text).not.toContain('1669693781580050940');
+    expect(fixture.events[1].context.messageId).toBe('9999999999999999999');
+  });
+
+  it('los números de vuelo de allSegments[].text quedan si el segmento es FLIGHT', () => {
+    const { fixture, details } = fixtureFor({ events: [] });
+    expect(details).toEqual([]);
+    expect(restBody(fixture).allSegments.map((s: any) => `${s.type}:${s.text}`)).toEqual(['FLIGHT:3309', 'FLIGHT:1908']);
+    expect(restBody(fixture).flights.map((f: any) => f.flightNumber)).toEqual([3309, 1908]);
+    expect(fixture.responses[0].body).toContain('<stl19:FlightNumber>3309</stl19:FlightNumber>');
+  });
+
+  describe('no se debilita el control: lo que coincide con un vuelo o con el MessageId sigue siendo fuga', () => {
+    const fields = (details: Array<{ field: string; value: string }>) => details.map((d) => `${d.field}=${d.value}`);
+
+    it('un teléfono, un boleto, un documento y un nombre con el número de un vuelo', () => {
+      for (const [extra, expected] of [
+        [{ contactInfo: { phones: [{ number: '3309' }] } }, ['number=3309']],
+        [{ flightTickets: [{ number: '1908' }] }, ['number=1908']],
+        [{ travelers: [{ identityDocuments: [{ documentNumber: '1908' }] }] }, ['documentNumber=1908']],
+        [{ travelers: [{ givenName: '3309', surname: 'GUTIÉRREZ' }] }, ['givenName=3309', 'givenName=3309']],
+      ] as const) {
+        const { details } = fixtureFor({ events: [], rest: booking(extra) });
+        expect(fields(details), JSON.stringify(extra)).toEqual(expected);
+      }
+      // En el STL: el teléfono y un FirstName con el número de un vuelo.
+      const response = realistic.replace('<stl19:FirstName>MARÍA JOSÉ</stl19:FirstName>', '<stl19:FirstName>1908</stl19:FirstName>');
+      expect(fields(fixtureFor({ response, events: [], rest: { bookingId: 'QWERTZ' } }).details)).toEqual(['FirstName=1908', 'FirstName=1908']);
+    });
+
+    it('allSegments[].text que no es de un FLIGHT, o que no tiene forma de número de vuelo, se tapa y se vigila', () => {
+      const rest = booking({
+        allSegments: [
+          { id: '8', type: 'FLIGHT', text: '3309' },
+          { id: '20', type: 'OTHER', text: '1908' },
+          { id: '21', type: 'HOTEL', text: 'HOTEL GUTIERREZ' },
+          { id: '22', type: 'FLIGHT', text: 'LLAMAR 5598765432' },
+          { id: '23', type: 'FLIGHT', text: '55123' },
+        ],
+      });
+      const { fixture, details, scrub } = fixtureFor({ events: [], rest });
+      expect(restBody(fixture).allSegments.map((s: any) => s.text)).toEqual(['3309', '9999', 'XXXXX XXXXXXXXX', 'XXXXXX 9999999999', '99999']);
+      // El 1908 del OTHER sigue en el texto por flights[].flightNumber: es fuga.
+      expect(fields(details)).toEqual(['text=1908']);
+      expect(scrub.leaks('HOTEL GUTIERREZ')).toEqual(['text']);
+      expect(scrub.leaks('LLAMAR 5598765432')).toEqual(['text']);
+      expect(scrub.leaks('vuelo 55123')).toEqual(['text']);
+    });
+
+    it('un text con un número de vuelo fuera de allSegments (remarks) sigue siendo fuga', () => {
+      const { details } = fixtureFor({ events: [], rest: booking({ remarks: [{ type: 'GENERAL', text: '3309' }] }) });
+      expect(fields(details)).toEqual(['text=3309']);
+    });
+
+    it('un elemento Number o Text del STL con el número de un vuelo sigue siendo fuga', () => {
+      const response = realistic.replace('<stl19:Number>5512345678</stl19:Number>', '<stl19:Number>3309</stl19:Number>');
+      const { details } = fixtureFor({ response, events: [], rest: { bookingId: 'QWERTZ' } });
+      expect(fields(details)).toEqual(['Number=3309']);
+    });
+
+    it('un teléfono, un boleto, un documento y un nombre iguales al MessageId', () => {
+      for (const rest of [
+        { contactInfo: { phones: [{ number: messageId }] } },
+        { flightTickets: [{ number: messageId }] },
+        { travelers: [{ identityDocuments: [{ documentNumber: messageId }] }] },
+        { travelers: [{ givenName: messageId }] },
+      ]) {
+        const { details, text } = fixtureFor({ rest });
+        expect(text).not.toContain(messageId);
+        expect(details.length, JSON.stringify(rest)).toBeGreaterThan(0);
+        expect(details.every((d) => d.value === messageId)).toBe(true);
+      }
+    });
+
+    it('un teléfono con la forma del MessageId (19 dígitos), pero otro valor, sigue siendo fuga', () => {
+      const phone = '1669686781576790941';
+      const response = realistic.replace('<stl19:Number>5512345678</stl19:Number>', `<stl19:Number>${phone}</stl19:Number>`);
+      const { details } = fixtureFor({ response, events: [endEvent(messageId, { note: `llamar al ${phone}` })], rest: { bookingId: 'QWERTZ' } });
+      expect(fields(details)).toEqual([`Number=${phone}`]);
+    });
+
+    it('un MessageId fuera de MessageHeader/MessageData no se trata como MessageId', () => {
+      const { scrub } = scrubberFor();
+      const out = scrub.xml('<a><MessageId>5512345678</MessageId><MessageData><MessageId>5512345679</MessageId></MessageData></a>');
+      expect(out).toBe('<a><MessageId>9999999999</MessageId><MessageData><MessageId>9999999999</MessageId></MessageData></a>');
+      expect(scrub.leaks('llamar al 5512345678 o al 5512345679')).toEqual(['MessageId']);
+      expect(scrub.text('5512345678 5512345679')).toBe('5512345678 5512345679');
+    });
+
+    it('un MessageId real que quedó en un texto que no pasó por el scrubber es fuga', () => {
+      const { scrub } = fixtureFor();
+      expect(fields(scrub.leakDetails(`soporte: ${messageId}`))).toEqual([`MessageId=${messageId}`]);
+      expect(fields(scrub.leakDetails(`soporte: ${requestMid}`))).toEqual([`MessageId=${requestMid}`]);
+    });
+
+    it('un MessageId dentro de otro número no se toca: el boleto entero sigue vigilado', () => {
+      const ticket = `00${messageId}`;
+      const { details, text } = fixtureFor({ events: [endEvent(messageId, { note: `TKT ${ticket}` })], rest: { bookingId: 'QWERTZ', flightTickets: [{ number: ticket }] } });
+      expect(text).toContain(ticket);
+      expect(fields(details)).toEqual([`number=${ticket}`]);
+    });
+
+    /** Revisión de #284, M-1: el reemplazo del MessageId no puede esconder un valor vigilado que lo contiene. */
+    const withText = (text: string) => realistic.replace('<stl19:Text>PAX VIP &amp; TKT 0012345678901</stl19:Text>', `<stl19:Text>${text}</stl19:Text>`);
+    const withPhone = (phone: string) => realistic.replace('<stl19:Number>5512345678</stl19:Number>', `<stl19:Number>${phone}</stl19:Number>`);
+    const warn = (context: Record<string, unknown>) => ({ level: 'warn', message: 'nota', context });
+
+    it('A: un remark que contiene el MessageId real, repetido en un evento, sigue siendo fuga', () => {
+      const remark = `REF ${messageId} GOMEZ`;
+      const { details, text } = fixtureFor({ response: withText(remark), events: [endEvent(messageId), warn({ remark: `remark: ${remark}` })], rest: { bookingId: 'QWERTZ' } });
+      expect(fields(details)).toEqual([`Text=${remark}`]);
+      expect(text).toContain('GOMEZ');
+    });
+
+    it('B: un context.messageId corto no se registra: se vigila, y el teléfono que lo contiene sigue siendo fuga', () => {
+      const { details, text } = fixtureFor({ response: withPhone('555 1234'), events: [endEvent('555'), warn({ note: 'TEL 555 1234' })], rest: { bookingId: 'QWERTZ' } });
+      expect(fields(details)).toEqual(['Number=555 1234', 'MessageId=555']);
+      expect(text).toContain('TEL 555 1234');
+    });
+
+    it('C: un MessageId del sobre sin forma de MessageId se tapa y se vigila, y el teléfono que lo contiene sigue siendo fuga', () => {
+      const response = withPhone('4455 1234').replace(`<eb:MessageId>${messageId}</eb:MessageId>`, '<eb:MessageId>4455</eb:MessageId>');
+      const { fixture, details } = fixtureFor({ response, events: [], rest: { bookingId: 'QWERTZ' }, results: [{ step: 'read', ok: true, note: 'TEL 4455 1234' }] });
+      expect(fixture.responses[0].body).toContain('<eb:MessageId>9999</eb:MessageId>');
+      expect(fixture.results[0].note).toBe('TEL 4455 1234');
+      expect(fields(details)).toEqual(['MessageId=4455', 'Number=4455 1234']);
+    });
+
+    it('un nombre o un correo que contiene el MessageId como palabra suelta sigue siendo fuga', () => {
+      const name = fixtureFor({ rest: { bookingId: 'QWERTZ', travelers: [{ givenName: `ANA ${messageId}` }] } });
+      expect(fields(name.details)).toEqual(expect.arrayContaining([`givenName=ANA ${messageId}`, `givenName=${messageId}`]));
+      const email = fixtureFor({ rest: { bookingId: 'QWERTZ', contactInfo: { emails: [`${messageId}@example.com`] } } });
+      expect(fields(email.details)).toEqual([`emails=${messageId}@example.com`]);
+    });
+
+    it('solo se registra lo que tiene forma de MessageId: de 15 a 20 dígitos, o mid: y un UUID', () => {
+      const { scrub } = scrubberFor();
+      for (const id of ['123456789012345', '12345678901234567890', 'mid:8b06a5d6-8324-45d6-a77b-9e36e29b3caa', 'MID:8B06A5D6-8324-45D6-A77B-9E36E29B3CAA']) {
+        expect(scrub.messageId(id), id).toBe(id.replace(/\p{L}/gu, 'X').replace(/\p{N}/gu, '9'));
+        expect(scrub.text(`id ${id}`), id).not.toContain(id);
+        expect(scrub.leaks(scrub.text(`id ${id}`)), id).toEqual([]);
+        // Sin tapar sigue siendo fuga.
+        expect(scrub.leaks(`id ${id}`), id).toEqual(['MessageId']);
+      }
+      for (const id of ['12345678901234', '123456789012345678901', 'mid:8b06a5d6', 'mid:x8b06a5d6-8324-45d6-a77b-9e36e29b3caa', 'ABC', '4455']) {
+        scrub.messageId(id);
+        expect(scrub.text(`id ${id}`), id).toBe(`id ${id}`);
+        expect(scrub.leaks(`id ${id}`), id).toEqual(['MessageId']);
+      }
+    });
+
+    it('localizadores, PCC, sine, nombres, teléfono, correo y boleto del sobre siguen vigilados', () => {
+      const { scrub } = fixtureFor();
+      const leaked = scrub.leaks('GUTIÉRREZ LUPITA ROMERO 5512345678 maria.g@example.com PAX VIP & TKT 0012345678901');
+      expect(leaked).toEqual(expect.arrayContaining(['LastName', 'Number', 'Address', 'Text', 'Name']));
+      expect(scrub.text('QWERTZ en P8QA')).toBe('AAAAAA en XXXX');
+    });
   });
 });
 

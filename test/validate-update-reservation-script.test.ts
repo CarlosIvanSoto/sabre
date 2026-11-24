@@ -423,13 +423,18 @@ describe('scrubFixture: los falsos positivos del paso read (#272)', () => {
     ...extra,
   });
 
-  function fixtureFor({ response = realistic, events = [endEvent(messageId)], rest = booking() }: { response?: string; events?: unknown[]; rest?: unknown } = {}) {
+  function fixtureFor({
+    response = realistic,
+    events = [endEvent(messageId)],
+    rest = booking(),
+    results = [{ step: 'GetReservationRQ Stateful', ok: true }],
+  }: { response?: string; events?: unknown[]; rest?: unknown; results?: unknown[] } = {}) {
     const { anonymizer, scrub } = scrubberFor();
     const fixture = scrubFixture(scrub, {
       recordedAt: '2026-11-21',
       environment: 'production',
       meta: { step: 'read', locator: 'QWERTZ' },
-      results: [{ step: 'GetReservationRQ Stateful', ok: true }],
+      results,
       findings: {},
       events,
       requests: [
@@ -569,6 +574,55 @@ describe('scrubFixture: los falsos positivos del paso read (#272)', () => {
       const { details, text } = fixtureFor({ events: [endEvent(messageId, { note: `TKT ${ticket}` })], rest: { bookingId: 'QWERTZ', flightTickets: [{ number: ticket }] } });
       expect(text).toContain(ticket);
       expect(fields(details)).toEqual([`number=${ticket}`]);
+    });
+
+    /** Revisión de #284, M-1: el reemplazo del MessageId no puede esconder un valor vigilado que lo contiene. */
+    const withText = (text: string) => realistic.replace('<stl19:Text>PAX VIP &amp; TKT 0012345678901</stl19:Text>', `<stl19:Text>${text}</stl19:Text>`);
+    const withPhone = (phone: string) => realistic.replace('<stl19:Number>5512345678</stl19:Number>', `<stl19:Number>${phone}</stl19:Number>`);
+    const warn = (context: Record<string, unknown>) => ({ level: 'warn', message: 'nota', context });
+
+    it('A: un remark que contiene el MessageId real, repetido en un evento, sigue siendo fuga', () => {
+      const remark = `REF ${messageId} GOMEZ`;
+      const { details, text } = fixtureFor({ response: withText(remark), events: [endEvent(messageId), warn({ remark: `remark: ${remark}` })], rest: { bookingId: 'QWERTZ' } });
+      expect(fields(details)).toEqual([`Text=${remark}`]);
+      expect(text).toContain('GOMEZ');
+    });
+
+    it('B: un context.messageId corto no se registra: se vigila, y el teléfono que lo contiene sigue siendo fuga', () => {
+      const { details, text } = fixtureFor({ response: withPhone('555 1234'), events: [endEvent('555'), warn({ note: 'TEL 555 1234' })], rest: { bookingId: 'QWERTZ' } });
+      expect(fields(details)).toEqual(['Number=555 1234', 'MessageId=555']);
+      expect(text).toContain('TEL 555 1234');
+    });
+
+    it('C: un MessageId del sobre sin forma de MessageId se tapa y se vigila, y el teléfono que lo contiene sigue siendo fuga', () => {
+      const response = withPhone('4455 1234').replace(`<eb:MessageId>${messageId}</eb:MessageId>`, '<eb:MessageId>4455</eb:MessageId>');
+      const { fixture, details } = fixtureFor({ response, events: [], rest: { bookingId: 'QWERTZ' }, results: [{ step: 'read', ok: true, note: 'TEL 4455 1234' }] });
+      expect(fixture.responses[0].body).toContain('<eb:MessageId>9999</eb:MessageId>');
+      expect(fixture.results[0].note).toBe('TEL 4455 1234');
+      expect(fields(details)).toEqual(['MessageId=4455', 'Number=4455 1234']);
+    });
+
+    it('un nombre o un correo que contiene el MessageId como palabra suelta sigue siendo fuga', () => {
+      const name = fixtureFor({ rest: { bookingId: 'QWERTZ', travelers: [{ givenName: `ANA ${messageId}` }] } });
+      expect(fields(name.details)).toEqual(expect.arrayContaining([`givenName=ANA ${messageId}`, `givenName=${messageId}`]));
+      const email = fixtureFor({ rest: { bookingId: 'QWERTZ', contactInfo: { emails: [`${messageId}@example.com`] } } });
+      expect(fields(email.details)).toEqual([`emails=${messageId}@example.com`]);
+    });
+
+    it('solo se registra lo que tiene forma de MessageId: de 15 a 20 dígitos, o mid: y un UUID', () => {
+      const { scrub } = scrubberFor();
+      for (const id of ['123456789012345', '12345678901234567890', 'mid:8b06a5d6-8324-45d6-a77b-9e36e29b3caa', 'MID:8B06A5D6-8324-45D6-A77B-9E36E29B3CAA']) {
+        expect(scrub.messageId(id), id).toBe(id.replace(/\p{L}/gu, 'X').replace(/\p{N}/gu, '9'));
+        expect(scrub.text(`id ${id}`), id).not.toContain(id);
+        expect(scrub.leaks(scrub.text(`id ${id}`)), id).toEqual([]);
+        // Sin tapar sigue siendo fuga.
+        expect(scrub.leaks(`id ${id}`), id).toEqual(['MessageId']);
+      }
+      for (const id of ['12345678901234', '123456789012345678901', 'mid:8b06a5d6', 'mid:x8b06a5d6-8324-45d6-a77b-9e36e29b3caa', 'ABC', '4455']) {
+        scrub.messageId(id);
+        expect(scrub.text(`id ${id}`), id).toBe(`id ${id}`);
+        expect(scrub.leaks(`id ${id}`), id).toEqual(['MessageId']);
+      }
     });
 
     it('localizadores, PCC, sine, nombres, teléfono, correo y boleto del sobre siguen vigilados', () => {

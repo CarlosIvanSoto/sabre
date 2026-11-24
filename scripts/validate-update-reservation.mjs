@@ -121,6 +121,7 @@ import {
   errorMentions,
   formatStlErrors,
   isLocator,
+  isXml,
   pccAliasText,
   previewUpdate,
   readAfterAaa,
@@ -290,8 +291,6 @@ function printSegments(title, segments, comparison) {
 }
 
 // ---------- Fixture ----------
-
-const isXml = (body) => typeof body === 'string' && body.trimStart().startsWith('<');
 
 /** Anonimiza todo, revisa que no quede un dato real y escribe; si queda uno, corta con código 1. */
 function writeFixture(name, meta, findings) {

@@ -731,6 +731,8 @@ const SINE_TEXT = new Set(['CreationAgentID', 'UpdateAgentID', 'AgentSine', 'Age
  * tampoco se graba tal cual: se tapa y se reemplaza igual en todo el texto (eventos del logger).
  */
 const MESSAGE_ID_TEXT = new Set(['MessageId', 'RefToMessageId']);
+/** La forma de un `MessageId`: el número de la respuesta o `mid:` y el UUID del request. Lo demás no se registra. */
+const MESSAGE_ID = /^(?:\d{15,20}|mid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 /** Un número de vuelo: hasta cuatro dígitos y, a veces, un sufijo operativo. */
 const FLIGHT_NUMBER = /^\d{1,4}[A-Z]?$/;
 /** Elementos con datos de personas: además de enmascararse, se vigila que su valor no quede (`leaks`). */
@@ -864,10 +866,13 @@ function tokenize(body) {
  *   `context.messageId` de los eventos `sabre.request.*` del transporte) y devuelve su reemplazo.
  *   `xml` ya registra los de `MessageHeader/MessageData/MessageId` y `RefToMessageId`. Un `MessageId`
  *   registrado se tapa en el sobre y `text` lo reemplaza donde aparezca como valor entero, sin vigilarlo.
+ *   Solo se registra lo que tiene forma de `MessageId` (`MESSAGE_ID`); lo demás se enmascara y se
+ *   vigila como dato de persona, así que corta si sigue en el texto.
  * - `leaks(text)`: los campos cuyos valores de personas siguen en el texto, sin repetir.
  * - `leakDetails(text)`: los mismos, como `{ field, value }` con el valor real (solo para la consola).
- *   También un `MessageId` real que siga en el texto y, aunque ya no esté, uno igual a un valor de
- *   persona vigilado o a una palabra de un nombre: ante la duda, se corta.
+ *   También un `MessageId` real que siga en el texto y, aunque ya no esté, uno contenido como valor
+ *   entero en un valor de persona vigilado o en una palabra de un nombre (o igual a uno de ellos):
+ *   `text` lo habría tapado y escondido el resto de ese valor. Ante la duda, se corta.
  *
  * @param {{ aliasOf: (locator: string) => string, secrets?: ReadonlyArray<string | undefined> }} options
  */
@@ -908,6 +913,10 @@ export function createScrubber({ aliasOf, secrets = [] }) {
   const messageId = (value) => {
     const trimmed = String(value).trim();
     if (trimmed === '') return value;
+    if (!MESSAGE_ID.test(trimmed)) {
+      watch('MessageId', trimmed, true);
+      return mask(value);
+    }
     if (!messageIds.has(trimmed)) messageIds.set(trimmed, mask(trimmed));
     return messageIds.get(trimmed);
   };
@@ -1031,9 +1040,10 @@ export function createScrubber({ aliasOf, secrets = [] }) {
     for (const [value, field] of watched) if (bounded(value, 'u').test(text)) found.push({ field, value });
     for (const [word, field] of names) if (bounded(word, 'iu').test(text)) found.push({ field, value: word });
     for (const id of messageIds.keys()) {
-      // finish ya lo reemplazó: si coincide con un dato de persona, no se sabe cuál de los dos se tapó.
-      if (watched.has(id)) found.push({ field: watched.get(id), value: id });
-      if (names.has(id.toUpperCase())) found.push({ field: names.get(id.toUpperCase()), value: id });
+      // finish ya lo reemplazó: dentro de un dato de persona (o igual a uno) habría escondido el resto.
+      const inside = bounded(id, 'iu');
+      for (const [value, field] of watched) if (inside.test(value)) found.push({ field, value });
+      for (const [word, field] of names) if (inside.test(word)) found.push({ field, value: word });
       if (bounded(id, 'u').test(text)) found.push({ field: 'MessageId', value: id });
     }
     return found;
@@ -1045,12 +1055,13 @@ export function createScrubber({ aliasOf, secrets = [] }) {
 
 // ---------- Fixture ----------
 
-const isXmlBody = (body) => typeof body === 'string' && body.trimStart().startsWith('<');
+/** Un body capturado que es un sobre XML (SOAP), no JSON de REST. */
+export const isXml = (body) => typeof body === 'string' && body.trimStart().startsWith('<');
 
 /** Un body capturado (SOAP, JSON de REST u otra cosa) por el scrubber; lo que no se reconoce, enmascarado. */
 export function scrubBody(scrub, body) {
   if (body === undefined || body === '') return body;
-  if (isXmlBody(body)) return scrub.xml(body);
+  if (isXml(body)) return scrub.xml(body);
   try {
     return JSON.stringify(scrub.json(JSON.parse(body)));
   } catch {

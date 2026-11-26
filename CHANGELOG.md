@@ -23,6 +23,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `type` and the flight: `marketingAirline`, `flightNumber`, `bookingClass`, `origin`,
   `destination`, `departureDate`), all as Sabre sends them. The SDK does not interpret `action`
   or `status`, and `CustomerName` is not typed (#285).
+- `seats` is a required field of `ReservationHistoryTransaction`: if you build that type by hand
+  (your own mocks or fixtures), add `seats: []` to it, or `tsc` will complain (#285).
 - The fake of `sabre-client/testing` takes `seats` when seeding a history transaction, and an
   `action: ''` (sent without `Action`) in its entries (#285).
 

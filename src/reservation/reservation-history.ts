@@ -221,14 +221,18 @@ export function parseReservationHistoryResponse(response: SoapResponse): Reserva
       new SabreWarning(`${RESERVATION_HISTORY_SERVICE}: ${found.count} ${element} sin Action${where}`, {
         service: RESERVATION_HISTORY_SERVICE,
         code: HISTORY_ENTRY_WITHOUT_ACTION,
-        raw: response.raw,
+        // Sin `raw`: el sobre trae nombres, SSR y tarjetas. El resumen es solo elemento, cuenta y rph.
       }),
     ];
   });
   return { transactions, warnings: [...response.warnings, ...withoutAction], ...respondedAtField(response.raw) };
 }
 
-/** El `@Action` del elemento, o `''` si falta; en ese caso lo anota para el warning. */
+/**
+ * El `@Action` del elemento, o `''` si falta; en ese caso lo anota para el warning. Un elemento sin
+ * atributos ni hijos (`<Seat/>`) llega del parser como `''`, no como objeto: no se lee ni se
+ * cuenta, igual que antes de #285.
+ */
 function actionOf(entry: unknown, element: string, rph: number | undefined, missing: MissingActions): string {
   const action = attribute(entry, 'Action');
   if (action !== undefined) return action;

@@ -281,6 +281,9 @@ describe('reservation.history: elementos sin @Action', () => {
     expect(warnings[0]).toBeInstanceOf(SabreWarning);
     expect(warnings[0]).toMatchObject({ service: 'itineraryHistory', code: WITHOUT_ACTION, message: `itineraryHistory: 1 ${element} sin Action (RPH 4)` });
     expect(warnings[0]!.message).not.toContain('DATO DEL PASAJERO');
+    // Ni el mensaje ni el raw ni nada del warning lleva el texto del elemento ni el sobre.
+    expect((warnings[0] as SabreWarning).raw).toBeUndefined();
+    expect(JSON.stringify(warnings[0], Object.getOwnPropertyNames(warnings[0]))).not.toContain('DATO DEL PASAJERO');
   });
 
   it('un Action vacío cuenta igual que uno ausente', async () => {

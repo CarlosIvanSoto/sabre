@@ -5,6 +5,7 @@ import { SabreBusinessError, SabreGatewayError, SabreWarning } from '../src/inde
 import { reservationHistoryPayload } from '../src/reservation/reservation-history.js';
 import cert from './fixtures/activity.sandbox-history.json';
 import inQueue from './fixtures/activity.sandbox-history-in-queue.json';
+import { OFFICIAL_HISTORY_SAMPLE } from './fixtures/history-official-sample.js';
 import { mockFetch } from './helpers.js';
 import { entry, legacyClient, rejection, SESSION_TOKEN, sentBody, sentTag, sessionOpened, soap, success, xml } from './soap-helpers.js';
 
@@ -106,6 +107,7 @@ describe('reservation.history: respuestas', () => {
           supplierRef: 'DCAA*DVDMYA',
         },
       ],
+      seats: [],
       generalInfo: [],
       remarks: [],
       accounting: [],
@@ -142,6 +144,7 @@ describe('reservation.history: respuestas', () => {
     expect(transaction).toEqual({
       rph: 3,
       flightSegments: [],
+      seats: [],
       generalInfo: [{ action: 'XX', text: 'LINEA 1\nLINEA 2' }],
       remarks: [{ action: 'H', text: 'UN REMARK' }],
       accounting: [{ action: 'HK', type: 'R', linkCode: '1' }],
@@ -168,18 +171,151 @@ describe('reservation.history: respuestas', () => {
     expect(error).toBeInstanceOf(SabreBusinessError);
     expect(error).toMatchObject({ service: 'itineraryHistory', retryable: false });
   });
+});
+
+const SEATS_IN_ITEM = `<Item RPH="2"><Seats>
+  <Seat Action="XS" CustomerName="PEREZ/JUAN" Number="1.1" Status="XX" Type="ABC123"><FlightSegment DepartureDateTime="12-21" FlightNumber="1234" ResBookDesigCode="Y"><DestinationLocation LocationCode="DBM"/><OriginLocation LocationCode="FSG"/><MarketingAirline Code="XX" FlightNumber="1234"/></FlightSegment></Seat>
+  <Seat Action="X4G*" Number="2.1" Status="KKUN"><FlightSegment DepartureDateTime="12-21" ResBookDesigCode="K"><DestinationLocation LocationCode="DBM"/><OriginLocation LocationCode="FSG"/><MarketingAirline Code="XX" FlightNumber="1235"/></FlightSegment></Seat>
+</Seats></Item>`;
+const info = (rph: number, inner: string) => `<HistoricalInfo RPH="${rph}">${inner}</HistoricalInfo>`;
+const items = (inner: string) => `<ItineraryInfo><ReservationItems>${inner}</ReservationItems></ItineraryInfo>`;
+
+describe('reservation.history: asientos (Item/Seats/Seat)', () => {
+  it('lee los asientos del ejemplo del design, en un Item aparte del vuelo, sin CustomerName', async () => {
+    const flight = '<Item RPH="1"><FlightSegment Action="AS" FlightNumber="1234" Status="HK"/></Item>';
+    const { session } = await openWith(xml(200, soap(historyRS(`${complete}${info(7, items(flight + SEATS_IN_ITEM))}`))));
+    const { transactions, warnings } = await session.reservation.history('ABC123');
+
+    expect(warnings).toEqual([]);
+    expect(transactions[0]!.flightSegments).toEqual([{ action: 'AS', status: 'HK', flightNumber: '1234' }]);
+    expect(transactions[0]!.seats).toEqual([
+      {
+        action: 'XS',
+        status: 'XX',
+        number: '1.1',
+        type: 'ABC123',
+        marketingAirline: 'XX',
+        flightNumber: '1234',
+        bookingClass: 'Y',
+        origin: 'FSG',
+        destination: 'DBM',
+        departureDate: '12-21',
+      },
+      // `X4G*` con asterisco y `KKUN` tal cual; el número de vuelo cae a MarketingAirline.
+      {
+        action: 'X4G*',
+        status: 'KKUN',
+        number: '2.1',
+        marketingAirline: 'XX',
+        flightNumber: '1235',
+        bookingClass: 'K',
+        origin: 'FSG',
+        destination: 'DBM',
+        departureDate: '12-21',
+      },
+    ]);
+    expect(JSON.stringify(transactions)).not.toContain('PEREZ');
+  });
+
+  it('junta los asientos de varios Item y de varios Seats, en orden', async () => {
+    const seat = (action: string, number: string) => `<Seat Action="${action}" Number="${number}"/>`;
+    const inner = items(`<Item><Seats>${seat('A4G', '1.1')}${seat('A4G', '1.2')}</Seats><Seats>${seat('X4G', '2.1')}</Seats></Item><Item><Seats>${seat('X4G*', '3.1')}</Seats></Item>`);
+    const { session } = await openWith(xml(200, soap(historyRS(`${complete}${info(1, inner)}`))));
+    const [transaction] = (await session.reservation.history('ABC123')).transactions;
+    expect(transaction!.seats.map((seat) => [seat.action, seat.number])).toEqual([
+      ['A4G', '1.1'],
+      ['A4G', '1.2'],
+      ['X4G', '2.1'],
+      ['X4G*', '3.1'],
+    ]);
+  });
+
+  it('un Seat sin FlightSegment trae solo sus atributos', async () => {
+    const inner = items('<Item><Seats><Seat Action="A4G" Status="NNSS" Type="W"/></Seats></Item>');
+    const { session } = await openWith(xml(200, soap(historyRS(`${complete}${info(1, inner)}`))));
+    expect((await session.reservation.history('ABC123')).transactions[0]!.seats).toEqual([{ action: 'A4G', status: 'NNSS', type: 'W' }]);
+  });
+
+  it('las transacciones sin asientos traen seats: []', async () => {
+    const { session } = await openWith(xml(200, soap(DOC_SAMPLE)));
+    const { transactions } = await session.reservation.history('ABC123');
+    expect(transactions.map((t) => t.seats)).toEqual([[], []]);
+  });
+});
+
+const WITHOUT_ACTION = 'HISTORY_ENTRY_WITHOUT_ACTION';
+
+describe('reservation.history: elementos sin @Action', () => {
+  it('el sample oficial completo se parsea: 6 transacciones y los tres INVOICE con action vacío', async () => {
+    const { session } = await openWith(xml(200, soap(OFFICIAL_HISTORY_SAMPLE)));
+    const { transactions, warnings } = await session.reservation.history('KBGQBN');
+
+    expect(transactions.map((t) => t.rph)).toEqual([1, 2, 3, 4, 5, 6]);
+    const invoices = transactions.filter((t) => t.generalInfo.some((entry) => entry.text === 'INVOICE'));
+    expect(invoices.map((t) => t.rph)).toEqual([1, 2, 5]);
+    for (const t of invoices) expect(t.generalInfo.find((entry) => entry.text === 'INVOICE')).toEqual({ action: '', text: 'INVOICE' });
+    // Las demás conservan su Action.
+    expect(transactions[0]!.generalInfo.map((entry) => entry.action)).toEqual(['', 'A7', 'AT']);
+    expect(transactions[2]!.flightSegments.map((segment) => segment.action)).toEqual(['AS', 'AS']);
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toBeInstanceOf(SabreWarning);
+    expect(warnings[0]).toMatchObject({
+      service: 'itineraryHistory',
+      code: WITHOUT_ACTION,
+      message: 'itineraryHistory: 3 GeneralInfo sin Action (RPH 1, 2, 5)',
+    });
+  });
 
   it.each([
-    ['un GeneralInfo sin Action', '<GeneralInfo><Text>X</Text></GeneralInfo>'],
-    ['un Remark sin Action', '<RemarkInfo><Remark><Text>X</Text></Remark></RemarkInfo>'],
-    ['un FlightSegment sin Action', '<ItineraryInfo><ReservationItems><Item><FlightSegment Status="HK"/></Item></ReservationItems></ItineraryInfo>'],
-  ])('%s es un SabreGatewayError con el sobre en raw', async (_name, inner) => {
-    const payload = historyRS(`${complete}<HistoricalInfo RPH="1">${inner}</HistoricalInfo>`);
+    ['GeneralInfo', '<GeneralInfo><Text>DATO DEL PASAJERO</Text></GeneralInfo>', (t: { generalInfo: unknown[] }) => t.generalInfo],
+    ['Remark', '<RemarkInfo><Remark><Text>DATO DEL PASAJERO</Text></Remark></RemarkInfo>', (t: { remarks: unknown[] }) => t.remarks],
+    ['FlightSegment', items('<Item><FlightSegment Status="HK" FlightNumber="9"/></Item>'), (t: { flightSegments: unknown[] }) => t.flightSegments],
+    ['Seat', items('<Item><Seats><Seat Number="1.1" Status="KKKK"/></Seats></Item>'), (t: { seats: unknown[] }) => t.seats],
+  ])('un %s sin Action se conserva con action vacío y da un warning', async (element, inner, pick) => {
+    const { session } = await openWith(xml(200, soap(historyRS(`${complete}${info(4, inner)}`))));
+    const { transactions, warnings } = await session.reservation.history('ABC123');
+
+    expect(pick(transactions[0]! as never)).toEqual([expect.objectContaining({ action: '' })]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toBeInstanceOf(SabreWarning);
+    expect(warnings[0]).toMatchObject({ service: 'itineraryHistory', code: WITHOUT_ACTION, message: `itineraryHistory: 1 ${element} sin Action (RPH 4)` });
+    expect(warnings[0]!.message).not.toContain('DATO DEL PASAJERO');
+  });
+
+  it('un Action vacío cuenta igual que uno ausente', async () => {
+    const { session } = await openWith(xml(200, soap(historyRS(`${complete}${info(1, '<GeneralInfo Action=""><Text>X</Text></GeneralInfo><GeneralInfo Action="  "><Text>Y</Text></GeneralInfo>')}`))));
+    const { transactions, warnings } = await session.reservation.history('ABC123');
+    expect(transactions[0]!.generalInfo).toEqual([{ action: '', text: 'X' }, { action: '', text: 'Y' }]);
+    expect(warnings.map((w) => w.message)).toEqual(['itineraryHistory: 2 GeneralInfo sin Action (RPH 1)']);
+  });
+
+  it('un solo warning por tipo de elemento, con la cuenta, y en un orden fijo; sin RPH no lo menciona', async () => {
+    const generalInfo = '<GeneralInfo><Text>A</Text></GeneralInfo><GeneralInfo><Text>B</Text></GeneralInfo>';
+    const seats = items('<Item><Seats><Seat Number="1.1"/></Seats></Item>');
+    const body = `${complete}${info(2, `${generalInfo}${seats}`)}<HistoricalInfo>${seats}<RemarkInfo><Remark><Text>C</Text></Remark></RemarkInfo></HistoricalInfo>${info(9, generalInfo)}`;
+    const { session } = await openWith(xml(200, soap(historyRS(body))));
+    const { warnings } = await session.reservation.history('ABC123');
+    expect(warnings.map((w) => w.message)).toEqual([
+      'itineraryHistory: 4 GeneralInfo sin Action (RPH 2, 9)',
+      'itineraryHistory: 1 Remark sin Action',
+      'itineraryHistory: 2 Seat sin Action (RPH 2)',
+    ]);
+  });
+
+  it('va después de los warnings de Sabre', async () => {
+    const payload = historyRS(
+      `<stl:ApplicationResults status="Complete">${success}${entry('Warning', 'WARN.SWS.HOST.WARNING_RETURNED', 'ALGO')}</stl:ApplicationResults>${info(1, '<GeneralInfo><Text>X</Text></GeneralInfo>')}`,
+    );
     const { session } = await openWith(xml(200, soap(payload)));
-    const error = await rejection(session.reservation.history('ABC123'));
-    expect(error).toBeInstanceOf(SabreGatewayError);
-    expect((error as Error).message).toMatch(/^itineraryHistory: respuesta no reconocida/);
-    expect((error as SabreGatewayError).raw).toContain('<TravelItineraryHistoryRS');
+    const { warnings } = await session.reservation.history('ABC123');
+    expect(warnings.map((w) => w.code)).toEqual(['WARN.SWS.HOST.WARNING_RETURNED', WITHOUT_ACTION]);
+  });
+
+  it('sin elementos sin Action no hay ese warning (la respuesta de CERT y el sample del design)', async () => {
+    const { session } = await openWith(recorded(cert), xml(200, soap(DOC_SAMPLE)));
+    expect((await session.reservation.history('ABC123')).warnings).toEqual([]);
+    expect((await session.reservation.history('ABC123')).warnings).toEqual([]);
   });
 });
 

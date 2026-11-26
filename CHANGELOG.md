@@ -7,6 +7,25 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `session.reservation.history`: a `GeneralInfo`, `Remark`, `FlightSegment` or `Seat` without
+  `@Action` no longer throws `SabreGatewayError` and loses the whole history. The official
+  sample sends `<GeneralInfo><Text>INVOICE</Text></GeneralInfo>` that way. The element is kept
+  with `action: ''` (the type stays `string`) and `warnings` gets one `SabreWarning`
+  (`service: 'itineraryHistory'`, `code: 'HISTORY_ENTRY_WITHOUT_ACTION'`) per kind of element,
+  with the count and the `rph` of the transactions, never the `Text` (#285).
+
+### Added
+
+- `ReservationHistoryTransaction.seats`: the `Item/Seats/Seat` of each transaction, in order
+  (`[]` when there are none), as the new `ReservationHistorySeat` (`action`, `status`, `number`,
+  `type` and the flight: `marketingAirline`, `flightNumber`, `bookingClass`, `origin`,
+  `destination`, `departureDate`), all as Sabre sends them. The SDK does not interpret `action`
+  or `status`, and `CustomerName` is not typed (#285).
+- The fake of `sabre-client/testing` takes `seats` when seeding a history transaction, and an
+  `action: ''` (sent without `Action`) in its entries (#285).
+
 ## [0.9.0] - 2026-11-20
 
 Confirming a schedule change, the entry point BX3 asked for (ADR-034). Everything is new and

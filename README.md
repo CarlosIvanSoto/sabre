@@ -542,7 +542,7 @@ const screen = await legacy.withSession((session) => session.command('W/PT¥*', 
 ```ts
 const { transactions } = await legacy.withSession((session) => session.reservation.history('ABC123'));
 // transactions[0] → { rph, createdAt: '2026-11-04T17:15', agent, agentDutyCode, pcc, aaaPcc,
-//                     receivedFrom, flightSegments, generalInfo, remarks, accounting }
+//                     receivedFrom, flightSegments, seats, generalInfo, remarks, accounting }
 ```
 
 - **Who, when and from where**: `createdAt` (with a year, no time zone), the agent's sine and duty
@@ -550,8 +550,18 @@ const { transactions } = await legacy.withSession((session) => session.reservati
 - **What changed, with its `action`**: `flightSegments` with their status at that moment
   (`AS` added, `XS` cancelled; dates without a year, as the host sends them), and SSR, ticketing,
   phones, names and emails as text in `generalInfo` (`A4S`, `A7`, `A9`, `AN`, `APE`…). Sabre does
-  not publish the list of `action` values. Seats, cars, hotels, rail, insurance and invoices are
-  not typed: they stay in the raw response (`onRawResponse`).
+  not publish the list of `action` values. Cars, hotels, rail, insurance and invoices are not
+  typed: they stay in the raw response (`onRawResponse`).
+- **Seats**: `seats` lists each transaction's `Item/Seats/Seat` (`[]` if there are none) with its
+  `action` (seen: `A4G`, `X4G` and `X4G*`), `status` (two codes stuck together: `KKUN`, `NNSS`),
+  `number`, `type` and the flight (`marketingAirline`, `flightNumber`, `bookingClass`, `origin`,
+  `destination` and `departureDate`, `MM-DD`). In a schedule change they tell which seats were
+  dropped or reassigned. The SDK does not interpret `action` or `status`: Sabre does not publish
+  what they mean (nor the `*`). The passenger's name (`CustomerName`) is not typed.
+- **An element without `@Action`** does not fail the response: the official sample sends
+  `<GeneralInfo><Text>INVOICE</Text></GeneralInfo>`. A `GeneralInfo`, `Remark`, `FlightSegment` or
+  `Seat` without it is kept with `action: ''`, and `warnings` gets one `SabreWarning` per kind of
+  element (`code: 'HISTORY_ENTRY_WITHOUT_ACTION'`) with the count and the `rph`, never the text.
 - **It carries passenger data** (names, phones, emails). The SDK never logs it.
 - **It does not record queue placements**, neither the system's nor a manual `place` (CERT): for that, use
   `queue.list`/`access` or the `QUEUE_PLACE` remarks of Get Booking.
@@ -992,7 +1002,8 @@ fake.openSessions; // 0: the session was closed
   `activity: { '9': { ignored: 27 } }`. The fake's actions do **not** change them: no one has
   tested which counter Sabre raises for each action.
 - `reservation.history`: `histories: { AAAAAA: [transactions] }` sets what each PNR returns, in
-  the shape of `ReservationHistoryTransaction` (missing lists come back empty). A PNR the fake
+  the shape of `ReservationHistoryTransaction` (missing lists come back empty, `seats` included;
+  an `action: ''` is sent without `Action`). A PNR the fake
   knows without a seeded history returns one synthetic transaction (its creation), and an unknown
   locator gives a host error marked as not simulated. Inside a queue, the history of another PNR
   is rejected with `NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY` and the one on screen is

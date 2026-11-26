@@ -20,6 +20,7 @@ import { createReservationUpdateHandler, type QueueFakeAirSegment, type QueueFak
 import type {
   ReservationHistoryAccounting,
   ReservationHistoryFlightSegment,
+  ReservationHistorySeat,
   ReservationHistoryText,
   ReservationHistoryTransaction,
 } from '../reservation/reservation-history.js';
@@ -56,9 +57,10 @@ export type QueueFakeActivity = Partial<Omit<QueueActivityCounters, 'numMessages
  */
 export type QueueFakeHistoryTransaction = Omit<
   ReservationHistoryTransaction,
-  'flightSegments' | 'generalInfo' | 'remarks' | 'accounting'
+  'flightSegments' | 'seats' | 'generalInfo' | 'remarks' | 'accounting'
 > & {
   flightSegments?: readonly ReservationHistoryFlightSegment[];
+  seats?: readonly ReservationHistorySeat[];
   generalInfo?: readonly ReservationHistoryText[];
   remarks?: readonly ReservationHistoryText[];
   accounting?: readonly ReservationHistoryAccounting[];
@@ -487,16 +489,17 @@ function toHistory(value: unknown, label: string): QueueFakeHistoryTransaction[]
     const at = `${label}[${index}]`;
     if (typeof transaction !== 'object' || transaction === null) fail(`${at} debe ser un objeto`);
     const t = transaction as QueueFakeHistoryTransaction;
-    // Sin Action, el SDK no entiende la respuesta: se frena acá, con el lugar exacto.
+    // `action` es un string, y puede ser `''` (Sabre no siempre la manda). Si no es un string, se frena acá, con el lugar exacto.
     for (const [list, name] of [
       [t.flightSegments, 'flightSegments'],
+      [t.seats, 'seats'],
       [t.generalInfo, 'generalInfo'],
       [t.remarks, 'remarks'],
     ] as const) {
       if (list === undefined) continue;
       if (!Array.isArray(list)) fail(`${at}.${name} debe ser una lista`);
       list.forEach((entry: { action?: unknown }, position: number) => {
-        if (typeof entry?.action !== 'string' || entry.action.trim() === '') fail(`${at}.${name}[${position}].action debe ser un string no vacío`);
+        if (typeof entry?.action !== 'string') fail(`${at}.${name}[${position}].action debe ser un string (puede ser '')`);
       });
     }
     if (t.accounting !== undefined && !Array.isArray(t.accounting)) fail(`${at}.accounting debe ser una lista`);
@@ -511,12 +514,36 @@ const attrs = (pairs: ReadonlyArray<[string, string | number | undefined]>): str
 const historyText = (text: string): string =>
   text.split('\n').map((line) => `<Text>${escape(line)}</Text>`).join('');
 
+/** El `@Action` de un elemento del historial: `''` se manda sin atributo, como cuando Sabre no la trae. */
+const actionAttr = (action: string): string | undefined => (action === '' ? undefined : action);
+
+/** Los `Seats` de una transacción, en un `Item` aparte del de los vuelos (como en el design). */
+function historySeats(seats: readonly ReservationHistorySeat[]): string {
+  if (seats.length === 0) return '';
+  const items = seats.map((seat) => {
+    const flight = [
+      seat.destination === undefined ? '' : `<DestinationLocation${attrs([['LocationCode', seat.destination]])}/>`,
+      seat.origin === undefined ? '' : `<OriginLocation${attrs([['LocationCode', seat.origin]])}/>`,
+      seat.marketingAirline === undefined && seat.flightNumber === undefined
+        ? ''
+        : `<MarketingAirline${attrs([['Code', seat.marketingAirline], ['FlightNumber', seat.flightNumber]])}/>`,
+    ].join('');
+    const hasFlight = flight !== '' || seat.departureDate !== undefined || seat.flightNumber !== undefined || seat.bookingClass !== undefined;
+    return `<Seat${attrs([['Action', actionAttr(seat.action)], ['Number', seat.number], ['Status', seat.status], ['Type', seat.type]])}>${
+      hasFlight
+        ? `<FlightSegment${attrs([['DepartureDateTime', seat.departureDate], ['FlightNumber', seat.flightNumber], ['ResBookDesigCode', seat.bookingClass]])}>${flight}</FlightSegment>`
+        : ''
+    }</Seat>`;
+  });
+  return `<Item><Seats>${items.join('')}</Seats></Item>`;
+}
+
 /** Una transacción como `HistoricalInfo`, en el orden de las respuestas de CERT. */
 function historicalInfo(t: QueueFakeHistoryTransaction): string {
   const segments = (t.flightSegments ?? []).map((segment) =>
     [
       `<Item><FlightSegment${attrs([
-        ['Action', segment.action],
+        ['Action', actionAttr(segment.action)],
         ['ArrivalDateTime', segment.arrivalDateTime],
         ['DepartureDateTime', segment.departureDateTime],
         ['FlightNumber', segment.flightNumber],
@@ -533,11 +560,13 @@ function historicalInfo(t: QueueFakeHistoryTransaction): string {
   );
   return [
     `<HistoricalInfo${attrs([['RPH', t.rph]])}>`,
-    ...(t.generalInfo ?? []).map((entry) => `<GeneralInfo${attrs([['Action', entry.action]])}>${historyText(entry.text)}</GeneralInfo>`),
-    segments.length === 0 ? '' : `<ItineraryInfo><ReservationItems>${segments.join('')}</ReservationItems></ItineraryInfo>`,
+    ...(t.generalInfo ?? []).map((entry) => `<GeneralInfo${attrs([['Action', actionAttr(entry.action)]])}>${historyText(entry.text)}</GeneralInfo>`),
+    segments.length === 0 && (t.seats ?? []).length === 0
+      ? ''
+      : `<ItineraryInfo><ReservationItems>${segments.join('')}${historySeats(t.seats ?? [])}</ReservationItems></ItineraryInfo>`,
     (t.remarks ?? []).length === 0
       ? ''
-      : `<RemarkInfo>${(t.remarks ?? []).map((entry) => `<Remark${attrs([['Action', entry.action]])}>${historyText(entry.text)}</Remark>`).join('')}</RemarkInfo>`,
+      : `<RemarkInfo>${(t.remarks ?? []).map((entry) => `<Remark${attrs([['Action', actionAttr(entry.action)]])}>${historyText(entry.text)}</Remark>`).join('')}</RemarkInfo>`,
     ...(t.accounting ?? []).map((entry) => `<AccountingInfo${attrs([['Action', entry.action], ['Type', entry.type], ['LinkCode', entry.linkCode]])}/>`),
     `<ItineraryRef><Source${attrs([
       ['AAA_PseudoCityCode', t.aaaPcc],

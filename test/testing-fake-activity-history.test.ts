@@ -1,5 +1,5 @@
 // El fake de sabre-client/testing con queue.activity y reservation.history (#167, ADR-027 D3).
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SabreBusinessError, SabreLegacy } from '../src/index.js';
 import { createQueueFake, type QueueFakeHistoryTransaction, type QueueFakeOptions } from '../src/testing/index.js';
 import inQueueOwn from './fixtures/activity.sandbox-in-queue-own.json';
@@ -123,6 +123,10 @@ const SEEDED: QueueFakeHistoryTransaction[] = [
         supplierRef: 'DCAM*ABC123',
       },
     ],
+    seats: [
+      { action: 'X4G*', status: 'KKUN', number: '1.1', type: 'W', marketingAirline: 'AM', flightNumber: '0400', bookingClass: 'Y', origin: 'MEX', destination: 'CUN', departureDate: '12-19' },
+      { action: 'A4G' },
+    ],
     generalInfo: [
       { action: 'AN', text: '1PEREZ/JUAN' },
       { action: 'A4S', text: 'SSR DOCS AM HK1\nSEGUNDA LINEA' },
@@ -140,7 +144,7 @@ describe('reservation.history contra el fake', () => {
     expect(result).toEqual({
       transactions: [
         { ...SEEDED[0] },
-        { ...SEEDED[1], flightSegments: [], generalInfo: [], remarks: [], accounting: [] },
+        { ...SEEDED[1], flightSegments: [], seats: [], generalInfo: [], remarks: [], accounting: [] },
       ],
       warnings: [],
     });
@@ -158,10 +162,24 @@ describe('reservation.history contra el fake', () => {
         pcc: 'XXXX',
         receivedFrom: 'SABRE-CLIENT/TESTING',
         flightSegments: [],
+        seats: [],
         generalInfo: [],
         remarks: [],
         accounting: [],
       },
+    ]);
+  });
+
+  it("una entrada con action '' sale sin Action y el SDK la lee con su warning", async () => {
+    const histories = { AAAAAA: [{ rph: 4, generalInfo: [{ action: '', text: 'INVOICE' }], seats: [{ action: '', number: '1.1' }] }] };
+    const { legacy } = client({ pnrs: [pnr('AAAAAA')], histories });
+    const onRawResponse = vi.fn();
+    const result = await legacy.withSession((session) => session.reservation.history('AAAAAA', { onRawResponse }));
+    expect(onRawResponse.mock.calls[0]?.[0].body).not.toContain('Action=');
+    expect(result.transactions[0]).toMatchObject({ generalInfo: [{ action: '', text: 'INVOICE' }], seats: [{ action: '', number: '1.1' }] });
+    expect(result.warnings.map((w) => [w.code, w.message])).toEqual([
+      ['HISTORY_ENTRY_WITHOUT_ACTION', 'itineraryHistory: 1 GeneralInfo sin Action (RPH 4)'],
+      ['HISTORY_ENTRY_WITHOUT_ACTION', 'itineraryHistory: 1 Seat sin Action (RPH 4)'],
     ]);
   });
 
@@ -192,7 +210,8 @@ describe('reservation.history contra el fake', () => {
   it.each([
     [{ abc: [] }, "histories['abc']: la clave debe ser un localizador de 6 caracteres alfanuméricos en mayúscula"],
     [{ AAAAAA: {} }, "histories['AAAAAA'] debe ser una lista de transacciones"],
-    [{ AAAAAA: [{ generalInfo: [{ text: 'x' }] }] }, "histories['AAAAAA'][0].generalInfo[0].action debe ser un string no vacío"],
+    [{ AAAAAA: [{ generalInfo: [{ text: 'x' }] }] }, "histories['AAAAAA'][0].generalInfo[0].action debe ser un string (puede ser '')"],
+    [{ AAAAAA: [{ seats: [{}] }] }, "histories['AAAAAA'][0].seats[0].action debe ser un string (puede ser '')"],
     [{ AAAAAA: [{ flightSegments: {} }] }, "histories['AAAAAA'][0].flightSegments debe ser una lista"],
   ])('histories inválido lanza TypeError: %j', (histories, message) => {
     expect(() => createQueueFake({ histories } as never)).toThrow(new TypeError(`sabre-client/testing: ${message}`));

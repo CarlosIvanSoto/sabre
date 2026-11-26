@@ -2,11 +2,13 @@
 // host. Ver sabre-wiki/wiki/proyectos/sabre-client/decisiones/tier-4-colas-avanzadas.md (B1),
 // wiki/sources/get-itinerary-history-v2-4-0-design.md y wiki/entities/get-itinerary-history.md.
 import type { RequestOptions } from '../air/bargain-finder-max.js';
-import { SabreGatewayError, type SabreWarning } from '../errors/index.js';
+import { SabreWarning } from '../errors/index.js';
 import { asArray, respondedAtField, type SoapResponse, textOf, xmlEscape } from '../http/soap-transport.js';
 import type { SessionRequest } from '../session/session.js';
 
 export const RESERVATION_HISTORY_SERVICE = 'itineraryHistory';
+/** `code` del `SabreWarning` de un elemento del historial que Sabre mandó sin `@Action`. */
+export const HISTORY_ENTRY_WITHOUT_ACTION = 'HISTORY_ENTRY_WITHOUT_ACTION';
 const NAMESPACE = 'http://webservices.sabre.com/sabreXML/2011/10';
 
 export type ReservationHistoryOptions = RequestOptions;
@@ -17,6 +19,11 @@ export type ReservationHistoryOptions = RequestOptions;
  * (nombre), `APE` (email) y `ADT`. La `A` inicial es un alta y la `X`, una baja.
  */
 export interface ReservationHistoryText {
+  /**
+   * `@Action`. Es `''` cuando Sabre no la manda (el sample oficial trae
+   * `<GeneralInfo><Text>INVOICE</Text></GeneralInfo>`); la respuesta trae entonces un `SabreWarning`
+   * `HISTORY_ENTRY_WITHOUT_ACTION`.
+   */
   action: string;
   /** `Text`, tal cual. Puede traer datos del pasajero. */
   text: string;
@@ -24,7 +31,10 @@ export interface ReservationHistoryText {
 
 /** Un `FlightSegment` del historial, tal como estaba en esa transacción. */
 export interface ReservationHistoryFlightSegment {
-  /** `@Action`: `AS` (alta) o `XS` (baja), según las respuestas y el design. */
+  /**
+   * `@Action`: `AS` (alta) o `XS` (baja), según las respuestas y el design. Es `''` cuando Sabre
+   * no la manda; la respuesta trae entonces un `SabreWarning` `HISTORY_ENTRY_WITHOUT_ACTION`.
+   */
   action: string;
   /** `@Status` en ese momento (`HK`, `HKNN`, `UN`…). */
   status?: string;
@@ -48,6 +58,39 @@ export interface ReservationHistoryFlightSegment {
   supplierRef?: string;
 }
 
+/**
+ * Un `Seat` del historial (`ItineraryInfo/ReservationItems/Item/Seats/Seat`): un asiento de esa
+ * transacción con el vuelo al que pertenece. En un cambio de horario dice qué asientos se quitaron
+ * o se reasignaron. El SDK no interpreta `action` ni `status`: Sabre no publica qué significan.
+ * No incluye `CustomerName`, el nombre del pasajero: queda solo en la respuesta cruda.
+ */
+export interface ReservationHistorySeat {
+  /**
+   * `@Action`, tal cual: se ha visto `A4G`, `X4G` y `X4G*` (con asterisco, sin confirmar qué
+   * indica). Es `''` cuando Sabre no la manda; la respuesta trae entonces un `SabreWarning`
+   * `HISTORY_ENTRY_WITHOUT_ACTION`.
+   */
+  action: string;
+  /** `@Status`, dos códigos pegados (`KKKK`, `KKUN`, `NNSS`), tal cual. Su orden está sin confirmar. */
+  status?: string;
+  /** `@Number`: la asignación del pasajero según el design; en su ejemplo vale `"1.1"`. */
+  number?: string;
+  /** `@Type`. */
+  type?: string;
+  /** `FlightSegment/MarketingAirline@Code`. */
+  marketingAirline?: string;
+  /** `FlightSegment@FlightNumber`, o `MarketingAirline@FlightNumber` si falta. */
+  flightNumber?: string;
+  /** `FlightSegment@ResBookDesigCode`: la clase. */
+  bookingClass?: string;
+  /** `FlightSegment/OriginLocation@LocationCode`. */
+  origin?: string;
+  /** `FlightSegment/DestinationLocation@LocationCode`. */
+  destination?: string;
+  /** `FlightSegment@DepartureDateTime` tal cual: `MM-DD`, sin año ni hora (`"12-21"`). */
+  departureDate?: string;
+}
+
 /** Una `AccountingInfo` del historial: la línea de contabilidad, sin sus importes. */
 export interface ReservationHistoryAccounting {
   /** `@Action` (`HK` en el design). */
@@ -60,8 +103,8 @@ export interface ReservationHistoryAccounting {
 
 /**
  * Una transacción del historial (`HistoricalInfo`): quién la firmó, cuándo y desde qué PCC
- * (`ItineraryRef/Source`), y los elementos que cambió. Lo que el SDK no tipa (asientos, autos,
- * hoteles, tren, seguros, facturas, importes) queda en la respuesta cruda (`onRawResponse`).
+ * (`ItineraryRef/Source`), y los elementos que cambió. Lo que el SDK no tipa (autos, hoteles,
+ * tren, seguros, facturas, importes, el nombre del pasajero de un asiento) queda en la respuesta cruda (`onRawResponse`).
  */
 export interface ReservationHistoryTransaction {
   /** `@RPH`: el número de la firma de la transacción (`HSTSIG`). */
@@ -85,6 +128,11 @@ export interface ReservationHistoryTransaction {
   receivedFrom?: string;
   /** `ItineraryInfo/ReservationItems/Item/FlightSegment`, en orden. */
   flightSegments: ReservationHistoryFlightSegment[];
+  /**
+   * `ItineraryInfo/ReservationItems/Item/Seats/Seat`, en orden. Es `[]` cuando la transacción no
+   * trae asientos.
+   */
+  seats: ReservationHistorySeat[];
   /** `GeneralInfo`, en orden: SSR, ticketing, teléfonos, nombres, emails… como texto. */
   generalInfo: ReservationHistoryText[];
   /** `RemarkInfo/Remark`, en orden. */
@@ -151,23 +199,63 @@ function integer(value: string | undefined): number | undefined {
   return value !== undefined && /^\d+$/.test(value) ? Number(value) : undefined;
 }
 
+/** Los elementos sin `@Action` de una respuesta, para dar un solo warning por tipo de elemento. */
+type MissingActions = Map<string, { count: number; rphs: Set<number> }>;
+
+const ELEMENT_ORDER = ['GeneralInfo', 'Remark', 'FlightSegment', 'Seat'] as const;
+
 /**
- * Lee `TravelItineraryHistoryRS`. Un `GeneralInfo`, `Remark` o `FlightSegment` sin `@Action` es una
- * respuesta que el SDK no entiende: lanza `SabreGatewayError`.
+ * Lee `TravelItineraryHistoryRS`. Un `GeneralInfo`, `Remark`, `FlightSegment` o `Seat` sin
+ * `@Action` se conserva con `action: ''` y suma un `SabreWarning` `HISTORY_ENTRY_WITHOUT_ACTION`
+ * por tipo de elemento, con la cuenta y los `rph`, sin el texto.
  */
 export function parseReservationHistoryResponse(response: SoapResponse): ReservationHistoryResponse {
-  const transactions = asArray(response.payload.HistoricalInfo).map((info) => transaction(node(info) ?? {}, response));
-  return { transactions, warnings: response.warnings, ...respondedAtField(response.raw) };
+  const missing: MissingActions = new Map();
+  const transactions = asArray(response.payload.HistoricalInfo).map((info) => transaction(node(info) ?? {}, missing));
+  const withoutAction = ELEMENT_ORDER.flatMap((element) => {
+    const found = missing.get(element);
+    if (found === undefined) return [];
+    const rphs = [...found.rphs].sort((a, b) => a - b);
+    const where = rphs.length === 0 ? '' : ` (RPH ${rphs.join(', ')})`;
+    return [
+      new SabreWarning(`${RESERVATION_HISTORY_SERVICE}: ${found.count} ${element} sin Action${where}`, {
+        service: RESERVATION_HISTORY_SERVICE,
+        code: HISTORY_ENTRY_WITHOUT_ACTION,
+        // Sin `raw`: el sobre trae nombres, SSR y tarjetas. El resumen es solo elemento, cuenta y rph.
+      }),
+    ];
+  });
+  return { transactions, warnings: [...response.warnings, ...withoutAction], ...respondedAtField(response.raw) };
 }
 
-function transaction(info: XmlNode, response: SoapResponse): ReservationHistoryTransaction {
+/**
+ * El `@Action` del elemento, o `''` si falta; en ese caso lo anota para el warning. Un elemento sin
+ * atributos ni hijos (`<Seat/>`) llega del parser como `''`, no como objeto: no se lee ni se
+ * cuenta, igual que antes de #285.
+ */
+function actionOf(entry: unknown, element: string, rph: number | undefined, missing: MissingActions): string {
+  const action = attribute(entry, 'Action');
+  if (action !== undefined) return action;
+  const found = missing.get(element) ?? { count: 0, rphs: new Set<number>() };
+  found.count += 1;
+  if (rph !== undefined) found.rphs.add(rph);
+  missing.set(element, found);
+  return '';
+}
+
+function transaction(info: XmlNode, missing: MissingActions): ReservationHistoryTransaction {
   const source = node(node(info.ItineraryRef)?.Source);
-  const flightSegments = asArray(node(node(info.ItineraryInfo)?.ReservationItems)?.Item).flatMap((item) =>
-    asArray(node(item)?.FlightSegment).map((segment) => flightSegment(node(segment) ?? {}, response)),
+  const rph = integer(attribute(info, 'RPH'));
+  const items = asArray(node(node(info.ItineraryInfo)?.ReservationItems)?.Item);
+  const flightSegments = items.flatMap((item) =>
+    asArray(node(item)?.FlightSegment).map((segment) => flightSegment(node(segment) ?? {}, rph, missing)),
+  );
+  const seats = items.flatMap((item) =>
+    asArray(node(item)?.Seats).flatMap((group) => asArray(node(group)?.Seat).map((seat) => historySeat(node(seat) ?? {}, rph, missing))),
   );
   return {
     ...defined({
-      rph: integer(attribute(info, 'RPH')),
+      rph,
       createdAt: attribute(source, 'CreateDateTime'),
       agent: attribute(source, 'CreationAgent'),
       agentDutyCode: attribute(source, 'CreationAgentDutyCode'),
@@ -177,24 +265,42 @@ function transaction(info: XmlNode, response: SoapResponse): ReservationHistoryT
       receivedFrom: attribute(source, 'ReceivedFrom'),
     }),
     flightSegments,
-    generalInfo: asArray(info.GeneralInfo).map((entry) => textEntry(entry, 'GeneralInfo', response)),
-    remarks: asArray(node(info.RemarkInfo)?.Remark).map((entry) => textEntry(entry, 'Remark', response)),
+    seats,
+    generalInfo: asArray(info.GeneralInfo).map((entry) => textEntry(entry, 'GeneralInfo', rph, missing)),
+    remarks: asArray(node(info.RemarkInfo)?.Remark).map((entry) => textEntry(entry, 'Remark', rph, missing)),
     accounting: asArray(info.AccountingInfo).map((entry) =>
       defined({ action: attribute(entry, 'Action'), type: attribute(entry, 'Type'), linkCode: attribute(entry, 'LinkCode') }),
     ),
   };
 }
 
-function textEntry(entry: unknown, label: string, response: SoapResponse): ReservationHistoryText {
-  const action = attribute(entry, 'Action');
-  if (action === undefined) throw malformed(`${label} sin Action`, response);
+function textEntry(entry: unknown, element: string, rph: number | undefined, missing: MissingActions): ReservationHistoryText {
+  const action = actionOf(entry, element, rph, missing);
   const texts = asArray(node(entry)?.Text).map((text) => textOf(text) ?? '');
   return { action, text: texts.join('\n') };
 }
 
-function flightSegment(segment: XmlNode, response: SoapResponse): ReservationHistoryFlightSegment {
-  const action = attribute(segment, 'Action');
-  if (action === undefined) throw malformed('FlightSegment sin Action', response);
+function historySeat(seat: XmlNode, rph: number | undefined, missing: MissingActions): ReservationHistorySeat {
+  const action = actionOf(seat, 'Seat', rph, missing);
+  const segment = node(seat.FlightSegment);
+  return {
+    action,
+    ...defined({
+      status: attribute(seat, 'Status'),
+      number: attribute(seat, 'Number'),
+      type: attribute(seat, 'Type'),
+      marketingAirline: attribute(segment?.MarketingAirline, 'Code'),
+      flightNumber: attribute(segment, 'FlightNumber') ?? attribute(segment?.MarketingAirline, 'FlightNumber'),
+      bookingClass: attribute(segment, 'ResBookDesigCode'),
+      origin: attribute(segment?.OriginLocation, 'LocationCode'),
+      destination: attribute(segment?.DestinationLocation, 'LocationCode'),
+      departureDate: attribute(segment, 'DepartureDateTime'),
+    }),
+  };
+}
+
+function flightSegment(segment: XmlNode, rph: number | undefined, missing: MissingActions): ReservationHistoryFlightSegment {
+  const action = actionOf(segment, 'FlightSegment', rph, missing);
   return {
     action,
     ...defined({
@@ -210,13 +316,4 @@ function flightSegment(segment: XmlNode, response: SoapResponse): ReservationHis
       supplierRef: attribute(segment.SupplierRef, 'ID'),
     }),
   };
-}
-
-function malformed(detail: string, response: SoapResponse): SabreGatewayError {
-  return new SabreGatewayError(`${RESERVATION_HISTORY_SERVICE}: respuesta no reconocida (${detail})`, {
-    protocol: 'soap',
-    status: response.status,
-    retryable: false,
-    raw: response.raw,
-  });
 }

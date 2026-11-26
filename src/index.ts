@@ -62,6 +62,7 @@ export type {
   ReservationHistoryFlightSegment,
   ReservationHistoryOptions,
   ReservationHistoryResponse,
+  ReservationHistorySeat,
   ReservationHistoryText,
   ReservationHistoryTransaction,
 } from './reservation/reservation-history.js';

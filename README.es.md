@@ -545,7 +545,7 @@ const screen = await legacy.withSession((session) => session.command('W/PT¥*', 
 ```ts
 const { transactions } = await legacy.withSession((session) => session.reservation.history('ABC123'));
 // transactions[0] → { rph, createdAt: '2026-11-04T17:15', agent, agentDutyCode, pcc, aaaPcc,
-//                     receivedFrom, flightSegments, generalInfo, remarks, accounting }
+//                     receivedFrom, flightSegments, seats, generalInfo, remarks, accounting }
 ```
 
 - **Quién, cuándo y desde dónde**: `createdAt` (con año, sin zona horaria), el sine y el duty code
@@ -553,8 +553,18 @@ const { transactions } = await legacy.withSession((session) => session.reservati
 - **Qué cambió, con su `action`**: `flightSegments` con su estado en ese momento (`AS` alta, `XS`
   baja; fechas sin año, como las manda el host), y SSR, ticketing, teléfonos, nombres y emails como
   texto en `generalInfo` (`A4S`, `A7`, `A9`, `AN`, `APE`…). Sabre no publica la lista de valores de
-  `action`. Asientos, autos, hoteles, tren, seguros y facturas no se tipan: quedan en la respuesta
-  cruda (`onRawResponse`).
+  `action`. Autos, hoteles, tren, seguros y facturas no se tipan: quedan en la respuesta cruda
+  (`onRawResponse`).
+- **Asientos**: `seats` lista los `Item/Seats/Seat` de cada transacción (`[]` si no hay) con su
+  `action` (vistos: `A4G`, `X4G` y `X4G*`), `status` (dos códigos pegados: `KKUN`, `NNSS`),
+  `number`, `type` y el vuelo (`marketingAirline`, `flightNumber`, `bookingClass`, `origin`,
+  `destination` y `departureDate`, `MM-DD`). En un cambio de horario dicen qué asientos se
+  quitaron o se reasignaron. El SDK no interpreta `action` ni `status`: Sabre no publica qué
+  significan (ni el `*`). El nombre del pasajero (`CustomerName`) no se tipa.
+- **Un elemento sin `@Action`** no hace fallar la respuesta: el sample oficial manda
+  `<GeneralInfo><Text>INVOICE</Text></GeneralInfo>`. Un `GeneralInfo`, `Remark`, `FlightSegment` o
+  `Seat` sin ella se conserva con `action: ''`, y `warnings` trae un `SabreWarning` por tipo de
+  elemento (`code: 'HISTORY_ENTRY_WITHOUT_ACTION'`) con la cuenta y los `rph`, nunca el texto.
 - **Trae datos del pasajero** (nombres, teléfonos, emails). El SDK nunca los manda al log.
 - **No registra las colocaciones en cola**, ni las del sistema ni un `place` manual (CERT): para eso están
   `queue.list`/`access` o los remarks `QUEUE_PLACE` de Get Booking.
@@ -994,7 +1004,8 @@ fake.openSessions; // 0: la sesión se cerró
   `activity: { '9': { ignored: 27 } }`. Las acciones del fake **no** los cambian: nadie probó qué
   contador sube Sabre con cada acción.
 - `reservation.history`: `histories: { AAAAAA: [transacciones] }` fija lo que devuelve cada PNR,
-  con la forma de `ReservationHistoryTransaction` (las listas que falten llegan vacías). Un PNR que
+  con la forma de `ReservationHistoryTransaction` (las listas que falten llegan vacías, `seats`
+  incluida; un `action: ''` sale sin `Action`). Un PNR que
   el fake conoce sin historial sembrado devuelve una transacción sintética (su creación), y un
   localizador desconocido da un error de host marcado como no simulado. Dentro de una cola, el
   historial de otro PNR se rechaza con `NAK6 -NOT ALLOWED- FINISH OR IGNORE OTHER ACTIVITY` y el del

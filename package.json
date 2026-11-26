@@ -1,7 +1,26 @@
 {
   "name": "sabre-client",
-  "version": "0.9.0",
-  "description": "TypeScript SDK for the Sabre GDS APIs: managed OAuth, air shopping, itinerary revalidation and booking over REST, built on Web Standard APIs to run on any server runtime.",
+  "version": "0.9.1",
+  "description": "TypeScript SDK for Sabre GDS REST and SOAP APIs: air shopping, booking, seats, ticketing, sessions and queues.",
+  "author": "Carlos Ivan Soto Pérez (https://github.com/CarlosIvanSoto)",
+  "keywords": [
+    "sabre",
+    "sabre-gds",
+    "sabre-api",
+    "sabre-sdk",
+    "gds",
+    "travel",
+    "airline",
+    "flight-booking",
+    "bargain-finder-max",
+    "ticketing",
+    "pnr",
+    "soap",
+    "rest",
+    "sdk",
+    "nodejs",
+    "typescript"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

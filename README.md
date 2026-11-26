@@ -1,8 +1,36 @@
-# sabre-client
+# sabre-client: TypeScript SDK for Sabre GDS (REST + SOAP)
 
-TypeScript SDK for the Sabre APIs.
+One typed client for the Sabre REST and SOAP APIs: air shopping, revalidation, booking, seat maps, ticketing, stateful SOAP sessions, queues and PNR history.
+One set of credentials, managed OAuth, typed errors and only Web Standard APIs (Node.js `>=22.12`, ESM).
+
+```sh
+npm install sabre-client
+```
+
+```ts
+import { Sabre, SabreLegacy, buildCredentials } from 'sabre-client';
+
+const credentials = buildCredentials({
+  user: process.env.SABRE_USERNAME!,
+  pcc: process.env.SABRE_PCC!,
+  password: process.env.SABRE_PASSWORD!,
+  clientId: process.env.SABRE_CLIENT_ID!,
+  clientSecret: process.env.SABRE_CLIENT_SECRET!,
+});
+
+// REST: read a booking
+const sabre = new Sabre({ environment: 'sandbox', credentials });
+const booking = await sabre.booking.get({ confirmationId: 'ABC123' });
+
+// SOAP: count the PNRs in each queue, inside a session that opens and closes itself
+const legacy = new SabreLegacy({ environment: 'sandbox', credentials });
+const counts = await legacy.withSession((session) => session.queue.count());
+```
 
 [Leer en español](./README.es.md)
+
+> **Independent project.** `sabre-client` is not an official Sabre product and is not
+> affiliated with or endorsed by Sabre. Sabre is a trademark of its owner.
 
 > **`0.3.0` is a complete rewrite, not an incremental update to `0.2.4`.**
 > It is built on a different architecture (a `Sabre` REST client with a managed
@@ -12,7 +40,7 @@ TypeScript SDK for the Sabre APIs.
 
 ## Status
 
-`0.9.0` is published under the `next` dist-tag while it is tested; `latest` stays on `0.8.0`.
+The `0.9.x` versions are published under the `next` dist-tag while they are tested; `latest` stays on `0.8.0`.
 It covers Tier 1 and Tier 2 of the Air Booking flow over REST, Tier 3 (SOAP sessions and queues)
 and Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `list` and
 `onRawRequest`, plus the queue filters of `0.6.0`. `0.7.0` adds ticket issuance and void
@@ -23,10 +51,11 @@ and Tier 4: queue activity, PNR history, the `S` message queue, `selection` in `
 ([Searching PNRs by update date](#searching-pnrs-by-update-date)) and its fake, with no breaking
 changes. `0.9.0` adds `session.reservation.confirmAirSegments` and `removeAirSegments`
 ([Confirming a schedule change](#confirming-a-schedule-change)) and their fake, also with no
-breaking changes.
+breaking changes. `0.9.1` adds the `seats` of `session.reservation.history` and the package metadata and this
+README (see the [CHANGELOG](./CHANGELOG.md)).
 
 ```sh
-npm install sabre-client@next   # 0.9.0
+npm install sabre-client@next   # 0.9.x
 npm install sabre-client        # 0.8.0
 ```
 

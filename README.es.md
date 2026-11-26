@@ -1,8 +1,36 @@
-# sabre-client
+# sabre-client: SDK de TypeScript para Sabre GDS (REST + SOAP)
 
-SDK de TypeScript para las APIs de Sabre.
+Un cliente tipado para las APIs REST y SOAP de Sabre: búsqueda de vuelos, revalidación, reserva, mapas de asientos, emisión de boletos, sesiones SOAP con estado, colas e historial del PNR.
+Un solo juego de credenciales, OAuth gestionado, errores tipados y solo Web Standard APIs (Node.js `>=22.12`, ESM).
+
+```sh
+npm install sabre-client
+```
+
+```ts
+import { Sabre, SabreLegacy, buildCredentials } from 'sabre-client';
+
+const credentials = buildCredentials({
+  user: process.env.SABRE_USERNAME!,
+  pcc: process.env.SABRE_PCC!,
+  password: process.env.SABRE_PASSWORD!,
+  clientId: process.env.SABRE_CLIENT_ID!,
+  clientSecret: process.env.SABRE_CLIENT_SECRET!,
+});
+
+// REST: leer una reserva
+const sabre = new Sabre({ environment: 'sandbox', credentials });
+const booking = await sabre.booking.get({ confirmationId: 'ABC123' });
+
+// SOAP: contar los PNR de cada cola, dentro de una sesión que se abre y se cierra sola
+const legacy = new SabreLegacy({ environment: 'sandbox', credentials });
+const counts = await legacy.withSession((session) => session.queue.count());
+```
 
 [Read in English](./README.md)
+
+> **Proyecto independiente.** `sabre-client` no es un producto oficial de Sabre y no está
+> afiliado ni respaldado por Sabre. Sabre es una marca de su titular.
 
 > **`0.3.0` es una reescritura completa, no una actualización incremental de `0.2.4`.**
 > Tiene otra arquitectura: un cliente REST `Sabre` con un `AuthManager` que gestiona el token,
@@ -12,7 +40,7 @@ SDK de TypeScript para las APIs de Sabre.
 
 ## Estado
 
-La `0.9.0` está publicada con el dist-tag `next` mientras se prueba; `latest` sigue en la `0.8.0`.
+Las versiones `0.9.x` están publicadas con el dist-tag `next` mientras se prueban; `latest` sigue en la `0.8.0`.
 Cubre el Tier 1 y el Tier 2 del flujo de Air Booking por REST, el Tier 3 (sesiones SOAP y colas) y
 el Tier 4: actividad de colas, historial del PNR, la cola de mensajes `S`, `selection` en `list` y
 `onRawRequest`, además de los filtros de cola de la `0.6.0`. La `0.7.0` suma la emisión y el void
@@ -23,10 +51,11 @@ de boletos ([Emitir y anular boletos](#emitir-y-anular-boletos)), las ventas del
 de modificación ([Buscar PNR por fecha de modificación](#buscar-pnr-por-fecha-de-modificación)) y
 su fake, sin cambios incompatibles. La `0.9.0` suma `session.reservation.confirmAirSegments` y
 `removeAirSegments` ([Confirmar un cambio de horario](#confirmar-un-cambio-de-horario)) y su fake,
-también sin cambios incompatibles.
+también sin cambios incompatibles. La `0.9.1` suma los `seats` de `session.reservation.history` y cambia los metadatos del
+paquete y este README (ver el [CHANGELOG](./CHANGELOG.md)).
 
 ```sh
-npm install sabre-client@next   # 0.9.0
+npm install sabre-client@next   # 0.9.x
 npm install sabre-client        # 0.8.0
 ```
 

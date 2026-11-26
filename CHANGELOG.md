@@ -7,6 +7,22 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-26
+
+Package metadata and README (#283), plus the fix and the additions of #285 that were waiting
+under `[Unreleased]`. The metadata and README change nothing in the code, the `exports` or the
+behavior.
+
+### Changed
+
+- `package.json`: the `description` now names REST and SOAP (it only named REST), and the package
+  gets `keywords` and an `author` (a name and the GitHub profile, with no email). The `keywords`
+  and `author` had been missing since `0.3.0-next.0`.
+- `README.md` and `README.es.md` open with what the package is: a title, a two-line summary,
+  `npm install sabre-client`, a short REST and SOAP example and the link to the other language,
+  plus a line saying it is an independent project and not an official Sabre product. The
+  rewrite notice and the version status moved below that opening; they were not removed.
+
 ### Fixed
 
 - `session.reservation.history`: a `GeneralInfo`, `Remark`, `FlightSegment` or `Seat` without
@@ -560,7 +576,8 @@ and queues). Get Ancillaries is NDC only and moved to after `0.3.0`.
 
 - The whole `0.2.4` API. There is no compatibility layer.
 
-[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/CarlosIvanSoto/sabre/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/CarlosIvanSoto/sabre/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/CarlosIvanSoto/sabre/compare/v0.6.0...v0.7.0
